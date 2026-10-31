@@ -1,0 +1,125 @@
+import { notesToolDefinitions, executeNotesTool } from './notesTool';
+import { projectSearchToolDefinition, executeProjectSearchTool } from './projectSearchTool';
+import { webResearchToolDefinition, executeWebResearchTool } from './webResearchTool';
+import { appShortcutsToolDefinition, executeAppShortcutsTool, ALLOWED_APPLICATIONS } from './appShortcutsTool';
+import { memoryToolDefinitions, executeMemoryTool } from '../memory/memoryTool';
+import { settingsStore } from '../storage/settingsStore';
+import { ToolConfirmationPayload } from '../../shared/types';
+
+export type ConfirmationRequester = (payload: ToolConfirmationPayload) => Promise<boolean>;
+
+export class ToolRegistry {
+  private confirmationRequester?: ConfirmationRequester;
+
+  public setConfirmationRequester(fn: ConfirmationRequester): void {
+    this.confirmationRequester = fn;
+  }
+
+  /**
+   * Returns all tool function declarations formatted for Gemini API tools
+   */
+  public getGeminiToolDeclarations(): any[] {
+    const allDefs = [
+      ...notesToolDefinitions,
+      ...memoryToolDefinitions,
+      projectSearchToolDefinition,
+      webResearchToolDefinition,
+      appShortcutsToolDefinition,
+    ];
+
+    // Format for @google/genai and @google/generative-ai
+    return [
+      {
+        functionDeclarations: allDefs.map((def) => ({
+          name: def.name,
+          description: def.description,
+          parameters: def.parameters,
+        })),
+      },
+    ];
+  }
+
+  /**
+   * Checks if user confirmation is required based on settings
+   */
+  private requiresConfirmation(toolName: string): boolean {
+    const settings = settingsStore.getSettings();
+    const conf = settings.requireToolConfirmations;
+
+    if (toolName === 'launch_allowed_app' && conf.launchApps) return true;
+    if (toolName === 'search_project_folder' && conf.folderSearch) return true;
+    if (toolName === 'search_web' && conf.webResearch) return true;
+    if (toolName === 'save_note' && conf.notes) return true;
+
+    return false;
+  }
+
+  /**
+   * Executes a tool with validation and permission checks
+   */
+  public async executeTool(toolName: string, args: Record<string, any>): Promise<any> {
+    console.log(`[ToolRegistry] Request to execute "${toolName}":`, args);
+
+    // 1. Permission / confirmation check
+    if (this.requiresConfirmation(toolName) && this.confirmationRequester) {
+      const confirmId = `conf_${Date.now()}`;
+      let description = `Allow FRIDAY to execute ${toolName}?`;
+
+      if (toolName === 'launch_allowed_app') {
+        const app = ALLOWED_APPLICATIONS.find((a) => a.id === args.appId);
+        description = `FRIDAY wants to open ${app ? app.name : args.appId} on your computer.`;
+      } else if (toolName === 'search_project_folder') {
+        description = `FRIDAY wants to search your approved project folders for "${args.query}".`;
+      } else if (toolName === 'search_web') {
+        description = `FRIDAY wants to search the web for "${args.query}".`;
+      } else if (toolName === 'save_note') {
+        description = `FRIDAY wants to save a note titled "${args.title}".`;
+      }
+
+      const userApproved = await this.confirmationRequester({
+        id: confirmId,
+        toolName,
+        description,
+        details: args,
+      });
+
+      if (!userApproved) {
+        return {
+          success: false,
+          rejectedByUser: true,
+          error: `Action was cancelled or denied by the user.`,
+        };
+      }
+    }
+
+    // 2. Dispatch to specific tool handler
+    try {
+      if (['save_note', 'list_notes', 'search_notes', 'read_note'].includes(toolName)) {
+        return await executeNotesTool(toolName, args);
+      }
+      if (toolName === 'save_memory' || toolName === 'search_memory') {
+        return await executeMemoryTool(toolName, args);
+      }
+      if (toolName === 'search_project_folder') {
+        return await executeProjectSearchTool(toolName, args);
+      }
+      if (toolName === 'search_web') {
+        return await executeWebResearchTool(toolName, args);
+      }
+      if (toolName === 'launch_allowed_app') {
+        return await executeAppShortcutsTool(toolName, args);
+      }
+
+      return { error: `Unrecognized tool name: ${toolName}` };
+    } catch (err: any) {
+      console.error(`[ToolRegistry] Error executing ${toolName}:`, err);
+      return {
+        success: false,
+        error: `Tool execution failed: ${err.message || 'Unknown error'}`,
+      };
+    }
+  }
+}
+
+export const toolRegistry = new ToolRegistry();
+

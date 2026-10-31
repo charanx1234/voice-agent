@@ -1,0 +1,40 @@
+# Dependencies
+node_modules/
+
+# Production build outputs
+dist/
+dist-electron/
+dist-renderer/
+dist-package/
+release/
+
+# Local test/scratch data (SQLite databases, screenshots)
+.data/
+
+# Environment files & secrets
+.env
+.env.local
+*.local
+
+# Logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+*.log
+
+# Operating System files
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+.DS_Store
+
+# Editor directories
+.idea/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+

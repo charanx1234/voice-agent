@@ -1,0 +1,41 @@
+{
+  "name": "friday-ai-companion",
+  "version": "1.0.0",
+  "description": "FRIDAY - Friendly Multilingual Indian Voice AI Desktop Companion",
+  "main": "dist-electron/main/index.js",
+  "author": "Friday AI Companion Team",
+  "license": "MIT",
+  "scripts": {
+    "dev": "vite",
+    "dev:electron": "concurrently -k \"vite\" \"cross-env WAIT_ON_DEV=1 electron dist-electron/main/index.js\"",
+    "build:electron": "tsc -p tsconfig.electron.json",
+    "build:renderer": "vite build",
+    "build": "npm run build:electron && npm run build:renderer",
+    "start": "npm run build:electron && electron dist-electron/main/index.js",
+    "test": "vitest run",
+    "package:win": "npm run build && electron-builder --win"
+  },
+  "dependencies": {
+    "@google/genai": "^2.32.0",
+    "@google/generative-ai": "^0.24.1",
+    "dotenv": "^16.4.7",
+    "lucide-react": "^0.475.0",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
+    "sql.js": "^1.15.2"
+  },
+  "devDependencies": {
+    "@types/node": "^22.13.4",
+    "@types/react": "^19.0.8",
+    "@types/react-dom": "^19.0.3",
+    "@vitejs/plugin-react": "^4.3.4",
+    "concurrently": "^9.1.2",
+    "cross-env": "^7.0.3",
+    "electron": "^34.2.0",
+    "electron-builder": "^25.1.8",
+    "rimraf": "^6.0.1",
+    "typescript": "^5.7.3",
+    "vite": "^6.1.0",
+    "vitest": "^3.0.5"
+  }
+}

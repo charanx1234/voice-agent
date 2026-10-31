@@ -1,0 +1,16 @@
+{
+  "appId": "com.friday.ai.companion",
+  "productName": "FRIDAY",
+  "directories": {
+    "output": "dist-package"
+  },
+  "files": [
+    "dist-electron/**/*",
+    "dist-renderer/**/*",
+    "package.json"
+  ],
+  "win": {
+    "signAndEditExecutable": false,
+    "target": ["dir"]
+  }
+}

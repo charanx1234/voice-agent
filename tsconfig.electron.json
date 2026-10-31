@@ -1,0 +1,27 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "CommonJS",
+    "lib": ["ES2022", "DOM"],
+    "skipLibCheck": true,
+    "moduleResolution": "node",
+    "resolveJsonModule": true,
+    "strict": true,
+    "outDir": "dist-electron",
+    "baseUrl": ".",
+    "paths": {
+      "@/*": ["src/*"]
+    },
+    "esModuleInterop": true
+  },
+  "include": [
+    "src/main/**/*",
+    "src/preload/**/*",
+    "src/services/**/*",
+    "src/shared/**/*"
+  ],
+  "exclude": [
+    "src/renderer/**/*",
+    "tests/**/*"
+  ]
+}

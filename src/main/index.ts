@@ -1,0 +1,144 @@
+import { app, BrowserWindow, shell } from 'electron';
+import path from 'path';
+import { registerIpcHandlers } from './ipc';
+import { memoryService } from '../services/memory/memoryService';
+
+let mainWindow: BrowserWindow | null = null;
+const getMainWindow = (): BrowserWindow | null => mainWindow;
+
+const DEV_SERVER_URL = process.env.VITE_DEV_SERVER_URL || 'http://localhost:5173';
+/** Only the `dev:electron` script sets WAIT_ON_DEV; `npm start` uses the built files. */
+const USE_DEV_SERVER = Boolean(process.env.WAIT_ON_DEV);
+
+/** Only our own dev server may be navigated to in-app; everything else leaves the window. */
+function isAllowedInAppNavigation(url: string): boolean {
+  return USE_DEV_SERVER && url.startsWith(DEV_SERVER_URL);
+}
+
+function createWindow(): void {
+  mainWindow = new BrowserWindow({
+    width: 460,
+    height: 740,
+    minWidth: 400,
+    minHeight: 640,
+    title: 'FRIDAY — AI Desktop Companion',
+    backgroundColor: '#0a0d14',
+    frame: false, // Sleek modern frameless desktop companion
+    titleBarStyle: 'hidden',
+    show: false,
+    webPreferences: {
+      preload: path.join(__dirname, '../preload/index.js'),
+      contextIsolation: true,
+      nodeIntegration: false,
+      // The preload script requires the shared IPC channel module, which a fully
+      // sandboxed preload cannot load; isolation is still enforced by contextIsolation.
+      sandbox: false,
+    },
+  });
+
+  registerIpcHandlers(getMainWindow);
+
+  mainWindow.once('ready-to-show', () => {
+    mainWindow?.show();
+  });
+
+  // Only the microphone is ever granted; every other permission request is denied.
+  mainWindow.webContents.session.setPermissionRequestHandler(
+    (_webContents, permission, callback) => {
+      callback(permission === 'media');
+    }
+  );
+  mainWindow.webContents.session.setPermissionCheckHandler((_webContents, permission) => {
+    return permission === 'media';
+  });
+
+  // Open external links safely in system browser, not inside the Electron companion window
+  mainWindow.webContents.setWindowOpenHandler(({ url }) => {
+    if (url.startsWith('https:') || url.startsWith('http:')) {
+      shell.openExternal(url);
+    }
+    return { action: 'deny' };
+  });
+
+  // Never let the companion window navigate away from the app itself.
+  mainWindow.webContents.on('will-navigate', (event, url) => {
+    if (isAllowedInAppNavigation(url)) return;
+    event.preventDefault();
+    if (url.startsWith('https:') || url.startsWith('http:')) {
+      shell.openExternal(url);
+    }
+  });
+
+  const indexPath = path.join(__dirname, '../../dist-renderer/index.html');
+
+  if (USE_DEV_SERVER) {
+    mainWindow.loadURL(DEV_SERVER_URL).catch((err) => {
+      console.error('[FRIDAY] Dev server unreachable, loading built files instead:', err.message);
+      mainWindow?.loadFile(indexPath);
+    });
+  } else {
+    mainWindow.loadFile(indexPath);
+  }
+
+  mainWindow.on('close', () => {
+    console.error('[FRIDAY] Window close requested.');
+  });
+
+  mainWindow.on('closed', () => {
+    console.error('[FRIDAY] Window closed.');
+    mainWindow = null;
+  });
+
+  // Lifecycle diagnostics: these make silent renderer deaths visible in logs.
+  mainWindow.webContents.on('render-process-gone', (_event, details) => {
+    console.error('[FRIDAY] Renderer process gone:', JSON.stringify(details));
+  });
+  mainWindow.webContents.on('unresponsive', () => {
+    console.error('[FRIDAY] Renderer became unresponsive.');
+  });
+  mainWindow.webContents.on('did-fail-load', (_event, code, description, url) => {
+    console.error(`[FRIDAY] Failed to load ${url} (${code}): ${description}`);
+  });
+}
+
+app.on('child-process-gone', (_event, details) => {
+  console.error('[FRIDAY] Child process gone:', JSON.stringify(details));
+});
+
+// <webview> is never used by FRIDAY, and embedding is a common escape hatch.
+app.on('web-contents-created', (_event, contents) => {
+  contents.on('will-attach-webview', (event) => {
+    event.preventDefault();
+  });
+});
+
+app.whenReady().then(() => {
+  createWindow();
+
+  // Open the memory database off the critical path so the first message is fast.
+  memoryService.init().catch((err) => {
+    console.error('[FRIDAY] Long-term memory unavailable:', err?.message);
+  });
+
+  app.on('activate', () => {
+    if (BrowserWindow.getAllWindows().length === 0) {
+      createWindow();
+    }
+  });
+});
+
+// Persist the final memory snapshot before the process exits.
+app.on('will-quit', () => {
+  memoryService.flushNow();
+});
+
+app.on('window-all-closed', () => {
+  console.error('[FRIDAY] All windows closed; quitting.');
+  if (process.platform !== 'darwin') {
+    app.quit();
+  }
+});
+
+app.on('before-quit', () => {
+  console.error('[FRIDAY] before-quit fired.');
+});
