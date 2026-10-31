@@ -2,6 +2,7 @@ import { notesToolDefinitions, executeNotesTool } from './notesTool';
 import { projectSearchToolDefinition, executeProjectSearchTool } from './projectSearchTool';
 import { webResearchToolDefinition, executeWebResearchTool } from './webResearchTool';
 import { appShortcutsToolDefinition, executeAppShortcutsTool, ALLOWED_APPLICATIONS } from './appShortcutsTool';
+import { researchToolDefinition, executeResearchTool } from './researchTool';
 import { memoryToolDefinitions, executeMemoryTool } from '../memory/memoryTool';
 import { reminderToolDefinitions, executeReminderTool } from '../reminders/remindersTool';
 import { dashboardToolDefinition, executeDashboardTool } from '../dashboard/dashboardTool';
@@ -28,6 +29,7 @@ export class ToolRegistry {
       dashboardToolDefinition,
       projectSearchToolDefinition,
       webResearchToolDefinition,
+      researchToolDefinition,
       appShortcutsToolDefinition,
     ];
 
@@ -104,8 +106,20 @@ export class ToolRegistry {
       if (toolName === 'save_memory' || toolName === 'search_memory') {
         return await executeMemoryTool(toolName, args);
       }
-      if (['create_reminder', 'list_reminders', 'complete_reminder'].includes(toolName)) {
+      if (
+        [
+          'create_reminder',
+          'list_reminders',
+          'complete_reminder',
+          'create_task',
+          'list_tasks',
+          'complete_task',
+        ].includes(toolName)
+      ) {
         return await executeReminderTool(toolName, args);
+      }
+      if (toolName === 'deep_research') {
+        return await executeResearchTool(toolName, args);
       }
       if (toolName === 'show_on_dashboard') {
         return await executeDashboardTool(toolName, args);

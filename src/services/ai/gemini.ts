@@ -1,6 +1,7 @@
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import { settingsStore } from '../storage/settingsStore';
 import { buildSystemInstruction } from './personality';
+import { buildConversationBrief } from './conversationContext';
 import { toolRegistry } from '../agent/toolRegistry';
 import { memoryService } from '../memory/memoryService';
 import { ChatMessage, ToolCallRecord } from '../../shared/types';
@@ -149,6 +150,9 @@ export class GeminiService {
     const candidates = buildModelCandidates(settings.modelName);
     const userText = (params.message || '').trim();
 
+    // Local, per-turn situation brief: mode, topic, follow-up, stated constraints.
+    const conversationBrief = buildConversationBrief(params.conversationHistory, userText || 'voice message').text;
+
     // Long-term memory is retrieved once per turn and injected as system context.
     let memoryBlock = '';
     try {
@@ -170,7 +174,8 @@ export class GeminiService {
           modelName,
           preferredLang,
           state,
-          memoryBlock
+          memoryBlock,
+          conversationBrief
         );
 
         if (modelName !== settings.modelName) {
@@ -231,10 +236,11 @@ export class GeminiService {
     modelName: string,
     preferredLang: string,
     state: { toolsExecuted: boolean },
-    memoryBlock = ''
+    memoryBlock = '',
+    conversationBrief = ''
   ): Promise<SendMessageResult> {
     const client = this.getClient();
-    const systemInstruction = buildSystemInstruction(preferredLang, memoryBlock);
+    const systemInstruction = buildSystemInstruction(preferredLang, memoryBlock, conversationBrief);
     const toolDeclarations = toolRegistry.getGeminiToolDeclarations();
 
     const model = client.getGenerativeModel({

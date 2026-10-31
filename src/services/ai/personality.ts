@@ -8,10 +8,12 @@ export { PERSONA_VERSION } from './persona';
 
 export function buildSystemInstruction(
   preferredLanguageCode: string = 'te-IN',
-  memoryContext: string = ''
+  memoryContext: string = '',
+  conversationBrief: string = ''
 ): string {
   return buildPersonaInstruction({
     preferredLanguage: preferredLanguageCode,
     memoryContext,
+    conversationBrief,
   });
 }

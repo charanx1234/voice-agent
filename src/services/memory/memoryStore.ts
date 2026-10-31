@@ -278,6 +278,33 @@ export class MemoryStore {
     return ranked;
   }
 
+  /**
+   * Memories connected to `id` by embedding similarity. Used to pull in related
+   * context (same project, same person) without loading the whole database.
+   */
+  public relatedTo(id: string, limit = 3): MemoryHit[] {
+    const row = this.db.get<MemoryRow>('SELECT * FROM memories WHERE id = ?;', [id]);
+    if (!row) return [];
+
+    const base = decodeEmbedding(row.embedding);
+    if (base.length === 0) return [];
+
+    const rows = this.db.all<MemoryRow>(
+      'SELECT * FROM memories WHERE id != ? AND embedding IS NOT NULL LIMIT ?;',
+      [id, MAX_CANDIDATES]
+    );
+
+    const hits: MemoryHit[] = [];
+    for (const candidate of rows) {
+      const vector = decodeEmbedding(candidate.embedding);
+      if (vector.length !== base.length) continue;
+
+      const score = cosineSimilarity(base, vector);
+      if (score >= 0.55) hits.push({ ...toRecord(candidate), score: Number(score.toFixed(4)) });
+    }
+
+    return hits.sort((a, b) => b.score - a.score).slice(0, limit);
+  }
   public markUsed(ids: string[]): void {
     if (ids.length === 0) return;
     const now = new Date().toISOString();

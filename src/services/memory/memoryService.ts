@@ -161,6 +161,13 @@ export class MemoryService {
       for (const hit of relevant) merged.set(hit.id, hit);
       for (const item of core) if (!merged.has(item.id)) merged.set(item.id, item);
 
+      // Pull in connected memories (same project/person) for the best two hits.
+      for (const hit of relevant.slice(0, 2)) {
+        for (const related of services.store.relatedTo(hit.id, 2)) {
+          if (!merged.has(related.id)) merged.set(related.id, related);
+        }
+      }
+
       return formatMemoryContext(Array.from(merged.values()));
     } catch (err: any) {
       this.log(`[MemoryService] Context build failed: ${err?.message}`);
