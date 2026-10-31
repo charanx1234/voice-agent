@@ -47,7 +47,7 @@ export class SqliteDatabase {
     filePath: string,
     options: SqliteDatabaseOptions = {}
   ): Promise<SqliteDatabase> {
-    const log = options.logger || ((message: string) => console.warn(message));
+    const log = options.logger || ((message: string) => (/fail|error|unavailable|could not|timed out/i.test(message) ? console.error(message) : console.log(message)));
     const SQL = await initSqlJs({ wasmBinary: SqliteDatabase.readWasmBinary() });
 
     const directory = path.dirname(filePath);

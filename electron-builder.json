@@ -11,6 +11,15 @@
   ],
   "win": {
     "signAndEditExecutable": false,
-    "target": ["dir"]
+    "target": ["nsis", "dir"]
+  },
+  "nsis": {
+    "oneClick": false,
+    "perMachine": false,
+    "allowToChangeInstallationDirectory": true,
+    "createDesktopShortcut": true,
+    "createStartMenuShortcut": true,
+    "shortcutName": "FRIDAY",
+    "deleteAppDataOnUninstall": false
   }
 }

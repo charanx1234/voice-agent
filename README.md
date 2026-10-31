@@ -239,10 +239,11 @@ All tests should pass:
  ✓ tests/memory.test.ts (22 tests)
  ✓ tests/voice.test.ts (9 tests)
  ✓ tests/tts.test.ts (14 tests)
+ ✓ tests/logger.test.ts (5 tests)
  ✓ tests/greetings.test.ts (6 tests)
  ✓ tests/reminders.test.ts (10 tests)
- Test Files  9 passed (9)
-      Tests  85 passed (85)
+ Test Files  10 passed (10)
+      Tests  90 passed (90)
 ```
 
 ---
@@ -253,7 +254,26 @@ To produce a production package for Windows:
 ```powershell
 npm run package:win
 ```
-The packaged Windows application will be generated in the `release/` folder.
+
+Outputs in `dist-package/`:
+
+| Artefact | Use |
+|---|---|
+| `FRIDAY Setup 1.0.0.exe` | Per-user installer (no admin). Creates Desktop and Start-menu shortcuts. |
+| `win-unpacked\FRIDAY.exe` | Portable build — run directly, no install. |
+
+Both are **GUI-subsystem** executables: launching them from Explorer or a shortcut never opens a console window.
+
+---
+
+## 🪵 Logs & Diagnostics
+
+- Logs are written to `%APPDATA%\friday-ai-companion\logs\friday-YYYY-MM-DD.log` (never printed to a terminal in the installed app).
+- Each line carries a timestamp, level (`INFO` / `WARN` / `ERROR`) and source scope.
+- Files rotate at 2 MB and the newest 7 are kept.
+- **Settings → Diagnostics → Open Logs Folder** opens the folder.
+- Only one FRIDAY instance can run at a time: launching it again focuses the existing window instead of starting a second memory/reminder backend.
+- On quit, memory and reminders are flushed and their background timers cancelled.
 
 ---
 
@@ -269,4 +289,5 @@ The packaged Windows application will be generated in the `release/` folder.
 ## 🛡️ License
 
 MIT License. Built with ❤️ for desktop AI companion development.
+
 

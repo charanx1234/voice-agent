@@ -31,6 +31,8 @@ export const IPC_CHANNELS = {
   DASHBOARD_ARTIFACT: 'friday:dashboard-artifact',
   TTS_SYNTHESIZE: 'friday:tts-synthesize',
   TTS_CANCEL: 'friday:tts-cancel',
+  LOGS_OPEN_FOLDER: 'friday:logs-open-folder',
+  LOGS_READ: 'friday:logs-read',
   MINIMIZE_WINDOW: 'friday:minimize-window',
   CLOSE_WINDOW: 'friday:close-window',
 } as const;

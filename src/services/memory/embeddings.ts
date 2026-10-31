@@ -148,7 +148,7 @@ export class EmbeddingService {
 
   constructor(options: EmbeddingServiceOptions) {
     this.getApiKey = options.getApiKey;
-    this.log = options.logger || ((message: string) => console.warn(message));
+    this.log = options.logger || ((message: string) => (/fail|error|unavailable|could not|timed out/i.test(message) ? console.error(message) : console.log(message)));
     this.timeoutMs = options.timeoutMs ?? 10000;
   }
 

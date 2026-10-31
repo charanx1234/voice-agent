@@ -239,6 +239,48 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
             </span>
           </div>
 
+          {/* Section: Diagnostics */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+            <label
+              style={{
+                fontSize: '0.78rem',
+                fontWeight: 600,
+                color: 'var(--muted)',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px',
+              }}
+            >
+              <FolderOpen size={14} color="var(--accent)" />
+              <span>DIAGNOSTICS</span>
+            </label>
+
+            <button
+              type="button"
+              onClick={() => window.fridayAPI?.openLogsFolder()}
+              style={{
+                alignSelf: 'flex-start',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '5px',
+                padding: '5px 10px',
+                borderRadius: '8px',
+                backgroundColor: 'color-mix(in srgb, var(--text) 5%, transparent)',
+                border: '1px solid color-mix(in srgb, var(--text) 10%, transparent)',
+                color: 'var(--muted)',
+                fontSize: '0.75rem',
+                cursor: 'pointer',
+              }}
+            >
+              <FolderOpen size={13} color="var(--accent)" />
+              <span>Open Logs Folder</span>
+            </button>
+
+            <span style={{ fontSize: '0.68rem', color: 'var(--muted-dim)' }}>
+              Backend logs are written to a file, so no terminal window is needed.
+            </span>
+          </div>
+
           {/* Section: Gemini API Key */}
           <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
             <label

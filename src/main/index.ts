@@ -1,8 +1,19 @@
 import { app, BrowserWindow, shell } from 'electron';
 import path from 'path';
 import { registerIpcHandlers } from './ipc';
+import { initLogger } from './backend/logger';
 import { memoryService } from '../services/memory/memoryService';
 import { remindersService } from '../services/reminders/remindersService';
+
+// Production builds write to a log file only; development keeps terminal output.
+initLogger({ keepConsole: !app.isPackaged });
+
+process.on('uncaughtException', (err) => {
+  console.error('[FRIDAY] Uncaught exception:', err);
+});
+process.on('unhandledRejection', (reason) => {
+  console.error('[FRIDAY] Unhandled rejection:', reason);
+});
 
 let mainWindow: BrowserWindow | null = null;
 const getMainWindow = (): BrowserWindow | null => mainWindow;
@@ -82,11 +93,11 @@ function createWindow(): void {
   }
 
   mainWindow.on('close', () => {
-    console.error('[FRIDAY] Window close requested.');
+    console.log('[FRIDAY] Window close requested.');
   });
 
   mainWindow.on('closed', () => {
-    console.error('[FRIDAY] Window closed.');
+    console.log('[FRIDAY] Window closed.');
     mainWindow = null;
   });
 
@@ -113,41 +124,57 @@ app.on('web-contents-created', (_event, contents) => {
   });
 });
 
-app.whenReady().then(() => {
-  // Required for Windows toast notifications and grouping.
-  app.setAppUserModelId('com.friday.ai.companion');
+const hasSingleInstanceLock = app.requestSingleInstanceLock();
 
-  createWindow();
-
-  // Open the memory database off the critical path so the first message is fast.
-  memoryService.init().catch((err) => {
-    console.error('[FRIDAY] Long-term memory unavailable:', err?.message);
+if (!hasSingleInstanceLock) {
+  // A second copy would open the same SQLite databases — focus the running app instead.
+  console.log('[FRIDAY] Another instance is already running; exiting.');
+  app.quit();
+} else {
+  app.on('second-instance', () => {
+    if (!mainWindow) return;
+    if (mainWindow.isMinimized()) mainWindow.restore();
+    mainWindow.show();
+    mainWindow.focus();
   });
 
-  remindersService.init().catch((err) => {
-    console.error('[FRIDAY] Reminders unavailable:', err?.message);
+  app.whenReady().then(() => {
+    // Required for Windows toast notifications and grouping.
+    app.setAppUserModelId('com.friday.ai.companion');
+
+    createWindow();
+
+    // Open the memory database off the critical path so the first message is fast.
+    memoryService.init().catch((err) => {
+      console.error('[FRIDAY] Long-term memory unavailable:', err?.message);
+    });
+
+    remindersService.init().catch((err) => {
+      console.error('[FRIDAY] Reminders unavailable:', err?.message);
+    });
+
+    app.on('activate', () => {
+      if (BrowserWindow.getAllWindows().length === 0) {
+        createWindow();
+      }
+    });
   });
 
-  app.on('activate', () => {
-    if (BrowserWindow.getAllWindows().length === 0) {
-      createWindow();
+  // Persist the final memory snapshot before the process exits.
+  app.on('will-quit', () => {
+    console.log('[FRIDAY] Shutting down backend services.');
+    memoryService.flushNow();
+    remindersService.shutdownNow();
+  });
+
+  app.on('window-all-closed', () => {
+    console.log('[FRIDAY] All windows closed; quitting.');
+    if (process.platform !== 'darwin') {
+      app.quit();
     }
   });
-});
 
-// Persist the final memory snapshot before the process exits.
-app.on('will-quit', () => {
-  memoryService.flushNow();
-  remindersService.flushNow();
-});
-
-app.on('window-all-closed', () => {
-  console.error('[FRIDAY] All windows closed; quitting.');
-  if (process.platform !== 'darwin') {
-    app.quit();
-  }
-});
-
-app.on('before-quit', () => {
-  console.error('[FRIDAY] before-quit fired.');
-});
+  app.on('before-quit', () => {
+    console.log('[FRIDAY] before-quit fired.');
+  });
+}

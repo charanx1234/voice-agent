@@ -8,6 +8,7 @@ import { memoryService } from '../services/memory/memoryService';
 import { remindersService } from '../services/reminders/remindersService';
 import { dashboardBus } from '../services/dashboard/dashboardTool';
 import { neuralVoiceService } from '../services/voice/neuralVoice';
+import { getLogDirectory, readRecentLogLines } from './backend/logger';
 import { ALLOWED_APPLICATIONS, executeAppShortcutsTool } from '../services/agent/appShortcutsTool';
 import { MemoryInputPayload, SpeechSynthesisRequest, ToolConfirmationPayload } from '../shared/types';
 
@@ -266,6 +267,25 @@ export function registerIpcHandlers(getMainWindow: () => BrowserWindow | null): 
     neuralVoiceService.cancelAll();
   });
 
+  // Log access for debugging without a terminal
+  ipcMain.handle(IPC_CHANNELS.LOGS_OPEN_FOLDER, async () => {
+    try {
+      await shell.openPath(getLogDirectory());
+      return true;
+    } catch (err: any) {
+      console.error('[IPC] Could not open log folder:', err?.message);
+      return false;
+    }
+  });
+
+  ipcMain.handle(IPC_CHANNELS.LOGS_READ, async (_event, limit?: number) => {
+    try {
+      return readRecentLogLines(limit || 200);
+    } catch {
+      return [];
+    }
+  });
+
   // Window control
   ipcMain.on(IPC_CHANNELS.MINIMIZE_WINDOW, () => {
     const win = getMainWindow();
@@ -275,7 +295,7 @@ export function registerIpcHandlers(getMainWindow: () => BrowserWindow | null): 
   });
 
   ipcMain.on(IPC_CHANNELS.CLOSE_WINDOW, () => {
-    console.error('[IPC] Renderer requested window close.');
+    console.log('[IPC] Renderer requested window close.');
     const win = getMainWindow();
     if (win && !win.isDestroyed()) {
       win.close();

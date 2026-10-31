@@ -91,6 +91,10 @@ const apiBridge: FridayApiBridge = {
     ipcRenderer.invoke(IPC_CHANNELS.TTS_SYNTHESIZE, request),
   cancelSpeech: () => ipcRenderer.send(IPC_CHANNELS.TTS_CANCEL),
 
+  // Diagnostics
+  openLogsFolder: () => ipcRenderer.invoke(IPC_CHANNELS.LOGS_OPEN_FOLDER),
+  readLogs: (limit?: number) => ipcRenderer.invoke(IPC_CHANNELS.LOGS_READ, limit),
+
   minimizeWindow: () => ipcRenderer.send(IPC_CHANNELS.MINIMIZE_WINDOW),
   closeWindow: () => ipcRenderer.send(IPC_CHANNELS.CLOSE_WINDOW),
 };

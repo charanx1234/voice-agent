@@ -228,6 +228,10 @@ export interface FridayApiBridge {
   synthesizeSpeech: (request: SpeechSynthesisRequest) => Promise<SpeechSynthesisResult>;
   cancelSpeech: () => void;
 
+  // Diagnostics
+  openLogsFolder: () => Promise<boolean>;
+  readLogs: (limit?: number) => Promise<string[]>;
+
   // Window Controls
   minimizeWindow: () => void;
   closeWindow: () => void;

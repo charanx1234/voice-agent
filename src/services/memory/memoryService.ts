@@ -84,7 +84,7 @@ export class MemoryService {
 
   constructor(options: MemoryServiceOptions = {}) {
     this.dbPath = options.dbPath || defaultMemoryDbPath();
-    this.log = options.logger || ((message: string) => console.warn(message));
+    this.log = options.logger || ((message: string) => (/fail|error|unavailable|could not|timed out/i.test(message) ? console.error(message) : console.log(message)));
   }
 
   public getDatabasePath(): string {

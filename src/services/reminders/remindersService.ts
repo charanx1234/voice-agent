@@ -49,7 +49,7 @@ export class RemindersService {
 
   constructor(options: RemindersServiceOptions = {}) {
     this.dbPath = options.dbPath || defaultReminderDbPath();
-    this.log = options.logger || ((message: string) => console.warn(message));
+    this.log = options.logger || ((message: string) => (/fail|error|unavailable|could not|timed out/i.test(message) ? console.error(message) : console.log(message)));
   }
 
   public async init(): Promise<void> {
@@ -227,11 +227,22 @@ export class RemindersService {
   }
 
   public flushNow(): void {
+    this.shutdownNow();
+  }
+
+  /** Synchronous shutdown for `will-quit`: cancels timers, flushes and closes. */
+  public shutdownNow(): void {
+    for (const timer of this.timers.values()) {
+      clearTimeout(timer);
+    }
+    this.timers.clear();
+
     try {
       this.db?.close();
-    } catch {
-      // ignore flush errors during quit
+    } catch (err: any) {
+      this.log(`[Reminders] Final flush failed: ${err?.message}`);
     }
+
     this.db = undefined;
     this.store = undefined;
     this.initPromise = undefined;
