@@ -8,6 +8,7 @@ import { memoryService } from '../services/memory/memoryService';
 import { remindersService } from '../services/reminders/remindersService';
 import { dashboardBus } from '../services/dashboard/dashboardTool';
 import { neuralVoiceService } from '../services/voice/neuralVoice';
+import { systemHealthService } from '../services/system/healthService';
 import { getLogDirectory, readRecentLogLines } from './backend/logger';
 import { ALLOWED_APPLICATIONS, executeAppShortcutsTool } from '../services/agent/appShortcutsTool';
 import { MemoryInputPayload, SpeechSynthesisRequest, ToolConfirmationPayload } from '../shared/types';
@@ -238,6 +239,15 @@ export function registerIpcHandlers(getMainWindow: () => BrowserWindow | null): 
     getMainWindow()?.webContents.send(IPC_CHANNELS.REMINDER_FIRED, reminder);
   });
 
+  remindersService.on('tasks-changed', async () => {
+    const tasks = await remindersService.listTasks(false);
+    getMainWindow()?.webContents.send(IPC_CHANNELS.TASKS_CHANGED, tasks);
+  });
+
+  systemHealthService.onSample((health) => {
+    getMainWindow()?.webContents.send(IPC_CHANNELS.SYSTEM_HEALTH_UPDATE, health);
+  });
+
   dashboardBus.on('artifact', (artifact) => {
     getMainWindow()?.webContents.send(IPC_CHANNELS.DASHBOARD_ARTIFACT, artifact);
   });
@@ -265,6 +275,35 @@ export function registerIpcHandlers(getMainWindow: () => BrowserWindow | null): 
 
   ipcMain.on(IPC_CHANNELS.TTS_CANCEL, () => {
     neuralVoiceService.cancelAll();
+  });
+
+  // Tasks
+  ipcMain.handle(IPC_CHANNELS.TASKS_LIST, async (_event, includeDone?: boolean) => {
+    try {
+      return await remindersService.listTasks(Boolean(includeDone));
+    } catch (err: any) {
+      console.error('[IPC] tasks-list failed:', err?.message);
+      return [];
+    }
+  });
+
+  ipcMain.handle(IPC_CHANNELS.TASKS_COMPLETE, async (_event, idOrText: string) => {
+    try {
+      return (await remindersService.completeTask(idOrText)) || null;
+    } catch (err: any) {
+      console.error('[IPC] tasks-complete failed:', err?.message);
+      return null;
+    }
+  });
+
+  // System health
+  ipcMain.handle(IPC_CHANNELS.SYSTEM_HEALTH_GET, async () => {
+    try {
+      return await systemHealthService.read();
+    } catch (err: any) {
+      console.error('[IPC] system-health failed:', err?.message);
+      return null;
+    }
   });
 
   // Log access for debugging without a terminal

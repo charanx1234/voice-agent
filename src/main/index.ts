@@ -4,6 +4,7 @@ import { registerIpcHandlers } from './ipc';
 import { initLogger } from './backend/logger';
 import { memoryService } from '../services/memory/memoryService';
 import { remindersService } from '../services/reminders/remindersService';
+import { systemHealthService } from '../services/system/healthService';
 
 // Production builds write to a log file only; development keeps terminal output.
 initLogger({ keepConsole: !app.isPackaged });
@@ -153,6 +154,9 @@ if (!hasSingleInstanceLock) {
       console.error('[FRIDAY] Reminders unavailable:', err?.message);
     });
 
+    // Lightweight health polling (5s) for the dashboard; no permissions required.
+    systemHealthService.start();
+
     app.on('activate', () => {
       if (BrowserWindow.getAllWindows().length === 0) {
         createWindow();
@@ -165,6 +169,7 @@ if (!hasSingleInstanceLock) {
     console.log('[FRIDAY] Shutting down backend services.');
     memoryService.flushNow();
     remindersService.shutdownNow();
+    systemHealthService.stop();
   });
 
   app.on('window-all-closed', () => {

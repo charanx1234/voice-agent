@@ -3,6 +3,8 @@ import {
   DashboardArtifact,
   FridayApiBridge,
   ReminderItem,
+  SystemHealthSnapshot,
+  TaskItem,
   SpeechSynthesisRequest,
   ToolConfirmationPayload,
 } from '../shared/types';
@@ -90,6 +92,23 @@ const apiBridge: FridayApiBridge = {
   synthesizeSpeech: (request: SpeechSynthesisRequest) =>
     ipcRenderer.invoke(IPC_CHANNELS.TTS_SYNTHESIZE, request),
   cancelSpeech: () => ipcRenderer.send(IPC_CHANNELS.TTS_CANCEL),
+
+  // Tasks
+  listTasks: (includeDone?: boolean) => ipcRenderer.invoke(IPC_CHANNELS.TASKS_LIST, includeDone),
+  completeTask: (idOrText: string) => ipcRenderer.invoke(IPC_CHANNELS.TASKS_COMPLETE, idOrText),
+  onTasksChanged: (callback: (tasks: TaskItem[]) => void) => {
+    const handler = (_event: any, tasks: TaskItem[]) => callback(tasks);
+    ipcRenderer.on(IPC_CHANNELS.TASKS_CHANGED, handler);
+    return () => ipcRenderer.removeListener(IPC_CHANNELS.TASKS_CHANGED, handler);
+  },
+
+  // System health
+  getSystemHealth: () => ipcRenderer.invoke(IPC_CHANNELS.SYSTEM_HEALTH_GET),
+  onSystemHealth: (callback: (health: SystemHealthSnapshot) => void) => {
+    const handler = (_event: any, health: SystemHealthSnapshot) => callback(health);
+    ipcRenderer.on(IPC_CHANNELS.SYSTEM_HEALTH_UPDATE, handler);
+    return () => ipcRenderer.removeListener(IPC_CHANNELS.SYSTEM_HEALTH_UPDATE, handler);
+  },
 
   // Diagnostics
   openLogsFolder: () => ipcRenderer.invoke(IPC_CHANNELS.LOGS_OPEN_FOLDER),

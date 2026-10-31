@@ -2,7 +2,7 @@ import path from 'path';
 import { EventEmitter } from 'events';
 import { app, Notification } from 'electron';
 import { SqliteDatabase } from '../memory/sqliteDatabase';
-import { ReminderRecord, ReminderStore } from './reminderStore';
+import { ReminderRecord, ReminderStore, TaskPriority, TaskRecord } from './reminderStore';
 import { parseReminderTime } from './timeParser';
 
 export interface CreateReminderResult {
@@ -74,7 +74,7 @@ export class RemindersService {
   }
 
   /** Subscribes to 'changed' and 'fired' notifications. Returns an unsubscribe function. */
-  public on(event: 'changed' | 'fired', listener: (payload?: any) => void): () => void {
+  public on(event: 'changed' | 'fired' | 'tasks-changed', listener: (payload?: any) => void): () => void {
     this.emitter.on(event, listener);
     return () => this.emitter.off(event, listener);
   }
@@ -113,6 +113,45 @@ export class RemindersService {
     this.emitter.emit('changed');
 
     return { success: true, reminder };
+  }
+
+  public async createTask(
+    text: string,
+    priority: TaskPriority = 'medium',
+    when?: string
+  ): Promise<{ success: boolean; task?: TaskRecord; error?: string }> {
+    const store = await this.ready();
+    if (!store) return { success: false, error: 'Task storage is unavailable.' };
+
+    const clean = (text || '').trim();
+    if (!clean) return { success: false, error: 'What is the task?' };
+
+    let dueAt: Date | undefined;
+    if (when && when.trim()) {
+      const parsed = parseReminderTime(when, new Date());
+      if (!parsed) {
+        return { success: false, error: `I could not understand the date "${when}".` };
+      }
+      dueAt = parsed.dueAt;
+    }
+
+    const task = store.createTask(clean, priority, dueAt);
+    this.emitter.emit('tasks-changed');
+    return { success: true, task };
+  }
+
+  public async listTasks(includeDone = false): Promise<TaskRecord[]> {
+    const store = await this.ready();
+    return store ? store.listTasks(includeDone) : [];
+  }
+
+  public async completeTask(idOrText: string): Promise<TaskRecord | undefined> {
+    const store = await this.ready();
+    if (!store) return undefined;
+
+    const task = store.completeTask(idOrText);
+    if (task) this.emitter.emit('tasks-changed');
+    return task;
   }
 
   public async list(includeDone = false): Promise<ReminderRecord[]> {

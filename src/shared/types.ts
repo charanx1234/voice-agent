@@ -110,6 +110,33 @@ export interface ReminderItem {
   notifiedAt?: string;
 }
 
+export type TaskPriority = 'high' | 'medium' | 'low';
+
+export interface TaskItem {
+  id: string;
+  text: string;
+  priority: TaskPriority;
+  dueAt?: string;
+  status: 'pending' | 'done';
+  createdAt: string;
+  completedAt?: string;
+}
+
+export interface SystemHealthSnapshot {
+  cpuPercent: number;
+  ramUsedGb: number;
+  ramTotalGb: number;
+  ramPercent: number;
+  batteryPercent: number | null;
+  charging: boolean | null;
+  diskUsedPercent: number | null;
+  diskFreeGb: number | null;
+  networkOnline: boolean;
+  temperatureC: number | null;
+  uptimeHours: number;
+  sampledAt: string;
+}
+
 /** Visual output FRIDAY sends to the dashboard while voice keeps running. */
 export type DashboardArtifactKind = 'code' | 'document' | 'list' | 'table' | 'markdown';
 
@@ -233,6 +260,15 @@ export interface FridayApiBridge {
   // Neural speech output
   synthesizeSpeech: (request: SpeechSynthesisRequest) => Promise<SpeechSynthesisResult>;
   cancelSpeech: () => void;
+
+  // Tasks
+  listTasks: (includeDone?: boolean) => Promise<TaskItem[]>;
+  completeTask: (idOrText: string) => Promise<TaskItem | null>;
+  onTasksChanged: (callback: (tasks: TaskItem[]) => void) => () => void;
+
+  // System health
+  getSystemHealth: () => Promise<SystemHealthSnapshot | null>;
+  onSystemHealth: (callback: (health: SystemHealthSnapshot) => void) => () => void;
 
   // Diagnostics
   openLogsFolder: () => Promise<boolean>;

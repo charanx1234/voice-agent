@@ -32,6 +32,42 @@ export const reminderToolDefinitions = [
     },
   },
   {
+    name: 'create_task',
+    description:
+      'Adds a task to the user’s task list with a priority and optional due date. Use for things they intend to do but that do not need a timed reminder.',
+    parameters: {
+      type: 'OBJECT',
+      properties: {
+        text: { type: 'STRING', description: 'What needs doing.' },
+        priority: {
+          type: 'STRING',
+          description: 'high, medium or low. Default medium.',
+        },
+        due: {
+          type: 'STRING',
+          description: 'Optional due date as spoken: "tomorrow", "Friday at 5", "in 3 days".',
+        },
+      },
+      required: ['text'],
+    },
+  },
+  {
+    name: 'list_tasks',
+    description: 'Lists the user’s pending tasks, highest priority first.',
+    parameters: { type: 'OBJECT', properties: {} },
+  },
+  {
+    name: 'complete_task',
+    description: 'Marks a task as done, matched by id or a few words from the task text.',
+    parameters: {
+      type: 'OBJECT',
+      properties: {
+        idOrText: { type: 'STRING', description: 'Task id or words from the task.' },
+      },
+      required: ['idOrText'],
+    },
+  },
+  {
     name: 'list_reminders',
     description: 'Lists the user’s pending reminders with their due times.',
     parameters: {
@@ -76,6 +112,47 @@ export async function executeReminderTool(
         dueText: formatDue(result.reminder.dueAt),
         message: `Reminder created for ${formatDue(result.reminder.dueAt)}: ${result.reminder.text}. Confirm it to the user in one short sentence.`,
       };
+    }
+
+    case 'create_task': {
+      const result = await remindersService.createTask(
+        args.text || '',
+        (args.priority || 'medium') as any,
+        args.due || undefined
+      );
+      if (!result.success || !result.task) {
+        return { success: false, error: result.error || 'Could not create that task.' };
+      }
+      return {
+        success: true,
+        task: {
+          id: result.task.id,
+          text: result.task.text,
+          priority: result.task.priority,
+          dueAt: result.task.dueAt || null,
+        },
+        message: `Task added (${result.task.priority} priority). Confirm briefly.`,
+      };
+    }
+
+    case 'list_tasks': {
+      const tasks = await remindersService.listTasks(false);
+      return {
+        success: true,
+        count: tasks.length,
+        tasks: tasks.map((task) => ({
+          id: task.id,
+          text: task.text,
+          priority: task.priority,
+          dueAt: task.dueAt || null,
+        })),
+      };
+    }
+
+    case 'complete_task': {
+      const task = await remindersService.completeTask(args.idOrText || '');
+      if (!task) return { success: false, error: 'No pending task matched that.' };
+      return { success: true, message: `Marked "${task.text}" as done.` };
     }
 
     case 'list_reminders': {
