@@ -14,7 +14,7 @@ import {
   FridaySettings,
   ToolConfirmationPayload,
 } from '@/shared/types';
-import { SUPPORTED_LANGUAGES } from '@/services/voice/languages';
+import { pickGreeting } from '@/services/voice/greetings';
 import { isLikelySilence } from '@/services/voice/micErrors';
 
 export const App: React.FC = () => {
@@ -80,14 +80,26 @@ export const App: React.FC = () => {
         if (stored.length > 0) {
           setMessages(stored);
         } else {
-          const langConfig =
-            SUPPORTED_LANGUAGES[loaded.preferredLanguage] ||
-            SUPPORTED_LANGUAGES['te-IN'];
+          // Time-of-day greeting that never repeats the previous line, even across restarts.
+          let lastGreeting: string | null = null;
+          try {
+            lastGreeting = window.localStorage.getItem('friday:lastGreeting');
+          } catch {
+            lastGreeting = null;
+          }
+
+          const greeting = pickGreeting(new Date(), lastGreeting);
+          try {
+            window.localStorage.setItem('friday:lastGreeting', greeting.key);
+          } catch {
+            // storage unavailable; rotation simply resets next launch
+          }
+
           setMessages([
             {
               id: `msg_welcome_${Date.now()}`,
               role: 'assistant',
-              text: langConfig.sampleGreeting,
+              text: greeting.text,
               timestamp: Date.now(),
               language: loaded.preferredLanguage,
             },
