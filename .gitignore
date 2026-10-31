@@ -38,3 +38,6 @@ $RECYCLE.BIN/
 *.sln
 *.sw?
 
+
+# Windows shortcuts (machine-specific)
+*.lnk
