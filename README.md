@@ -25,7 +25,9 @@ FRIDAY understands and speaks **Telugu (తెలుగు)**, **Indian English*
   - **English (US)**: `en-US`
 - **Voice Pipeline**:
   - **Input**: Microphone audio capture with real-time waveform visualization, sending audio to Gemini Multimodal Audio understanding.
-  - **Output**: Neural text-to-speech with a **female voice** — Microsoft Edge neural voices (free, no key) such as `en-IN-NeerjaExpressiveNeural`, `te-IN-ShrutiNeural`, `hi-IN-SwaraNeural`, `ta-IN-PallaviNeural`, `kn-IN-SapnaNeural` and `en-US-AriaNeural`.
+  - **Output**: Neural text-to-speech across **three English accents** — American (17 voices), British (5) and Indian (3) — each with female and male options, plus native voices for Telugu, Hindi, Tamil and Kannada.
+  - **Accent & voice selection**: Settings → Voice lets you pick the accent, choose a specific female or male neural voice, audition it with **Play Sample**, and adjust speed, pitch and volume. The choice is saved locally and restored on the next launch.
+  - **Indic languages keep their own voice**: an English accent never overrides Telugu/Hindi/Tamil/Kannada speech.
   - **Fallback chain**: Edge neural → Gemini TTS (`gemini-2.5-flash-preview-tts`, warm female `Kore`) → installed system voice, preferring female voices so it never drops to a male default.
   - **Natural delivery**: speech is split into sentence chunks, synthesized in a pipeline (the next chunk is generated while the current one plays), with adjustable speed, **pitch (−3…+3 semitones)** and volume. Markdown, code fences and URLs are cleaned before speaking.
   - **Real lip-sync**: the robot's mouth is driven by the analysed audio waveform, not a simulated animation.
@@ -241,10 +243,11 @@ All tests should pass:
  ✓ tests/tts.test.ts (14 tests)
  ✓ tests/logger.test.ts (5 tests)
  ✓ tests/persona.test.ts (9 tests)
+ ✓ tests/voiceCatalog.test.ts (10 tests)
  ✓ tests/greetings.test.ts (6 tests)
  ✓ tests/reminders.test.ts (10 tests)
- Test Files  11 passed (11)
-      Tests  99 passed (99)
+ Test Files  12 passed (12)
+      Tests  109 passed (109)
 ```
 
 ---

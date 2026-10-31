@@ -30,6 +30,8 @@ export const App: React.FC = () => {
     pitch: 0,
     ttsEngine: 'auto',
     voiceId: 'default',
+    voiceAccent: 'en-IN',
+    ttsVoice: 'en-IN-NeerjaExpressiveNeural',
     ttsProvider: 'auto',
     themeMode: 'auto',
     approvedFolders: [],
@@ -267,6 +269,8 @@ export const App: React.FC = () => {
             volume: settings.speechVolume,
             pitch: settings.pitch,
             voiceId: settings.voiceId,
+            voice: settings.ttsVoice,
+            accent: settings.voiceAccent,
             engine: settings.ttsEngine,
             audioBase64: response.audioBase64,
           });
@@ -576,6 +580,8 @@ export const App: React.FC = () => {
             volume: settings.speechVolume,
             pitch: settings.pitch,
             voiceId: settings.voiceId,
+            voice: settings.ttsVoice,
+            accent: settings.voiceAccent,
             engine: settings.ttsEngine,
           })
         }

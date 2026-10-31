@@ -344,6 +344,8 @@ export function useVoiceAssistant() {
         volume?: number;
         pitch?: number;
         voiceId?: string;
+        voice?: string;
+        accent?: string;
         engine?: 'auto' | 'edge' | 'gemini' | 'system';
         audioBase64?: string;
       } = {}
@@ -365,6 +367,8 @@ export function useVoiceAssistant() {
             volume: options.volume,
             pitch: options.pitch,
             voiceId: options.voiceId,
+            voice: options.voice,
+            accent: options.accent,
             engine: options.engine,
             onError: () => setRobotState('error'),
           });

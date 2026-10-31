@@ -1,9 +1,14 @@
 import { MsEdgeTTS, OUTPUT_FORMAT } from 'msedge-tts';
 import { settingsStore } from '../storage/settingsStore';
+import { resolveVoiceId } from './voiceCatalog';
 
 export interface NeuralVoiceRequest {
   text: string;
   language?: string;
+  /** Explicit Edge voice id from the catalogue; validated before use. */
+  voice?: string;
+  /** 'en-US' | 'en-GB' | 'en-IN' — decides the default voice for English. */
+  accent?: string;
   rate?: number; // playback multiplier, 0.7 - 1.3
   pitch?: number; // semitones, -3 .. +3
   volume?: number; // 0 - 1
@@ -33,14 +38,9 @@ const MAX_TEXT_LENGTH = 1500;
 const SYNTHESIS_TIMEOUT_MS = 15_000;
 const SOLUTION_TIMEOUT = 20_000;
 
-/** Resolves the female voice for a language, falling back to Indian English. */
+/** Default voice for a language (kept for callers that only know the language). */
 export function voiceForLanguage(language?: string): string {
-  if (!language) return FEMALE_VOICES['en-IN'];
-  if (FEMALE_VOICES[language]) return FEMALE_VOICES[language];
-
-  const base = language.split('-')[0];
-  const match = Object.keys(FEMALE_VOICES).find((code) => code.split('-')[0] === base);
-  return match ? FEMALE_VOICES[match] : FEMALE_VOICES['en-IN'];
+  return resolveVoiceId({ language });
 }
 
 export function rateToPercent(rate?: number): number {
@@ -125,7 +125,11 @@ export class NeuralVoiceService {
     const text = (request.text || '').trim().slice(0, MAX_TEXT_LENGTH);
     if (!text) throw new Error('There is no text to speak.');
 
-    const voice = voiceForLanguage(request.language);
+    const voice = resolveVoiceId({
+      voice: request.voice,
+      accent: request.accent,
+      language: request.language,
+    });
     const rate = rateToPercent(request.rate);
     const pitch = pitchToHz(request.pitch);
     const volume = volumeToPercent(request.volume);

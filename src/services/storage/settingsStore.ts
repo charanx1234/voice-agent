@@ -3,6 +3,7 @@ import path from 'path';
 import { app } from 'electron';
 import dotenv from 'dotenv';
 import { FridaySettings } from '../../shared/types';
+import { accentForLanguage, defaultVoiceForAccent } from '../voice/voiceCatalog';
 
 // Load .env if present in project root
 dotenv.config();
@@ -16,6 +17,8 @@ const DEFAULT_SETTINGS: FridaySettings = {
   pitch: 0,
   ttsEngine: 'auto',
   voiceId: 'default',
+  voiceAccent: 'en-IN',
+  ttsVoice: 'en-IN-NeerjaExpressiveNeural',
   ttsProvider: 'auto',
   themeMode: 'auto',
   approvedFolders: [],
@@ -70,10 +73,23 @@ export class SettingsStore {
             ? 'dark'
             : 'auto';
 
+        // Voice preferences: derive sensible defaults for older installs.
+        const preferredLanguage = parsed.preferredLanguage || DEFAULT_SETTINGS.preferredLanguage;
+        const voiceAccent: FridaySettings['voiceAccent'] =
+          parsed.voiceAccent === 'en-US' || parsed.voiceAccent === 'en-GB' || parsed.voiceAccent === 'en-IN'
+            ? parsed.voiceAccent
+            : accentForLanguage(preferredLanguage);
+        const ttsVoice =
+          typeof parsed.ttsVoice === 'string' && parsed.ttsVoice.trim()
+            ? parsed.ttsVoice
+            : defaultVoiceForAccent(voiceAccent);
+
         return {
           ...DEFAULT_SETTINGS,
           ...parsed,
           themeMode,
+          voiceAccent,
+          ttsVoice,
           modelName: model,
           // If env has key and stored doesn't, fallback to env
           apiKey: parsed.apiKey || process.env.GEMINI_API_KEY || '',

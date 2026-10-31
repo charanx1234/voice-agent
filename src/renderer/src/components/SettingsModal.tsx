@@ -17,6 +17,12 @@ import {
 } from 'lucide-react';
 import { FridaySettings } from '@/shared/types';
 import { SUPPORTED_LANGUAGES } from '@/services/voice/languages';
+import {
+  ACCENTS,
+  LANGUAGE_VOICES,
+  LANGUAGE_VOICE_LABELS,
+  getAccent,
+} from '@/services/voice/voiceCatalog';
 import { VoiceOption } from '@/services/voice/voiceManager';
 
 interface SettingsModalProps {
@@ -44,6 +50,13 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   const [showKey, setShowKey] = useState(false);
   const [language, setLanguage] = useState(settings.preferredLanguage || 'te-IN');
   const [voiceId, setVoiceId] = useState(settings.voiceId || 'default');
+  const [voiceAccent, setVoiceAccent] = useState<FridaySettings['voiceAccent']>(
+    settings.voiceAccent || 'en-IN'
+  );
+  const [ttsVoice, setTtsVoice] = useState(
+    settings.ttsVoice || 'en-IN-NeerjaExpressiveNeural'
+  );
+  const [sampleBusy, setSampleBusy] = useState(false);
   const [speechSpeed, setSpeechSpeed] = useState(settings.speechSpeed || 1.0);
   const [speechVolume, setSpeechVolume] = useState(settings.speechVolume || 1.0);
   const [pitch, setPitch] = useState(settings.pitch ?? 0);
@@ -65,6 +78,9 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
       setApiKeyInput(settings.apiKey || '');
       setLanguage(settings.preferredLanguage || 'te-IN');
       setVoiceId(settings.voiceId || 'default');
+      setVoiceAccent(settings.voiceAccent || 'en-IN');
+      setTtsVoice(settings.ttsVoice || 'en-IN-NeerjaExpressiveNeural');
+      setSampleBusy(false);
       setSpeechSpeed(settings.speechSpeed || 1.0);
       setSpeechVolume(settings.speechVolume || 1.0);
       setPitch(settings.pitch ?? 0);
@@ -83,6 +99,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
       apiKey: apiKeyInput,
       preferredLanguage: language,
       voiceId,
+      voiceAccent,
+      ttsVoice,
       speechSpeed,
       speechVolume,
       pitch,
@@ -119,6 +137,42 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   };
 
   const langConfig = SUPPORTED_LANGUAGES[language] || SUPPORTED_LANGUAGES['te-IN'];
+  const englishLanguage = language.toLowerCase().startsWith('en');
+  const accentGroup = getAccent(voiceAccent);
+  const accentVoices = accentGroup.voices;
+
+  /** Plays the currently selected (possibly unsaved) voice so users can audition accents. */
+  const handlePlaySample = async () => {
+    if (!window.fridayAPI || sampleBusy) return;
+
+    setSampleBusy(true);
+    try {
+      const sampleText = englishLanguage
+        ? `Hi, I'm FRIDAY. This is my ${accentGroup.shortLabel} English voice.`
+        : langConfig.sampleGreeting;
+
+      const result = await window.fridayAPI.synthesizeSpeech({
+        text: sampleText,
+        language: englishLanguage ? voiceAccent : language,
+        voice: englishLanguage ? ttsVoice : LANGUAGE_VOICES[language],
+        accent: voiceAccent,
+        rate: speechSpeed,
+        pitch,
+        volume: speechVolume,
+      });
+
+      await new Promise<void>((resolve) => {
+        const audio = new Audio(`data:${result.mimeType};base64,${result.audioBase64}`);
+        audio.onended = () => resolve();
+        audio.onerror = () => resolve();
+        audio.play().catch(() => resolve());
+      });
+    } catch {
+      // a failed sample must never block the settings dialog
+    } finally {
+      setSampleBusy(false);
+    }
+  };
 
   return (
     <div
@@ -418,24 +472,160 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
               ))}
             </select>
 
-            {/* Voice Dropdown */}
+            {/* Accent selector (English only) */}
             <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', marginTop: '2px' }}>
-              <label style={{ fontSize: '0.72rem', color: 'var(--muted-dim)' }}>VOICE MODEL</label>
+              <label style={{ fontSize: '0.72rem', color: 'var(--muted-dim)' }}>
+                ENGLISH ACCENT
+              </label>
+              <div style={{ display: 'flex', gap: '6px' }}>
+                {ACCENTS.map((accent) => {
+                  const active = voiceAccent === accent.id;
+                  const disabled = !englishLanguage;
+                  return (
+                    <button
+                      key={accent.id}
+                      type="button"
+                      disabled={disabled}
+                      onClick={() => {
+                        setVoiceAccent(accent.id);
+                        setTtsVoice(accent.defaultVoice);
+                      }}
+                      title={accent.label}
+                      style={{
+                        flex: 1,
+                        padding: '6px 8px',
+                        borderRadius: '9px',
+                        fontSize: '0.74rem',
+                        fontWeight: 600,
+                        cursor: disabled ? 'default' : 'pointer',
+                        opacity: disabled ? 0.45 : 1,
+                        backgroundColor: active
+                          ? 'color-mix(in srgb, var(--accent) 12%, transparent)'
+                          : 'color-mix(in srgb, var(--text) 4%, transparent)',
+                        border: `1px solid ${
+                          active
+                            ? 'color-mix(in srgb, var(--accent) 45%, transparent)'
+                            : 'color-mix(in srgb, var(--text) 10%, transparent)'
+                        }`,
+                        color: active ? 'var(--accent)' : 'var(--muted)',
+                      }}
+                    >
+                      {accent.shortLabel}
+                    </button>
+                  );
+                })}
+              </div>
+              {!englishLanguage && (
+                <span style={{ fontSize: '0.68rem', color: 'var(--muted-dim)' }}>
+                  Accent applies to English. {langConfig.name} uses{' '}
+                  {LANGUAGE_VOICE_LABELS[language] || 'its own voice'}.
+                </span>
+              )}
+            </div>
+
+            {/* Voice selector */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+              <label style={{ fontSize: '0.72rem', color: 'var(--muted-dim)' }}>VOICE</label>
+              {englishLanguage ? (
+                <select
+                  value={ttsVoice}
+                  onChange={(e) => setTtsVoice(e.target.value)}
+                  style={{
+                    backgroundColor: 'color-mix(in srgb, var(--text) 5%, transparent)',
+                    border: '1px solid color-mix(in srgb, var(--text) 10%, transparent)',
+                    borderRadius: '10px',
+                    padding: '7px 10px',
+                    color: 'var(--text)',
+                    fontSize: '0.78rem',
+                    outline: 'none',
+                  }}
+                >
+                  <optgroup label="Female">
+                    {accentVoices
+                      .filter((voice) => voice.gender === 'female')
+                      .map((voice) => (
+                        <option key={voice.id} value={voice.id} style={{ background: 'var(--surface)' }}>
+                          {voice.label}
+                        </option>
+                      ))}
+                  </optgroup>
+                  <optgroup label="Male">
+                    {accentVoices
+                      .filter((voice) => voice.gender === 'male')
+                      .map((voice) => (
+                        <option key={voice.id} value={voice.id} style={{ background: 'var(--surface)' }}>
+                          {voice.label}
+                        </option>
+                      ))}
+                  </optgroup>
+                </select>
+              ) : (
+                <select
+                  value={LANGUAGE_VOICES[language] || ''}
+                  disabled
+                  style={{
+                    backgroundColor: 'color-mix(in srgb, var(--text) 5%, transparent)',
+                    border: '1px solid color-mix(in srgb, var(--text) 10%, transparent)',
+                    borderRadius: '10px',
+                    padding: '7px 10px',
+                    color: 'var(--muted)',
+                    fontSize: '0.78rem',
+                    outline: 'none',
+                  }}
+                >
+                  <option value={LANGUAGE_VOICES[language] || ''} style={{ background: 'var(--surface)' }}>
+                    {LANGUAGE_VOICE_LABELS[language] || 'Default voice'}
+                  </option>
+                </select>
+              )}
+            </div>
+
+            {/* Sample playback */}
+            <button
+              type="button"
+              onClick={handlePlaySample}
+              disabled={sampleBusy}
+              style={{
+                alignSelf: 'flex-start',
+                marginTop: '2px',
+                padding: '4px 10px',
+                borderRadius: '8px',
+                backgroundColor: 'color-mix(in srgb, var(--accent) 10%, transparent)',
+                border: '1px solid color-mix(in srgb, var(--accent) 30%, transparent)',
+                color: 'var(--accent)',
+                fontSize: '0.75rem',
+                fontWeight: 600,
+                cursor: sampleBusy ? 'default' : 'pointer',
+                opacity: sampleBusy ? 0.7 : 1,
+                display: 'flex',
+                alignItems: 'center',
+                gap: '5px',
+              }}
+            >
+              <Volume2 size={13} color="var(--accent)" />
+              <span>{sampleBusy ? 'Playing…' : 'Play Sample'}</span>
+            </button>
+
+            {/* System fallback voice */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+              <label style={{ fontSize: '0.68rem', color: 'var(--muted-dim)' }}>
+                SYSTEM FALLBACK VOICE
+              </label>
               <select
                 value={voiceId}
                 onChange={(e) => setVoiceId(e.target.value)}
                 style={{
-                  backgroundColor: 'color-mix(in srgb, var(--text) 5%, transparent)',
-                  border: '1px solid color-mix(in srgb, var(--text) 10%, transparent)',
-                  borderRadius: '10px',
-                  padding: '7px 10px',
-                  color: 'var(--text)',
-                  fontSize: '0.78rem',
+                  backgroundColor: 'color-mix(in srgb, var(--text) 4%, transparent)',
+                  border: '1px solid color-mix(in srgb, var(--text) 8%, transparent)',
+                  borderRadius: '9px',
+                  padding: '6px 9px',
+                  color: 'var(--muted)',
+                  fontSize: '0.72rem',
                   outline: 'none',
                 }}
               >
                 <option value="default" style={{ background: 'var(--surface)' }}>
-                  Automatic (Best match for {langConfig.name})
+                  Automatic (best match for {langConfig.name})
                 </option>
                 {voices.map((v) => (
                   <option key={v.id} value={v.id} style={{ background: 'var(--surface)' }}>
@@ -444,29 +634,6 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                 ))}
               </select>
             </div>
-
-            {/* Test Voice Button */}
-            <button
-              type="button"
-              onClick={() => onTestVoice(langConfig.sampleGreeting)}
-              style={{
-                alignSelf: 'flex-start',
-                marginTop: '2px',
-                padding: '4px 10px',
-                borderRadius: '8px',
-                backgroundColor: 'color-mix(in srgb, var(--text) 5%, transparent)',
-                border: '1px solid color-mix(in srgb, var(--text) 10%, transparent)',
-                color: 'var(--muted)',
-                fontSize: '0.75rem',
-                cursor: 'pointer',
-                display: 'flex',
-                alignItems: 'center',
-                gap: '5px',
-              }}
-            >
-              <Volume2 size={13} color="var(--accent)" />
-              <span>Test Spoken Voice</span>
-            </button>
           </div>
 
           {/* Section: Speech Speed */}

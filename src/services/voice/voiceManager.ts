@@ -17,6 +17,10 @@ export interface SpeakOptions {
   pitch?: number;
   volume?: number;
   voiceId?: string;
+  /** Explicit neural voice id from the catalogue. */
+  voice?: string;
+  /** English accent fallback when no explicit voice is chosen. */
+  accent?: string;
   engine?: SpeechEngine;
   onStart?: () => void;
   onEnd?: () => void;
@@ -152,6 +156,8 @@ export class VoiceManager {
         rate: options.rate,
         pitch: options.pitch,
         volume: options.volume,
+        voice: options.voice,
+        accent: options.accent,
       });
 
     let pending = request(chunks[0]);
@@ -200,12 +206,16 @@ export class VoiceManager {
         return;
       }
 
+      // For English, prefer the system voice that matches the chosen accent.
+      const systemLanguage =
+        options.accent && language.toLowerCase().startsWith('en') ? options.accent : language;
+
       const utterance = new SpeechSynthesisUtterance(text);
-      utterance.lang = language;
+      utterance.lang = systemLanguage;
       utterance.rate = options.rate ?? 1.0;
       utterance.volume = options.volume ?? 1.0;
 
-      const voice = this.findBestVoice(language, options.voiceId);
+      const voice = this.findBestVoice(systemLanguage, options.voiceId);
       if (voice) utterance.voice = voice;
 
       utterance.onstart = () => {

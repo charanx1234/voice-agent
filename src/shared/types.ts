@@ -38,6 +38,10 @@ export interface FridaySettings {
   /** Preferred speech engine; 'auto' tries Edge, then Gemini, then the system voice. */
   ttsEngine: 'auto' | 'edge' | 'gemini' | 'system';
   voiceId: string;
+  /** Accent used for English speech: American, British or Indian. */
+  voiceAccent: 'en-US' | 'en-GB' | 'en-IN';
+  /** Chosen neural voice id from the Edge catalogue. */
+  ttsVoice: string;
   ttsProvider: 'webspeech' | 'cloud' | 'auto';
   /** 'auto' follows the Windows theme; 'light' and 'dark' are manual overrides. */
   themeMode: 'auto' | 'light' | 'dark';
@@ -121,6 +125,8 @@ export interface DashboardArtifact {
 export interface SpeechSynthesisRequest {
   text: string;
   language?: string;
+  voice?: string;
+  accent?: string;
   rate?: number;
   pitch?: number;
   volume?: number;
