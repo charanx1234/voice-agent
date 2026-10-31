@@ -35,7 +35,8 @@ export interface FridaySettings {
   speechVolume: number; // 0 to 1 (default 1.0)
   voiceId: string;
   ttsProvider: 'webspeech' | 'cloud' | 'auto';
-  theme: 'dark' | 'midnight' | 'cyber';
+  /** 'auto' follows the Windows theme; 'light' and 'dark' are manual overrides. */
+  themeMode: 'auto' | 'light' | 'dark';
   approvedFolders: string[];
   requireToolConfirmations: {
     notes: boolean;
@@ -89,6 +90,28 @@ export interface MemoryInputPayload {
   content: string;
   subject?: string;
   importance?: number;
+}
+
+/** Reminder created from a spoken or typed request. */
+export interface ReminderItem {
+  id: string;
+  text: string;
+  dueAt: string;
+  status: 'pending' | 'done' | 'cancelled';
+  createdAt: string;
+  notifiedAt?: string;
+}
+
+/** Visual output FRIDAY sends to the dashboard while voice keeps running. */
+export type DashboardArtifactKind = 'code' | 'document' | 'list' | 'table' | 'markdown';
+
+export interface DashboardArtifact {
+  id: string;
+  title: string;
+  kind: DashboardArtifactKind;
+  content: string;
+  language?: string;
+  createdAt: string;
 }
 
 export interface SearchMatch {
@@ -170,6 +193,17 @@ export interface FridayApiBridge {
   getMemoryStats: () => Promise<MemoryStats>;
   loadConversation: (limit?: number) => Promise<ChatMessage[]>;
   clearConversation: () => Promise<boolean>;
+
+  // Reminders
+  listReminders: (includeDone?: boolean) => Promise<ReminderItem[]>;
+  completeReminder: (idOrText: string) => Promise<ReminderItem | null>;
+  deleteReminder: (idOrText: string) => Promise<boolean>;
+  onReminderFired: (callback: (reminder: ReminderItem) => void) => () => void;
+  onRemindersChanged: (callback: (reminders: ReminderItem[]) => void) => () => void;
+
+  // Dashboard
+  setDashboardOpen: (open: boolean) => void;
+  onDashboardArtifact: (callback: (artifact: DashboardArtifact) => void) => () => void;
 
   // Window Controls
   minimizeWindow: () => void;

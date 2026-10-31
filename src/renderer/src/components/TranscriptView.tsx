@@ -28,8 +28,8 @@ export const TranscriptView: React.FC<TranscriptViewProps> = ({
         flexDirection: 'column',
         height: '100%',
         maxHeight: '260px',
-        backgroundColor: 'rgba(10, 14, 23, 0.95)',
-        borderTop: '1px solid rgba(255, 255, 255, 0.08)',
+        backgroundColor: 'color-mix(in srgb, var(--surface) 95%, transparent)',
+        borderTop: '1px solid color-mix(in srgb, var(--text) 8%, transparent)',
       }}
     >
       {/* Header */}
@@ -39,9 +39,9 @@ export const TranscriptView: React.FC<TranscriptViewProps> = ({
           alignItems: 'center',
           justifyContent: 'space-between',
           padding: '8px 14px',
-          borderBottom: '1px solid rgba(255, 255, 255, 0.06)',
+          borderBottom: '1px solid color-mix(in srgb, var(--text) 6%, transparent)',
           fontSize: '0.8rem',
-          color: '#94a3b8',
+          color: 'var(--muted)',
         }}
       >
         <span style={{ fontWeight: 600, letterSpacing: '0.04em' }}>CONVERSATION TRANSCRIPT</span>
@@ -52,7 +52,7 @@ export const TranscriptView: React.FC<TranscriptViewProps> = ({
             style={{
               background: 'none',
               border: 'none',
-              color: '#64748b',
+              color: 'var(--muted-dim)',
               cursor: 'pointer',
               display: 'flex',
               alignItems: 'center',
@@ -82,12 +82,12 @@ export const TranscriptView: React.FC<TranscriptViewProps> = ({
           <div
             style={{
               textAlign: 'center',
-              color: '#64748b',
+              color: 'var(--muted-dim)',
               fontSize: '0.82rem',
               padding: '24px 0',
             }}
           >
-            Say something in Telugu, Hindi, Tamil, Kannada, or English, or type below!
+            No messages yet.
           </div>
         ) : (
           messages.map((msg) => {
@@ -109,23 +109,23 @@ export const TranscriptView: React.FC<TranscriptViewProps> = ({
                     alignItems: 'center',
                     gap: '6px',
                     fontSize: '0.72rem',
-                    color: '#64748b',
+                    color: 'var(--muted-dim)',
                   }}
                 >
                   {isUser ? (
                     <>
                       <span>You</span>
-                      {msg.isVoice && <Mic size={11} color="#00e5ff" />}
+                      {msg.isVoice && <Mic size={11} color="var(--accent)" />}
                     </>
                   ) : msg.isError ? (
                     <>
-                      <AlertTriangle size={12} color="#f43f5e" />
-                      <span style={{ color: '#f43f5e', fontWeight: 600 }}>ERROR</span>
+                      <AlertTriangle size={12} color="var(--danger)" />
+                      <span style={{ color: 'var(--danger)', fontWeight: 600 }}>ERROR</span>
                     </>
                   ) : (
                     <>
-                      <Bot size={12} color="#00e5ff" />
-                      <span style={{ color: '#00e5ff', fontWeight: 600 }}>FRIDAY</span>
+                      <Bot size={12} color="var(--accent)" />
+                      <span style={{ color: 'var(--accent)', fontWeight: 600 }}>FRIDAY</span>
                     </>
                   )}
                   <span>
@@ -141,18 +141,18 @@ export const TranscriptView: React.FC<TranscriptViewProps> = ({
                   style={{
                     maxWidth: '88%',
                     backgroundColor: isUser
-                      ? 'rgba(0, 229, 255, 0.12)'
+                      ? 'color-mix(in srgb, var(--accent) 12%, transparent)'
                       : msg.isError
-                      ? 'rgba(244, 63, 94, 0.1)'
-                      : 'rgba(26, 34, 51, 0.85)',
+                      ? 'color-mix(in srgb, var(--danger) 10%, transparent)'
+                      : 'color-mix(in srgb, var(--surface) 85%, transparent)',
                     border: isUser
-                      ? '1px solid rgba(0, 229, 255, 0.3)'
+                      ? '1px solid color-mix(in srgb, var(--accent) 30%, transparent)'
                       : msg.isError
-                      ? '1px solid rgba(244, 63, 94, 0.35)'
-                      : '1px solid rgba(255, 255, 255, 0.08)',
+                      ? '1px solid color-mix(in srgb, var(--danger) 35%, transparent)'
+                      : '1px solid color-mix(in srgb, var(--text) 8%, transparent)',
                     borderRadius: isUser ? '14px 14px 2px 14px' : '14px 14px 14px 2px',
                     padding: '8px 12px',
-                    color: '#f1f5f9',
+                    color: 'var(--text)',
                     fontSize: '0.85rem',
                     lineHeight: '1.45',
                     whiteSpace: 'pre-wrap',
@@ -168,17 +168,17 @@ export const TranscriptView: React.FC<TranscriptViewProps> = ({
                         <div
                           key={idx}
                           style={{
-                            backgroundColor: 'rgba(10, 14, 23, 0.7)',
-                            border: '1px solid rgba(255, 255, 255, 0.06)',
+                            backgroundColor: 'color-mix(in srgb, var(--surface) 70%, transparent)',
+                            border: '1px solid color-mix(in srgb, var(--text) 6%, transparent)',
                             borderRadius: '8px',
                             padding: '6px 8px',
                             fontSize: '0.75rem',
                           }}
                         >
-                          <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontWeight: 600, color: '#38bdf8' }}>
-                            {tool.status === 'completed' && <CheckCircle2 size={13} color="#34d399" />}
-                            {tool.status === 'rejected' && <XCircle size={13} color="#f59e0b" />}
-                            {tool.status === 'failed' && <XCircle size={13} color="#f43f5e" />}
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontWeight: 600, color: 'var(--info)' }}>
+                            {tool.status === 'completed' && <CheckCircle2 size={13} color="var(--success)" />}
+                            {tool.status === 'rejected' && <XCircle size={13} color="var(--warning)" />}
+                            {tool.status === 'failed' && <XCircle size={13} color="var(--danger)" />}
                             <span>Action: {tool.toolName}</span>
                           </div>
 
@@ -190,7 +190,7 @@ export const TranscriptView: React.FC<TranscriptViewProps> = ({
                                   key={mIdx}
                                   onClick={() => onOpenFile && onOpenFile(m.filePath)}
                                   style={{
-                                    color: '#00e5ff',
+                                    color: 'var(--accent)',
                                     textDecoration: 'underline',
                                     cursor: 'pointer',
                                     display: 'flex',
@@ -215,7 +215,7 @@ export const TranscriptView: React.FC<TranscriptViewProps> = ({
                                   target="_blank"
                                   rel="noreferrer"
                                   style={{
-                                    color: '#00e5ff',
+                                    color: 'var(--accent)',
                                     display: 'flex',
                                     alignItems: 'center',
                                     gap: '4px',

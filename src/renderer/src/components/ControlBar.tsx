@@ -73,19 +73,19 @@ export const ControlBar: React.FC<ControlBarProps> = ({
             recordingSeconds > 0
               ? `Listening… ${formatRecordingDuration(recordingSeconds)}`
               : 'Listening...',
-          color: '#00e5ff',
-          bg: 'rgba(0, 229, 255, 0.15)',
+          color: 'var(--accent)',
+          bg: 'color-mix(in srgb, var(--accent) 15%, transparent)',
         };
       case 'thinking':
-        return { label: 'Thinking...', color: '#38bdf8', bg: 'rgba(56, 189, 248, 0.15)' };
+        return { label: 'Thinking...', color: 'var(--info)', bg: 'color-mix(in srgb, var(--info) 15%, transparent)' };
       case 'speaking':
-        return { label: 'Speaking...', color: '#34d399', bg: 'rgba(52, 211, 153, 0.15)' };
+        return { label: 'Speaking...', color: 'var(--success)', bg: 'color-mix(in srgb, var(--success) 15%, transparent)' };
       case 'interrupted':
-        return { label: 'Interrupted', color: '#fbbf24', bg: 'rgba(251, 191, 36, 0.15)' };
+        return { label: 'Interrupted', color: 'var(--warning)', bg: 'color-mix(in srgb, var(--warning) 15%, transparent)' };
       case 'error':
-        return { label: 'Service Error', color: '#f43f5e', bg: 'rgba(244, 63, 94, 0.15)' };
+        return { label: 'Service Error', color: 'var(--danger)', bg: 'color-mix(in srgb, var(--danger) 15%, transparent)' };
       default:
-        return { label: 'FRIDAY Ready', color: '#94a3b8', bg: 'rgba(148, 163, 184, 0.1)' };
+        return { label: 'FRIDAY Ready', color: 'var(--muted)', bg: 'color-mix(in srgb, var(--muted) 10%, transparent)' };
     }
   };
 
@@ -136,11 +136,11 @@ export const ControlBar: React.FC<ControlBarProps> = ({
             onClick={onOpenShortcuts}
             title="Agent Tools & Shortcuts"
             style={{
-              background: 'rgba(255, 255, 255, 0.05)',
-              border: '1px solid rgba(255, 255, 255, 0.1)',
+              background: 'color-mix(in srgb, var(--text) 5%, transparent)',
+              border: '1px solid color-mix(in srgb, var(--text) 10%, transparent)',
               borderRadius: '10px',
               padding: '6px 8px',
-              color: '#94a3b8',
+              color: 'var(--muted)',
               cursor: 'pointer',
               display: 'flex',
               alignItems: 'center',
@@ -157,11 +157,11 @@ export const ControlBar: React.FC<ControlBarProps> = ({
             onClick={onOpenMemory}
             title="Long-term memory"
             style={{
-              background: memoryCount > 0 ? 'rgba(167, 139, 250, 0.12)' : 'rgba(255, 255, 255, 0.05)',
-              border: memoryCount > 0 ? '1px solid rgba(167, 139, 250, 0.4)' : '1px solid rgba(255, 255, 255, 0.1)',
+              background: memoryCount > 0 ? 'color-mix(in srgb, var(--accent) 12%, transparent)' : 'color-mix(in srgb, var(--text) 5%, transparent)',
+              border: memoryCount > 0 ? '1px solid color-mix(in srgb, var(--accent) 40%, transparent)' : '1px solid color-mix(in srgb, var(--text) 10%, transparent)',
               borderRadius: '10px',
               padding: '6px 8px',
-              color: memoryCount > 0 ? '#a78bfa' : '#94a3b8',
+              color: memoryCount > 0 ? 'var(--accent)' : 'var(--muted)',
               cursor: 'pointer',
               display: 'flex',
               alignItems: 'center',
@@ -178,11 +178,11 @@ export const ControlBar: React.FC<ControlBarProps> = ({
             onClick={onToggleTranscript}
             title="Toggle Transcript"
             style={{
-              background: transcriptOpen ? 'rgba(0, 229, 255, 0.15)' : 'rgba(255, 255, 255, 0.05)',
-              border: transcriptOpen ? '1px solid rgba(0, 229, 255, 0.4)' : '1px solid rgba(255, 255, 255, 0.1)',
+              background: transcriptOpen ? 'color-mix(in srgb, var(--accent) 15%, transparent)' : 'color-mix(in srgb, var(--text) 5%, transparent)',
+              border: transcriptOpen ? '1px solid color-mix(in srgb, var(--accent) 40%, transparent)' : '1px solid color-mix(in srgb, var(--text) 10%, transparent)',
               borderRadius: '10px',
               padding: '6px 8px',
-              color: transcriptOpen ? '#00e5ff' : '#94a3b8',
+              color: transcriptOpen ? 'var(--accent)' : 'var(--muted)',
               cursor: 'pointer',
               display: 'flex',
               alignItems: 'center',
@@ -199,11 +199,11 @@ export const ControlBar: React.FC<ControlBarProps> = ({
             onClick={onToggleMute}
             title={isMuted ? 'Unmute voice' : 'Mute voice'}
             style={{
-              background: isMuted ? 'rgba(244, 63, 94, 0.15)' : 'rgba(255, 255, 255, 0.05)',
-              border: isMuted ? '1px solid rgba(244, 63, 94, 0.4)' : '1px solid rgba(255, 255, 255, 0.1)',
+              background: isMuted ? 'color-mix(in srgb, var(--danger) 15%, transparent)' : 'color-mix(in srgb, var(--text) 5%, transparent)',
+              border: isMuted ? '1px solid color-mix(in srgb, var(--danger) 40%, transparent)' : '1px solid color-mix(in srgb, var(--text) 10%, transparent)',
               borderRadius: '10px',
               padding: '6px 8px',
-              color: isMuted ? '#f43f5e' : '#94a3b8',
+              color: isMuted ? 'var(--danger)' : 'var(--muted)',
               cursor: 'pointer',
             }}
           >
@@ -215,11 +215,11 @@ export const ControlBar: React.FC<ControlBarProps> = ({
             onClick={onOpenSettings}
             title="Settings"
             style={{
-              background: !hasApiKey ? 'rgba(245, 158, 11, 0.2)' : 'rgba(255, 255, 255, 0.05)',
-              border: !hasApiKey ? '1px solid #f59e0b' : '1px solid rgba(255, 255, 255, 0.1)',
+              background: !hasApiKey ? 'color-mix(in srgb, var(--warning) 20%, transparent)' : 'color-mix(in srgb, var(--text) 5%, transparent)',
+              border: !hasApiKey ? '1px solid var(--warning)' : '1px solid color-mix(in srgb, var(--text) 10%, transparent)',
               borderRadius: '10px',
               padding: '6px 8px',
-              color: !hasApiKey ? '#f59e0b' : '#94a3b8',
+              color: !hasApiKey ? 'var(--warning)' : 'var(--muted)',
               cursor: 'pointer',
               position: 'relative',
             }}
@@ -234,7 +234,7 @@ export const ControlBar: React.FC<ControlBarProps> = ({
                   width: '7px',
                   height: '7px',
                   borderRadius: '50%',
-                  backgroundColor: '#f59e0b',
+                  backgroundColor: 'var(--warning)',
                 }}
               />
             )}
@@ -253,17 +253,17 @@ export const ControlBar: React.FC<ControlBarProps> = ({
             height: '64px',
             borderRadius: '50%',
             background: isListening
-              ? 'linear-gradient(135deg, #00e5ff 0%, #0077b6 100%)'
-              : 'linear-gradient(135deg, #1e293b 0%, #0f172a 100%)',
-            border: isListening ? '2px solid #ffffff' : '2px solid rgba(0, 229, 255, 0.35)',
-            color: isListening ? '#0a0e17' : '#00e5ff',
+              ? 'linear-gradient(135deg, var(--accent) 0%, var(--accent-dim) 100%)'
+              : 'linear-gradient(135deg, var(--surface) 0%, var(--surface) 100%)',
+            border: isListening ? '2px solid var(--text)' : '2px solid color-mix(in srgb, var(--accent) 35%, transparent)',
+            color: isListening ? 'var(--bg)' : 'var(--accent)',
             cursor: 'pointer',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
             boxShadow: isListening
-              ? '0 0 25px rgba(0, 229, 255, 0.7), inset 0 0 10px rgba(255, 255, 255, 0.6)'
-              : '0 4px 16px rgba(0, 0, 0, 0.4)',
+              ? '0 0 25px color-mix(in srgb, var(--accent) 70%, transparent), inset 0 0 10px color-mix(in srgb, var(--text) 60%, transparent)'
+              : '0 4px 16px color-mix(in srgb, var(--shadow-color) 40%, transparent)',
             transition: 'all 0.25s cubic-bezier(0.16, 1, 0.3, 1)',
           }}
         >
@@ -277,8 +277,8 @@ export const ControlBar: React.FC<ControlBarProps> = ({
           display: 'flex',
           alignItems: 'center',
           gap: '8px',
-          background: 'rgba(17, 24, 39, 0.8)',
-          border: '1px solid rgba(255, 255, 255, 0.1)',
+          background: 'color-mix(in srgb, var(--surface) 80%, transparent)',
+          border: '1px solid color-mix(in srgb, var(--text) 10%, transparent)',
           borderRadius: '16px',
           padding: '6px 10px 6px 14px',
         }}
@@ -288,13 +288,13 @@ export const ControlBar: React.FC<ControlBarProps> = ({
           value={inputText}
           onChange={(e) => setInputText(e.target.value)}
           onKeyDown={handleKeyDown}
-          placeholder="Type in Telugu, Hindi, English, etc..."
+          placeholder=""
           style={{
             flex: 1,
             background: 'transparent',
             border: 'none',
             outline: 'none',
-            color: '#f8fafc',
+            color: 'var(--text)',
             fontSize: '0.88rem',
             fontFamily: 'inherit',
           }}
@@ -304,12 +304,12 @@ export const ControlBar: React.FC<ControlBarProps> = ({
           disabled={!inputText.trim()}
           title="Send message"
           style={{
-            background: inputText.trim() ? '#00e5ff' : 'rgba(255, 255, 255, 0.05)',
+            background: inputText.trim() ? 'var(--accent)' : 'color-mix(in srgb, var(--text) 5%, transparent)',
             border: 'none',
             borderRadius: '10px',
             width: '32px',
             height: '32px',
-            color: inputText.trim() ? '#0a0e17' : '#475569',
+            color: inputText.trim() ? 'var(--bg)' : 'var(--muted-dim)',
             cursor: inputText.trim() ? 'pointer' : 'default',
             display: 'flex',
             alignItems: 'center',

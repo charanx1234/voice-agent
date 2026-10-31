@@ -92,15 +92,15 @@ export const RobotCharacter: React.FC<RobotCharacterProps> = ({
           <defs>
             {/* Robot Head Metallic Gradient */}
             <linearGradient id="chassisGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-              <stop offset="0%" stopColor="#1a2233" />
-              <stop offset="50%" stopColor="#111724" />
-              <stop offset="100%" stopColor="#0a0e17" />
+              <stop offset="0%" stopColor="var(--surface)" />
+              <stop offset="50%" stopColor="var(--surface)" />
+              <stop offset="100%" stopColor="var(--bg)" />
             </linearGradient>
 
             {/* Screen Glass Gradient */}
             <linearGradient id="screenGrad" x1="0%" y1="0%" x2="0%" y2="100%">
-              <stop offset="0%" stopColor="#080c14" />
-              <stop offset="100%" stopColor="#0d1422" />
+              <stop offset="0%" stopColor="var(--bg)" />
+              <stop offset="100%" stopColor="var(--bg)" />
             </linearGradient>
 
             {/* Cyan Eye Glow Filter */}
@@ -134,7 +134,7 @@ export const RobotCharacter: React.FC<RobotCharacterProps> = ({
               y1="40"
               x2="120"
               y2="18"
-              stroke="#2e3e5c"
+              stroke="var(--elevated)"
               strokeWidth="4"
               strokeLinecap="round"
             />
@@ -142,7 +142,7 @@ export const RobotCharacter: React.FC<RobotCharacterProps> = ({
               cx="120"
               cy="16"
               r="7"
-              fill={state === 'error' ? '#f43f5e' : state === 'listening' ? '#00e5ff' : '#00b4d8'}
+              fill={state === 'error' ? 'var(--danger)' : state === 'listening' ? 'var(--accent)' : 'var(--accent)'}
               filter="url(#cyanGlow)"
             />
           </g>
@@ -173,7 +173,7 @@ export const RobotCharacter: React.FC<RobotCharacterProps> = ({
           <path
             d="M 64 68 Q 120 74 176 68"
             fill="none"
-            stroke="rgba(255, 255, 255, 0.08)"
+            stroke="color-mix(in srgb, var(--text) 8%, transparent)"
             strokeWidth="2.5"
             strokeLinecap="round"
           />
@@ -191,7 +191,7 @@ export const RobotCharacter: React.FC<RobotCharacterProps> = ({
               />
               {/* Pupil / inner specular gleam */}
               {!isBlinking && (
-                <circle cx="-3" cy="-4" r="4" fill="#ffffff" opacity="0.9" />
+                <circle cx="-3" cy="-4" r="4" fill="var(--text)" opacity="0.9" />
               )}
             </g>
 
@@ -206,7 +206,7 @@ export const RobotCharacter: React.FC<RobotCharacterProps> = ({
               />
               {/* Pupil / inner specular gleam */}
               {!isBlinking && (
-                <circle cx="-3" cy="-4" r="4" fill="#ffffff" opacity="0.9" />
+                <circle cx="-3" cy="-4" r="4" fill="var(--text)" opacity="0.9" />
               )}
             </g>
           </g>
@@ -233,8 +233,8 @@ export const RobotCharacter: React.FC<RobotCharacterProps> = ({
           {/* Cute subtle blush accents when idle/speaking */}
           {(state === 'idle' || state === 'speaking') && (
             <g opacity="0.25">
-              <circle cx="72" cy="128" r="6" fill="#00e5ff" filter="url(#cyanGlow)" />
-              <circle cx="168" cy="128" r="6" fill="#00e5ff" filter="url(#cyanGlow)" />
+              <circle cx="72" cy="128" r="6" fill="var(--accent)" filter="url(#cyanGlow)" />
+              <circle cx="168" cy="128" r="6" fill="var(--accent)" filter="url(#cyanGlow)" />
             </g>
           )}
         </svg>

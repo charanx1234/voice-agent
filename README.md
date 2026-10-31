@@ -51,7 +51,19 @@ FRIDAY remembers what matters between sessions, not every word you say:
 - **You stay in control**: open the brain icon to view, search, add, edit, or delete any memory, and switch automatic remembering off entirely.
 - **Graceful degradation**: if the embedding API is unreachable, a local hashed embedding keeps search working offline; if extraction fails, an offline rule-based extractor still catches explicit "remember that…" requests.
 
-### 5. Privacy & Security
+### 5. Light & Dark Themes
+- **Light**: cream background (`#F8F4E7`) with burgundy (`#722F37`) accents.
+- **Dark**: pure black (`#000000`) with white text and accents — strictly monochrome, no colour at all, including status states.
+- **Auto by default**: follows the Windows light/dark setting live. Manual override lives in Settings → Appearance (`Auto` / `Light` / `Dark`).
+- Existing installs that had a fixed dark theme are migrated to `Dark` so nothing changes unexpectedly.
+
+### 6. Voice Reminders & Live Dashboard
+- **Reminders from natural speech**: *"remind me to call mom at 6"*, *"in 20 minutes"*, *"tomorrow at 9"* — created immediately in the same turn and confirmed out loud. No separate reminders screen or form.
+- Reminders persist in SQLite and fire as a Windows toast (plus a spoken announcement) even across restarts; overdue ones are delivered when the app next opens.
+- **Dashboard beside the voice chat**: when a request produces something visual — code, a document, plan, list or table — the window widens and a dashboard pane appears with the full content. Voice never pauses: you can keep talking, ask for changes, and watch the pane update live.
+- The dashboard also lists active reminders, with a one-click "done" action.
+
+### 7. Privacy & Security
 - **Strict IPC Isolation**: Electron runs with `contextIsolation: true` and `nodeIntegration: false`. The renderer only interacts through a restricted, strongly typed bridge (`window.fridayAPI`).
 - **Zero API Key Leakage**: Keys are never hardcoded or tracked in Git. The API key is stored safely in your local Windows AppData directory or loaded from `.env` in development, and is always masked (`AIza...9xQ`) in UI and logs.
 - **User Confirmation Required**: Sensitive actions (opening apps, searching folders) prompt you for approval with an Allow/Deny modal.
@@ -199,6 +211,13 @@ npm run dev
   - **Pencil** edits a memory, **trash** deletes it after confirmation.
   - The toggle switches automatic remembering off while keeping the existing memories.
 
+### 5. Using Reminders and the Dashboard
+- Say or type: *"remind me to call mom at 6"* — FRIDAY creates it immediately and confirms aloud; no other screen involved.
+- *"What are my reminders?"* lists them; *"mark the call mom reminder as done"* completes one.
+- Ask for code or a document: *"write a Python retry helper and show it on the dashboard"* — the dashboard pane opens beside the chat with the full code, and FRIDAY gives a short spoken summary.
+- Keep talking while the pane is open: *"add exponential backoff and show it again"* updates the pane in place.
+- The window returns to its compact size when you close the dashboard with the ✕.
+
 ---
 
 ## 🧪 Running the Automated Tests
@@ -215,8 +234,10 @@ All tests should pass:
  ✓ tests/hardening.test.ts (13 tests)
  ✓ tests/memory.test.ts (22 tests)
  ✓ tests/voice.test.ts (9 tests)
- Test Files  6 passed (6)
-      Tests  55 passed (55)
+ ✓ tests/greetings.test.ts (6 tests)
+ ✓ tests/reminders.test.ts (10 tests)
+ Test Files  8 passed (8)
+      Tests  71 passed (71)
 ```
 
 ---

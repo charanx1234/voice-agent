@@ -102,7 +102,7 @@
 .robot-shadow {
   width: 140px;
   height: 14px;
-  background: radial-gradient(ellipse at center, rgba(0, 229, 255, 0.22) 0%, rgba(0, 0, 0, 0.4) 60%, transparent 80%);
+  background: radial-gradient(ellipse at center, color-mix(in srgb, var(--accent) 22%, transparent) 0%, color-mix(in srgb, var(--shadow-color) 40%, transparent) 60%, transparent 80%);
   border-radius: 50%;
   margin-top: -6px;
   transition: all 0.4s ease;
@@ -110,48 +110,48 @@
 
 .state-listening .robot-shadow {
   width: 155px;
-  background: radial-gradient(ellipse at center, rgba(0, 229, 255, 0.35) 0%, rgba(0, 0, 0, 0.5) 60%, transparent 80%);
+  background: radial-gradient(ellipse at center, color-mix(in srgb, var(--accent) 35%, transparent) 0%, color-mix(in srgb, var(--shadow-color) 50%, transparent) 60%, transparent 80%);
 }
 
 .state-error .robot-shadow {
-  background: radial-gradient(ellipse at center, rgba(244, 63, 94, 0.25) 0%, rgba(0, 0, 0, 0.4) 60%, transparent 80%);
+  background: radial-gradient(ellipse at center, color-mix(in srgb, var(--danger) 25%, transparent) 0%, color-mix(in srgb, var(--shadow-color) 40%, transparent) 60%, transparent 80%);
 }
 
 /* Robot SVG Styles */
 .robot-chassis {
-  fill: #141a29;
-  stroke: #222e47;
+  fill: var(--surface-2);
+  stroke: color-mix(in srgb, var(--text) 22%, transparent);
   stroke-width: 3;
-  filter: drop-shadow(0 12px 24px rgba(0, 0, 0, 0.55));
+  filter: drop-shadow(0 12px 24px color-mix(in srgb, var(--shadow-color) 55%, transparent));
   transition: fill 0.3s ease, stroke 0.3s ease;
 }
 
 .state-listening .robot-chassis {
-  stroke: #00e5ff;
-  filter: drop-shadow(0 0 16px rgba(0, 229, 255, 0.28));
+  stroke: var(--accent);
+  filter: drop-shadow(0 0 16px color-mix(in srgb, var(--accent) 28%, transparent));
 }
 
 .state-error .robot-chassis {
-  stroke: #f43f5e;
-  filter: drop-shadow(0 0 14px rgba(244, 63, 94, 0.25));
+  stroke: var(--danger);
+  filter: drop-shadow(0 0 14px color-mix(in srgb, var(--danger) 25%, transparent));
 }
 
 .robot-screen {
-  fill: #090d15;
-  stroke: #162035;
+  fill: var(--bg);
+  stroke: var(--border);
   stroke-width: 2.5;
 }
 
 /* Antennas & Pulse rings */
 .robot-antenna {
-  fill: #1f2a40;
-  stroke: #334466;
+  fill: var(--surface-2);
+  stroke: color-mix(in srgb, var(--text) 28%, transparent);
   stroke-width: 2;
   transition: stroke 0.3s ease;
 }
 
 .state-listening .robot-antenna {
-  stroke: #00e5ff;
+  stroke: var(--accent);
 }
 
 .antenna-ring {
@@ -167,26 +167,26 @@
   0% {
     r: 6;
     opacity: 0.8;
-    stroke: #00e5ff;
+    stroke: var(--accent);
   }
   100% {
     r: 22;
     opacity: 0;
-    stroke: #00e5ff;
+    stroke: var(--accent);
   }
 }
 
 /* Glowing Eyes */
 .robot-eye {
-  fill: #00e5ff;
-  filter: drop-shadow(0 0 8px #00e5ff) drop-shadow(0 0 16px rgba(0, 229, 255, 0.6));
+  fill: var(--accent);
+  filter: drop-shadow(0 0 8px var(--accent)) drop-shadow(0 0 16px color-mix(in srgb, var(--accent) 60%, transparent));
   transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
   transform-origin: center;
 }
 
 .state-error .robot-eye {
-  fill: #f43f5e;
-  filter: drop-shadow(0 0 8px #f43f5e) drop-shadow(0 0 14px rgba(244, 63, 94, 0.5));
+  fill: var(--danger);
+  filter: drop-shadow(0 0 8px var(--danger)) drop-shadow(0 0 14px color-mix(in srgb, var(--danger) 50%, transparent));
 }
 
 .state-thinking .robot-eye {
@@ -200,13 +200,13 @@
 
 /* Mouth LED bars */
 .mouth-bar {
-  fill: #00e5ff;
-  filter: drop-shadow(0 0 5px rgba(0, 229, 255, 0.65));
+  fill: var(--accent);
+  filter: drop-shadow(0 0 5px color-mix(in srgb, var(--accent) 65%, transparent));
   transition: height 0.08s ease, y 0.08s ease, fill 0.3s ease;
 }
 
 .state-error .mouth-bar {
-  fill: #f43f5e;
-  filter: drop-shadow(0 0 4px rgba(244, 63, 94, 0.5));
+  fill: var(--danger);
+  filter: drop-shadow(0 0 4px color-mix(in srgb, var(--danger) 50%, transparent));
 }
 

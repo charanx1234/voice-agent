@@ -8,10 +8,13 @@ import { SettingsModal } from './components/SettingsModal';
 import { ToolConfirmModal } from './components/ToolConfirmModal';
 import { ToolShortcutsPanel } from './components/ToolShortcutsPanel';
 import { MemoryPanel } from './components/MemoryPanel';
+import { Dashboard } from './components/Dashboard';
 import { useVoiceAssistant } from './hooks/useVoiceAssistant';
 import {
   ChatMessage,
+  DashboardArtifact,
   FridaySettings,
+  ReminderItem,
   ToolConfirmationPayload,
 } from '@/shared/types';
 import { pickGreeting } from '@/services/voice/greetings';
@@ -26,7 +29,7 @@ export const App: React.FC = () => {
     speechVolume: 1.0,
     voiceId: 'default',
     ttsProvider: 'auto',
-    theme: 'midnight',
+    themeMode: 'auto',
     approvedFolders: [],
     requireToolConfirmations: {
       notes: false,
@@ -46,6 +49,10 @@ export const App: React.FC = () => {
   const [memoryOpen, setMemoryOpen] = useState(false);
   const [memoryCount, setMemoryCount] = useState(0);
   const [recordingSeconds, setRecordingSeconds] = useState(0);
+  const [artifacts, setArtifacts] = useState<DashboardArtifact[]>([]);
+  const [activeArtifactId, setActiveArtifactId] = useState<string | null>(null);
+  const [dashboardOpen, setDashboardOpen] = useState(false);
+  const [reminders, setReminders] = useState<ReminderItem[]>([]);
   const [pendingConfirmation, setPendingConfirmation] =
     useState<ToolConfirmationPayload | null>(null);
 
@@ -64,6 +71,30 @@ export const App: React.FC = () => {
     interrupt,
   } = useVoiceAssistant();
 
+  /** Applies the resolved theme: 'auto' mirrors the Windows light/dark setting. */
+  const applyTheme = useCallback((mode: FridaySettings['themeMode'] = 'auto') => {
+    const prefersDark =
+      typeof window.matchMedia === 'function'
+        ? window.matchMedia('(prefers-color-scheme: dark)').matches
+        : true;
+    const resolved = mode === 'auto' ? (prefersDark ? 'dark' : 'light') : mode;
+    document.documentElement.setAttribute('data-theme', resolved);
+    document.documentElement.setAttribute('data-theme-mode', mode);
+  }, []);
+
+  // Follow the OS theme live while the user is on "Auto".
+  useEffect(() => {
+    if (typeof window.matchMedia !== 'function') return undefined;
+    const media = window.matchMedia('(prefers-color-scheme: dark)');
+    const onChange = () => {
+      const mode = document.documentElement.getAttribute('data-theme-mode') || 'auto';
+      if (mode === 'auto') applyTheme('auto');
+    };
+
+    media.addEventListener('change', onChange);
+    return () => media.removeEventListener('change', onChange);
+  }, [applyTheme]);
+
   // Load initial settings and restore the previous conversation
   useEffect(() => {
     if (window.fridayAPI) {
@@ -73,7 +104,7 @@ export const App: React.FC = () => {
         const loaded = await api.getSettings();
         setSettings(loaded);
         setIsMuted(loaded.soundMuted);
-        document.documentElement.setAttribute('data-theme', loaded.theme);
+        applyTheme(loaded.themeMode);
 
         // Restore the persisted transcript so context survives a restart.
         const stored = await api.loadConversation(50);
@@ -108,6 +139,9 @@ export const App: React.FC = () => {
 
         const stats = await api.getMemoryStats();
         setMemoryCount(stats.total);
+
+        const pendingReminders = await api.listReminders(false);
+        setReminders(pendingReminders);
       };
 
       bootstrap().catch((err) => {
@@ -121,11 +155,40 @@ export const App: React.FC = () => {
         }
       );
 
+      // Visual output from a voice turn: open/refresh the dashboard without leaving voice mode.
+      const cleanupArtifacts = api.onDashboardArtifact((artifact) => {
+        setArtifacts((previous) => [artifact, ...previous].slice(0, 8));
+        setActiveArtifactId(artifact.id);
+        setDashboardOpen(true);
+        api.setDashboardOpen(true);
+      });
+
+      // A reminder fired: speak it and keep it in the transcript.
+      const cleanupReminderFired = api.onReminderFired((reminder) => {
+        setMessages((previous) => [
+          ...previous,
+          {
+            id: `msg_reminder_${Date.now()}`,
+            role: 'assistant',
+            text: `Reminder: ${reminder.text}`,
+            timestamp: Date.now(),
+          },
+        ]);
+        speakResponse(`Reminder: ${reminder.text}`);
+      });
+
+      const cleanupReminders = api.onRemindersChanged((list) => {
+        setReminders(list);
+      });
+
       return () => {
         cleanupConfirmations();
+        cleanupArtifacts();
+        cleanupReminderFired();
+        cleanupReminders();
       };
     }
-  }, [setIsMuted]);
+  }, [setIsMuted, applyTheme]);
 
   // Handle saving settings
   const handleSaveSettings = async (updates: Partial<FridaySettings>) => {
@@ -133,9 +196,7 @@ export const App: React.FC = () => {
       await window.fridayAPI.saveSettings(updates);
       const refreshed = await window.fridayAPI.getSettings();
       setSettings(refreshed);
-      if (refreshed.theme) {
-        document.documentElement.setAttribute('data-theme', refreshed.theme);
-      }
+      applyTheme(refreshed.themeMode);
     }
   };
 
@@ -302,6 +363,18 @@ export const App: React.FC = () => {
     }
   };
 
+  const handleCloseDashboard = () => {
+    setDashboardOpen(false);
+    window.fridayAPI?.setDashboardOpen(false);
+  };
+
+  const handleCompleteReminder = async (id: string) => {
+    if (!window.fridayAPI) return;
+    await window.fridayAPI.completeReminder(id);
+    const list = await window.fridayAPI.listReminders(false);
+    setReminders(list);
+  };
+
   return (
     <div
       style={{
@@ -309,7 +382,7 @@ export const App: React.FC = () => {
         flexDirection: 'column',
         height: '100vh',
         width: '100vw',
-        backgroundColor: 'var(--bg-primary)',
+        backgroundColor: 'var(--bg)',
         overflow: 'hidden',
         position: 'relative',
       }}
@@ -323,17 +396,17 @@ export const App: React.FC = () => {
           justifyContent: 'space-between',
           height: '38px',
           padding: '0 12px',
-          backgroundColor: 'rgba(12, 18, 29, 0.85)',
-          borderBottom: '1px solid rgba(255, 255, 255, 0.06)',
+          backgroundColor: 'color-mix(in srgb, var(--surface) 85%, transparent)',
+          borderBottom: '1px solid color-mix(in srgb, var(--text) 6%, transparent)',
           userSelect: 'none',
         }}
       >
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-          <Sparkles size={15} color="#00e5ff" />
-          <span style={{ fontSize: '0.82rem', fontWeight: 700, letterSpacing: '0.08em', color: '#f8fafc' }}>
+          <Sparkles size={15} color="var(--accent)" />
+          <span style={{ fontSize: '0.82rem', fontWeight: 700, letterSpacing: '0.08em', color: 'var(--text)' }}>
             FRIDAY
           </span>
-          <span style={{ fontSize: '0.68rem', color: '#64748b', fontWeight: 500 }}>
+          <span style={{ fontSize: '0.68rem', color: 'var(--muted-dim)', fontWeight: 500 }}>
             AI COMPANION
           </span>
         </div>
@@ -352,7 +425,7 @@ export const App: React.FC = () => {
             style={{
               background: 'none',
               border: 'none',
-              color: '#94a3b8',
+              color: 'var(--muted)',
               cursor: 'pointer',
               padding: '4px',
               borderRadius: '4px',
@@ -365,7 +438,7 @@ export const App: React.FC = () => {
             style={{
               background: 'none',
               border: 'none',
-              color: '#94a3b8',
+              color: 'var(--muted)',
               cursor: 'pointer',
               padding: '4px',
               borderRadius: '4px',
@@ -376,89 +449,113 @@ export const App: React.FC = () => {
         </div>
       </div>
 
-      {/* Missing API Key Banner */}
-      {!settings.hasCustomKey && (
+      <div style={{ display: 'flex', flex: 1, minHeight: 0, overflow: 'hidden' }}>
+        {/* Companion column: voice keeps running here while the dashboard updates */}
         <div
-          onClick={() => setSettingsOpen(true)}
           style={{
-            backgroundColor: 'rgba(245, 158, 11, 0.15)',
-            borderBottom: '1px solid rgba(245, 158, 11, 0.3)',
-            padding: '6px 12px',
+            flex: dashboardOpen ? '0 0 460px' : '1 1 auto',
+            width: dashboardOpen ? 460 : '100%',
             display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            fontSize: '0.74rem',
-            color: '#f59e0b',
-            cursor: 'pointer',
+            flexDirection: 'column',
+            minHeight: 0,
           }}
         >
-          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-            <AlertCircle size={14} />
-            <span>Click here to enter your Google Gemini API key to activate FRIDAY</span>
+          {/* Missing API Key Banner */}
+          {!settings.hasCustomKey && (
+            <div
+              onClick={() => setSettingsOpen(true)}
+              style={{
+                backgroundColor: 'color-mix(in srgb, var(--warning) 15%, transparent)',
+                borderBottom: '1px solid color-mix(in srgb, var(--warning) 30%, transparent)',
+                padding: '6px 12px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                fontSize: '0.74rem',
+                color: 'var(--warning)',
+                cursor: 'pointer',
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                <AlertCircle size={14} />
+                <span>Click here to enter your Google Gemini API key to activate FRIDAY</span>
+              </div>
+              <span style={{ textDecoration: 'underline', fontWeight: 600 }}>Configure</span>
+            </div>
+          )}
+
+          {/* Main Companion Body */}
+          <div
+            style={{
+              flex: 1,
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              justifyContent: 'center',
+              position: 'relative',
+              padding: '6px 0',
+              overflow: 'hidden',
+            }}
+          >
+            {/* Animated Robot Character */}
+            <RobotCharacter
+              state={robotState}
+              amplitude={amplitude}
+              frequencies={frequencies}
+              onClick={interrupt}
+            />
+
+            {/* Live Audio Visualizer */}
+            <AudioVisualizer
+              frequencies={frequencies}
+              isActive={isListening || robotState === 'speaking'}
+            />
           </div>
-          <span style={{ textDecoration: 'underline', fontWeight: 600 }}>Configure</span>
+
+          {/* Conversation Transcript (Collapsible) */}
+          {transcriptOpen && (
+            <TranscriptView
+              messages={messages}
+              onClearHistory={handleClearHistory}
+              onOpenFile={handleOpenFile}
+            />
+          )}
+
+          {/* Bottom Control Bar */}
+          <ControlBar
+            state={robotState}
+            isListening={isListening}
+            isMuted={isMuted}
+            hasApiKey={settings.hasCustomKey}
+            messageCount={messages.length}
+            memoryCount={memoryCount}
+            transcriptOpen={transcriptOpen}
+            recordingSeconds={recordingSeconds}
+            onToggleMic={handleToggleMic}
+            onSendMessage={(txt) => handleSendMessage(txt)}
+            onToggleMute={() => {
+              const next = !isMuted;
+              setIsMuted(next);
+              handleSaveSettings({ soundMuted: next });
+            }}
+            onToggleTranscript={() => setTranscriptOpen(!transcriptOpen)}
+            onOpenSettings={() => setSettingsOpen(true)}
+            onOpenShortcuts={() => setShortcutsOpen(true)}
+            onOpenMemory={() => setMemoryOpen(true)}
+          />
         </div>
-      )}
 
-      {/* Main Companion Body */}
-      <div
-        style={{
-          flex: 1,
-          display: 'flex',
-          flexDirection: 'column',
-          alignItems: 'center',
-          justifyContent: 'center',
-          position: 'relative',
-          padding: '6px 0',
-          overflow: 'hidden',
-        }}
-      >
-        {/* Animated Robot Character */}
-        <RobotCharacter
-          state={robotState}
-          amplitude={amplitude}
-          frequencies={frequencies}
-          onClick={interrupt}
-        />
-
-        {/* Live Audio Visualizer */}
-        <AudioVisualizer
-          frequencies={frequencies}
-          isActive={isListening || robotState === 'speaking'}
-        />
+        {dashboardOpen && (
+          <Dashboard
+            artifacts={artifacts}
+            activeId={activeArtifactId}
+            onSelect={setActiveArtifactId}
+            onClose={handleCloseDashboard}
+            reminders={reminders}
+            onCompleteReminder={handleCompleteReminder}
+          />
+        )}
       </div>
-
-      {/* Conversation Transcript (Collapsible) */}
-      {transcriptOpen && (
-        <TranscriptView
-          messages={messages}
-          onClearHistory={handleClearHistory}
-          onOpenFile={handleOpenFile}
-        />
-      )}
-
-      {/* Bottom Control Bar */}
-      <ControlBar
-        state={robotState}
-        isListening={isListening}
-        isMuted={isMuted}
-        hasApiKey={settings.hasCustomKey}
-        messageCount={messages.length}
-        memoryCount={memoryCount}
-        transcriptOpen={transcriptOpen}
-        recordingSeconds={recordingSeconds}
-        onToggleMic={handleToggleMic}
-        onSendMessage={(txt) => handleSendMessage(txt)}
-        onToggleMute={() => {
-          const next = !isMuted;
-          setIsMuted(next);
-          handleSaveSettings({ soundMuted: next });
-        }}
-        onToggleTranscript={() => setTranscriptOpen(!transcriptOpen)}
-        onOpenSettings={() => setSettingsOpen(true)}
-        onOpenShortcuts={() => setShortcutsOpen(true)}
-        onOpenMemory={() => setMemoryOpen(true)}
-      />
 
       {/* Settings Modal */}
       <SettingsModal

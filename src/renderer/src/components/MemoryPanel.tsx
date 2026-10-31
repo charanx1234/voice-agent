@@ -45,11 +45,11 @@ const KIND_LABELS: Record<MemoryKind, string> = {
 };
 
 const KIND_COLORS: Record<MemoryKind, string> = {
-  preference: '#38bdf8',
-  personal: '#a78bfa',
-  project: '#34d399',
-  fact: '#94a3b8',
-  instruction: '#fbbf24',
+  preference: 'var(--info)',
+  personal: 'var(--accent)',
+  project: 'var(--success)',
+  fact: 'var(--muted)',
+  instruction: 'var(--warning)',
 };
 
 export const MemoryPanel: React.FC<MemoryPanelProps> = ({
@@ -190,7 +190,7 @@ export const MemoryPanel: React.FC<MemoryPanelProps> = ({
       style={{
         position: 'fixed',
         inset: 0,
-        backgroundColor: 'rgba(4, 7, 13, 0.82)',
+        backgroundColor: 'color-mix(in srgb, var(--overlay) 82%, transparent)',
         backdropFilter: 'blur(10px)',
         zIndex: 55,
         display: 'flex',
@@ -204,12 +204,12 @@ export const MemoryPanel: React.FC<MemoryPanelProps> = ({
           width: '100%',
           maxWidth: '430px',
           maxHeight: '86vh',
-          backgroundColor: '#0c121d',
-          border: '1px solid rgba(0, 229, 255, 0.25)',
+          backgroundColor: 'var(--surface)',
+          border: '1px solid color-mix(in srgb, var(--accent) 25%, transparent)',
           borderRadius: '18px',
           display: 'flex',
           flexDirection: 'column',
-          boxShadow: '0 16px 40px rgba(0, 0, 0, 0.7)',
+          boxShadow: '0 16px 40px color-mix(in srgb, var(--shadow-color) 70%, transparent)',
           overflow: 'hidden',
         }}
       >
@@ -220,20 +220,20 @@ export const MemoryPanel: React.FC<MemoryPanelProps> = ({
             alignItems: 'center',
             justifyContent: 'space-between',
             padding: '12px 18px',
-            borderBottom: '1px solid rgba(255, 255, 255, 0.08)',
+            borderBottom: '1px solid color-mix(in srgb, var(--text) 8%, transparent)',
           }}
         >
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <Brain size={17} color="#00e5ff" />
+            <Brain size={17} color="var(--accent)" />
             <span style={{ fontSize: '0.86rem', fontWeight: 700, letterSpacing: '0.04em' }}>
               LONG-TERM MEMORY
             </span>
             <span
               style={{
                 fontSize: '0.7rem',
-                color: '#00e5ff',
-                backgroundColor: 'rgba(0, 229, 255, 0.12)',
-                border: '1px solid rgba(0, 229, 255, 0.3)',
+                color: 'var(--accent)',
+                backgroundColor: 'color-mix(in srgb, var(--accent) 12%, transparent)',
+                border: '1px solid color-mix(in srgb, var(--accent) 30%, transparent)',
                 borderRadius: '999px',
                 padding: '1px 8px',
                 fontWeight: 600,
@@ -245,7 +245,7 @@ export const MemoryPanel: React.FC<MemoryPanelProps> = ({
 
           <button
             onClick={onClose}
-            style={{ background: 'none', border: 'none', color: '#94a3b8', cursor: 'pointer' }}
+            style={{ background: 'none', border: 'none', color: 'var(--muted)', cursor: 'pointer' }}
           >
             <X size={18} />
           </button>
@@ -258,7 +258,7 @@ export const MemoryPanel: React.FC<MemoryPanelProps> = ({
             display: 'flex',
             flexDirection: 'column',
             gap: '10px',
-            borderBottom: '1px solid rgba(255, 255, 255, 0.06)',
+            borderBottom: '1px solid color-mix(in srgb, var(--text) 6%, transparent)',
           }}
         >
           <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
@@ -268,28 +268,28 @@ export const MemoryPanel: React.FC<MemoryPanelProps> = ({
                 display: 'flex',
                 alignItems: 'center',
                 gap: '6px',
-                backgroundColor: 'rgba(0, 0, 0, 0.35)',
-                border: '1px solid rgba(255, 255, 255, 0.1)',
+                backgroundColor: 'color-mix(in srgb, var(--shadow-color) 35%, transparent)',
+                border: '1px solid color-mix(in srgb, var(--text) 10%, transparent)',
                 borderRadius: '10px',
                 padding: '6px 10px',
               }}
             >
-              <Search size={14} color="#64748b" />
+              <Search size={14} color="var(--muted-dim)" />
               <input
                 value={query}
                 onChange={(event) => setQuery(event.target.value)}
-                placeholder="Search memories (semantic search)"
+                placeholder="Search memories"
                 style={{
                   flex: 1,
                   background: 'transparent',
                   border: 'none',
                   outline: 'none',
-                  color: '#f8fafc',
+                  color: 'var(--text)',
                   fontSize: '0.8rem',
                   fontFamily: 'inherit',
                 }}
               />
-              {loading && <span style={{ fontSize: '0.66rem', color: '#64748b' }}>…</span>}
+              {loading && <span style={{ fontSize: '0.66rem', color: 'var(--muted-dim)' }}>…</span>}
             </div>
 
             <button
@@ -301,9 +301,9 @@ export const MemoryPanel: React.FC<MemoryPanelProps> = ({
                 gap: '4px',
                 padding: '7px 10px',
                 borderRadius: '10px',
-                backgroundColor: 'rgba(0, 229, 255, 0.12)',
-                border: '1px solid rgba(0, 229, 255, 0.35)',
-                color: '#00e5ff',
+                backgroundColor: 'color-mix(in srgb, var(--accent) 12%, transparent)',
+                border: '1px solid color-mix(in srgb, var(--accent) 35%, transparent)',
+                color: 'var(--accent)',
                 fontSize: '0.75rem',
                 fontWeight: 600,
                 cursor: 'pointer',
@@ -325,7 +325,7 @@ export const MemoryPanel: React.FC<MemoryPanelProps> = ({
               border: 'none',
               padding: 0,
               cursor: 'pointer',
-              color: '#94a3b8',
+              color: 'var(--muted)',
               fontSize: '0.72rem',
             }}
           >
@@ -335,7 +335,7 @@ export const MemoryPanel: React.FC<MemoryPanelProps> = ({
                 width: '32px',
                 height: '18px',
                 borderRadius: '999px',
-                backgroundColor: memoryEnabled ? 'rgba(0, 229, 255, 0.7)' : 'rgba(148, 163, 184, 0.3)',
+                backgroundColor: memoryEnabled ? 'color-mix(in srgb, var(--accent) 70%, transparent)' : 'color-mix(in srgb, var(--muted) 30%, transparent)',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: memoryEnabled ? 'flex-end' : 'flex-start',
@@ -348,7 +348,7 @@ export const MemoryPanel: React.FC<MemoryPanelProps> = ({
                   width: '14px',
                   height: '14px',
                   borderRadius: '50%',
-                  backgroundColor: '#0a0e17',
+                  backgroundColor: 'var(--bg)',
                 }}
               />
             </span>
@@ -365,12 +365,12 @@ export const MemoryPanel: React.FC<MemoryPanelProps> = ({
                 gap: '8px',
                 padding: '12px',
                 marginBottom: '12px',
-                backgroundColor: 'rgba(0, 229, 255, 0.05)',
-                border: '1px solid rgba(0, 229, 255, 0.25)',
+                backgroundColor: 'color-mix(in srgb, var(--accent) 5%, transparent)',
+                border: '1px solid color-mix(in srgb, var(--accent) 25%, transparent)',
                 borderRadius: '12px',
               }}
             >
-              <span style={{ fontSize: '0.72rem', color: '#00e5ff', fontWeight: 700 }}>
+              <span style={{ fontSize: '0.72rem', color: 'var(--accent)', fontWeight: 700 }}>
                 {editingId ? 'EDIT MEMORY' : 'NEW MEMORY'}
               </span>
 
@@ -382,11 +382,11 @@ export const MemoryPanel: React.FC<MemoryPanelProps> = ({
                   }
                   style={{
                     flex: 1,
-                    background: 'rgba(0, 0, 0, 0.4)',
-                    border: '1px solid rgba(255, 255, 255, 0.12)',
+                    background: 'color-mix(in srgb, var(--shadow-color) 40%, transparent)',
+                    border: '1px solid color-mix(in srgb, var(--text) 12%, transparent)',
                     borderRadius: '8px',
                     padding: '6px 8px',
-                    color: '#f1f5f9',
+                    color: 'var(--text)',
                     fontSize: '0.76rem',
                   }}
                 >
@@ -404,11 +404,11 @@ export const MemoryPanel: React.FC<MemoryPanelProps> = ({
                   }
                   style={{
                     width: '118px',
-                    background: 'rgba(0, 0, 0, 0.4)',
-                    border: '1px solid rgba(255, 255, 255, 0.12)',
+                    background: 'color-mix(in srgb, var(--shadow-color) 40%, transparent)',
+                    border: '1px solid color-mix(in srgb, var(--text) 12%, transparent)',
                     borderRadius: '8px',
                     padding: '6px 8px',
-                    color: '#f1f5f9',
+                    color: 'var(--text)',
                     fontSize: '0.76rem',
                   }}
                 >
@@ -423,13 +423,13 @@ export const MemoryPanel: React.FC<MemoryPanelProps> = ({
               <input
                 value={draft.title}
                 onChange={(event) => setDraft({ ...draft, title: event.target.value })}
-                placeholder="Title, e.g. Preferred reply language"
+                placeholder="Title"
                 style={{
-                  background: 'rgba(0, 0, 0, 0.4)',
-                  border: '1px solid rgba(255, 255, 255, 0.12)',
+                  background: 'color-mix(in srgb, var(--shadow-color) 40%, transparent)',
+                  border: '1px solid color-mix(in srgb, var(--text) 12%, transparent)',
                   borderRadius: '8px',
                   padding: '6px 8px',
-                  color: '#fff',
+                  color: 'var(--text)',
                   fontSize: '0.78rem',
                   fontFamily: 'inherit',
                 }}
@@ -438,14 +438,14 @@ export const MemoryPanel: React.FC<MemoryPanelProps> = ({
               <textarea
                 value={draft.content}
                 onChange={(event) => setDraft({ ...draft, content: event.target.value })}
-                placeholder="One clear sentence, e.g. User prefers replies in Telugu."
+                placeholder="Content"
                 rows={3}
                 style={{
-                  background: 'rgba(0, 0, 0, 0.4)',
-                  border: '1px solid rgba(255, 255, 255, 0.12)',
+                  background: 'color-mix(in srgb, var(--shadow-color) 40%, transparent)',
+                  border: '1px solid color-mix(in srgb, var(--text) 12%, transparent)',
                   borderRadius: '8px',
                   padding: '6px 8px',
-                  color: '#fff',
+                  color: 'var(--text)',
                   fontSize: '0.78rem',
                   fontFamily: 'inherit',
                   resize: 'vertical',
@@ -455,20 +455,20 @@ export const MemoryPanel: React.FC<MemoryPanelProps> = ({
               <input
                 value={draft.subject}
                 onChange={(event) => setDraft({ ...draft, subject: event.target.value })}
-                placeholder="Optional dedupe key, e.g. reply-language"
+                placeholder="Optional key"
                 style={{
-                  background: 'rgba(0, 0, 0, 0.4)',
-                  border: '1px solid rgba(255, 255, 255, 0.12)',
+                  background: 'color-mix(in srgb, var(--shadow-color) 40%, transparent)',
+                  border: '1px solid color-mix(in srgb, var(--text) 12%, transparent)',
                   borderRadius: '8px',
                   padding: '6px 8px',
-                  color: '#fff',
+                  color: 'var(--text)',
                   fontSize: '0.74rem',
                   fontFamily: 'inherit',
                 }}
               />
 
               {error && (
-                <div style={{ display: 'flex', alignItems: 'center', gap: '5px', color: '#f43f5e', fontSize: '0.72rem' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '5px', color: 'var(--danger)', fontSize: '0.72rem' }}>
                   <AlertTriangle size={12} />
                   <span>{error}</span>
                 </div>
@@ -479,9 +479,9 @@ export const MemoryPanel: React.FC<MemoryPanelProps> = ({
                   onClick={cancelDraft}
                   style={{
                     background: 'none',
-                    border: '1px solid rgba(255, 255, 255, 0.15)',
+                    border: '1px solid color-mix(in srgb, var(--text) 15%, transparent)',
                     borderRadius: '8px',
-                    color: '#94a3b8',
+                    color: 'var(--muted)',
                     padding: '5px 10px',
                     fontSize: '0.74rem',
                     cursor: 'pointer',
@@ -496,10 +496,10 @@ export const MemoryPanel: React.FC<MemoryPanelProps> = ({
                     display: 'flex',
                     alignItems: 'center',
                     gap: '4px',
-                    backgroundColor: '#00e5ff',
+                    backgroundColor: 'var(--accent)',
                     border: 'none',
                     borderRadius: '8px',
-                    color: '#04121a',
+                    color: 'var(--on-accent)',
                     padding: '5px 12px',
                     fontSize: '0.74rem',
                     fontWeight: 700,
@@ -522,7 +522,7 @@ export const MemoryPanel: React.FC<MemoryPanelProps> = ({
                 alignItems: 'center',
                 gap: '8px',
                 padding: '28px 10px',
-                color: '#64748b',
+                color: 'var(--muted-dim)',
                 textAlign: 'center',
               }}
             >
@@ -536,13 +536,13 @@ export const MemoryPanel: React.FC<MemoryPanelProps> = ({
           ) : (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
               {items.map((memory) => {
-                const color = KIND_COLORS[memory.kind] || '#94a3b8';
+                const color = KIND_COLORS[memory.kind] || 'var(--muted)';
                 return (
                   <div
                     key={memory.id}
                     style={{
-                      backgroundColor: 'rgba(255, 255, 255, 0.03)',
-                      border: '1px solid rgba(255, 255, 255, 0.07)',
+                      backgroundColor: 'color-mix(in srgb, var(--text) 3%, transparent)',
+                      border: '1px solid color-mix(in srgb, var(--text) 7%, transparent)',
                       borderRadius: '12px',
                       padding: '9px 11px',
                       display: 'flex',
@@ -572,7 +572,7 @@ export const MemoryPanel: React.FC<MemoryPanelProps> = ({
                           style={{
                             fontSize: '0.8rem',
                             fontWeight: 600,
-                            color: '#f1f5f9',
+                            color: 'var(--text)',
                             overflow: 'hidden',
                             textOverflow: 'ellipsis',
                             whiteSpace: 'nowrap',
@@ -585,7 +585,7 @@ export const MemoryPanel: React.FC<MemoryPanelProps> = ({
                       <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexShrink: 0 }}>
                         <span
                           title={`Importance ${memory.importance} of 5`}
-                          style={{ fontSize: '0.62rem', color: '#64748b', letterSpacing: '1px' }}
+                          style={{ fontSize: '0.62rem', color: 'var(--muted-dim)', letterSpacing: '1px' }}
                         >
                           {'●'.repeat(memory.importance)}
                           {'○'.repeat(5 - memory.importance)}
@@ -594,7 +594,7 @@ export const MemoryPanel: React.FC<MemoryPanelProps> = ({
                         <button
                           onClick={() => startEdit(memory)}
                           title="Edit memory"
-                          style={{ background: 'none', border: 'none', color: '#38bdf8', cursor: 'pointer' }}
+                          style={{ background: 'none', border: 'none', color: 'var(--info)', cursor: 'pointer' }}
                         >
                           <Pencil size={13} />
                         </button>
@@ -605,9 +605,9 @@ export const MemoryPanel: React.FC<MemoryPanelProps> = ({
                             disabled={busy}
                             style={{
                               background: 'none',
-                              border: '1px solid rgba(244, 63, 94, 0.5)',
+                              border: '1px solid color-mix(in srgb, var(--danger) 50%, transparent)',
                               borderRadius: '6px',
-                              color: '#f43f5e',
+                              color: 'var(--danger)',
                               fontSize: '0.66rem',
                               fontWeight: 700,
                               padding: '1px 5px',
@@ -620,7 +620,7 @@ export const MemoryPanel: React.FC<MemoryPanelProps> = ({
                           <button
                             onClick={() => setConfirmingId(memory.id)}
                             title="Delete memory"
-                            style={{ background: 'none', border: 'none', color: '#f43f5e', cursor: 'pointer' }}
+                            style={{ background: 'none', border: 'none', color: 'var(--danger)', cursor: 'pointer' }}
                           >
                             <Trash2 size={13} />
                           </button>
@@ -628,12 +628,12 @@ export const MemoryPanel: React.FC<MemoryPanelProps> = ({
                       </div>
                     </div>
 
-                    <p style={{ fontSize: '0.78rem', color: '#cbd5e1', lineHeight: 1.45, whiteSpace: 'pre-wrap' }}>
+                    <p style={{ fontSize: '0.78rem', color: 'var(--muted)', lineHeight: 1.45, whiteSpace: 'pre-wrap' }}>
                       {memory.content}
                     </p>
 
                     {typeof memory.score === 'number' && query.trim() && (
-                      <span style={{ fontSize: '0.66rem', color: '#475569' }}>
+                      <span style={{ fontSize: '0.66rem', color: 'var(--muted-dim)' }}>
                         relevance {(memory.score * 100).toFixed(0)}%
                       </span>
                     )}
@@ -648,9 +648,9 @@ export const MemoryPanel: React.FC<MemoryPanelProps> = ({
         <div
           style={{
             padding: '9px 18px',
-            borderTop: '1px solid rgba(255, 255, 255, 0.06)',
+            borderTop: '1px solid color-mix(in srgb, var(--text) 6%, transparent)',
             fontSize: '0.66rem',
-            color: '#475569',
+            color: 'var(--muted-dim)',
             display: 'flex',
             alignItems: 'center',
             gap: '6px',

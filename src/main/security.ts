@@ -22,6 +22,13 @@ export const IPC_CHANNELS = {
   MEMORY_STATS: 'friday:memory-stats',
   CONVERSATION_LOAD: 'friday:conversation-load',
   CONVERSATION_CLEAR: 'friday:conversation-clear',
+  REMINDERS_LIST: 'friday:reminders-list',
+  REMINDERS_COMPLETE: 'friday:reminders-complete',
+  REMINDERS_DELETE: 'friday:reminders-delete',
+  REMINDERS_CHANGED: 'friday:reminders-changed',
+  REMINDER_FIRED: 'friday:reminder-fired',
+  DASHBOARD_SET_OPEN: 'friday:dashboard-set-open',
+  DASHBOARD_ARTIFACT: 'friday:dashboard-artifact',
   MINIMIZE_WINDOW: 'friday:minimize-window',
   CLOSE_WINDOW: 'friday:close-window',
 } as const;

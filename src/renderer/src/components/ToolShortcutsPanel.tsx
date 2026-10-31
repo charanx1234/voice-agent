@@ -66,17 +66,17 @@ export const ToolShortcutsPanel: React.FC<ToolShortcutsPanelProps> = ({
   const getAppIcon = (id: string) => {
     switch (id) {
       case 'calculator':
-        return <Calculator size={18} color="#00e5ff" />;
+        return <Calculator size={18} color="var(--accent)" />;
       case 'notepad':
-        return <FileText size={18} color="#38bdf8" />;
+        return <FileText size={18} color="var(--info)" />;
       case 'paint':
-        return <Palette size={18} color="#f472b6" />;
+        return <Palette size={18} color="var(--accent)" />;
       case 'explorer':
-        return <Folder size={18} color="#fbbf24" />;
+        return <Folder size={18} color="var(--warning)" />;
       case 'cmd':
-        return <Terminal size={18} color="#34d399" />;
+        return <Terminal size={18} color="var(--success)" />;
       default:
-        return <Play size={18} color="#00e5ff" />;
+        return <Play size={18} color="var(--accent)" />;
     }
   };
 
@@ -85,7 +85,7 @@ export const ToolShortcutsPanel: React.FC<ToolShortcutsPanelProps> = ({
       style={{
         position: 'fixed',
         inset: 0,
-        backgroundColor: 'rgba(4, 7, 13, 0.82)',
+        backgroundColor: 'color-mix(in srgb, var(--overlay) 82%, transparent)',
         backdropFilter: 'blur(10px)',
         zIndex: 50,
         display: 'flex',
@@ -99,12 +99,12 @@ export const ToolShortcutsPanel: React.FC<ToolShortcutsPanelProps> = ({
           width: '100%',
           maxWidth: '420px',
           maxHeight: '85vh',
-          backgroundColor: '#0c121d',
-          border: '1px solid rgba(0, 229, 255, 0.25)',
+          backgroundColor: 'var(--surface)',
+          border: '1px solid color-mix(in srgb, var(--accent) 25%, transparent)',
           borderRadius: '18px',
           display: 'flex',
           flexDirection: 'column',
-          boxShadow: '0 16px 40px rgba(0, 0, 0, 0.7)',
+          boxShadow: '0 16px 40px color-mix(in srgb, var(--shadow-color) 70%, transparent)',
           overflow: 'hidden',
         }}
       >
@@ -115,7 +115,7 @@ export const ToolShortcutsPanel: React.FC<ToolShortcutsPanelProps> = ({
             alignItems: 'center',
             justifyContent: 'space-between',
             padding: '12px 18px',
-            borderBottom: '1px solid rgba(255, 255, 255, 0.08)',
+            borderBottom: '1px solid color-mix(in srgb, var(--text) 8%, transparent)',
           }}
         >
           {/* Tabs */}
@@ -123,11 +123,11 @@ export const ToolShortcutsPanel: React.FC<ToolShortcutsPanelProps> = ({
             <button
               onClick={() => setTab('apps')}
               style={{
-                background: tab === 'apps' ? 'rgba(0, 229, 255, 0.15)' : 'none',
-                border: tab === 'apps' ? '1px solid rgba(0, 229, 255, 0.4)' : '1px solid transparent',
+                background: tab === 'apps' ? 'color-mix(in srgb, var(--accent) 15%, transparent)' : 'none',
+                border: tab === 'apps' ? '1px solid color-mix(in srgb, var(--accent) 40%, transparent)' : '1px solid transparent',
                 borderRadius: '8px',
                 padding: '4px 12px',
-                color: tab === 'apps' ? '#00e5ff' : '#94a3b8',
+                color: tab === 'apps' ? 'var(--accent)' : 'var(--muted)',
                 fontSize: '0.8rem',
                 fontWeight: 600,
                 cursor: 'pointer',
@@ -138,11 +138,11 @@ export const ToolShortcutsPanel: React.FC<ToolShortcutsPanelProps> = ({
             <button
               onClick={() => setTab('notes')}
               style={{
-                background: tab === 'notes' ? 'rgba(0, 229, 255, 0.15)' : 'none',
-                border: tab === 'notes' ? '1px solid rgba(0, 229, 255, 0.4)' : '1px solid transparent',
+                background: tab === 'notes' ? 'color-mix(in srgb, var(--accent) 15%, transparent)' : 'none',
+                border: tab === 'notes' ? '1px solid color-mix(in srgb, var(--accent) 40%, transparent)' : '1px solid transparent',
                 borderRadius: '8px',
                 padding: '4px 12px',
-                color: tab === 'notes' ? '#00e5ff' : '#94a3b8',
+                color: tab === 'notes' ? 'var(--accent)' : 'var(--muted)',
                 fontSize: '0.8rem',
                 fontWeight: 600,
                 cursor: 'pointer',
@@ -154,7 +154,7 @@ export const ToolShortcutsPanel: React.FC<ToolShortcutsPanelProps> = ({
 
           <button
             onClick={onClose}
-            style={{ background: 'none', border: 'none', color: '#94a3b8', cursor: 'pointer' }}
+            style={{ background: 'none', border: 'none', color: 'var(--muted)', cursor: 'pointer' }}
           >
             <X size={18} />
           </button>
@@ -164,7 +164,7 @@ export const ToolShortcutsPanel: React.FC<ToolShortcutsPanelProps> = ({
         <div style={{ padding: '16px 18px', overflowY: 'auto', flex: 1 }}>
           {tab === 'apps' && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-              <span style={{ fontSize: '0.74rem', color: '#64748b' }}>
+              <span style={{ fontSize: '0.74rem', color: 'var(--muted-dim)' }}>
                 Pre-approved desktop tools that FRIDAY can launch on command:
               </span>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
@@ -177,10 +177,10 @@ export const ToolShortcutsPanel: React.FC<ToolShortcutsPanelProps> = ({
                       alignItems: 'center',
                       gap: '10px',
                       padding: '10px 12px',
-                      backgroundColor: 'rgba(255, 255, 255, 0.04)',
-                      border: '1px solid rgba(255, 255, 255, 0.08)',
+                      backgroundColor: 'color-mix(in srgb, var(--text) 4%, transparent)',
+                      border: '1px solid color-mix(in srgb, var(--text) 8%, transparent)',
                       borderRadius: '12px',
-                      color: '#f8fafc',
+                      color: 'var(--text)',
                       cursor: 'pointer',
                       textAlign: 'left',
                     }}
@@ -188,7 +188,7 @@ export const ToolShortcutsPanel: React.FC<ToolShortcutsPanelProps> = ({
                     {getAppIcon(app.id)}
                     <div>
                       <div style={{ fontSize: '0.8rem', fontWeight: 600 }}>{app.name}</div>
-                      <div style={{ fontSize: '0.68rem', color: '#64748b' }}>{app.description}</div>
+                      <div style={{ fontSize: '0.68rem', color: 'var(--muted-dim)' }}>{app.description}</div>
                     </div>
                   </button>
                 ))}
@@ -199,7 +199,7 @@ export const ToolShortcutsPanel: React.FC<ToolShortcutsPanelProps> = ({
           {tab === 'notes' && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <span style={{ fontSize: '0.74rem', color: '#64748b' }}>
+                <span style={{ fontSize: '0.74rem', color: 'var(--muted-dim)' }}>
                   Text notes managed by FRIDAY:
                 </span>
                 <button
@@ -210,9 +210,9 @@ export const ToolShortcutsPanel: React.FC<ToolShortcutsPanelProps> = ({
                     gap: '4px',
                     padding: '3px 8px',
                     borderRadius: '6px',
-                    backgroundColor: 'rgba(0, 229, 255, 0.1)',
-                    border: '1px solid rgba(0, 229, 255, 0.3)',
-                    color: '#00e5ff',
+                    backgroundColor: 'color-mix(in srgb, var(--accent) 10%, transparent)',
+                    border: '1px solid color-mix(in srgb, var(--accent) 30%, transparent)',
+                    color: 'var(--accent)',
                     fontSize: '0.72rem',
                     fontWeight: 600,
                     cursor: 'pointer',
@@ -230,8 +230,8 @@ export const ToolShortcutsPanel: React.FC<ToolShortcutsPanelProps> = ({
                     flexDirection: 'column',
                     gap: '6px',
                     padding: '10px',
-                    backgroundColor: 'rgba(0, 229, 255, 0.05)',
-                    border: '1px solid rgba(0, 229, 255, 0.2)',
+                    backgroundColor: 'color-mix(in srgb, var(--accent) 5%, transparent)',
+                    border: '1px solid color-mix(in srgb, var(--accent) 20%, transparent)',
                     borderRadius: '10px',
                   }}
                 >
@@ -241,11 +241,11 @@ export const ToolShortcutsPanel: React.FC<ToolShortcutsPanelProps> = ({
                     onChange={(e) => setNewNoteTitle(e.target.value)}
                     placeholder="Note Title"
                     style={{
-                      background: 'rgba(0, 0, 0, 0.3)',
-                      border: '1px solid rgba(255, 255, 255, 0.1)',
+                      background: 'color-mix(in srgb, var(--shadow-color) 30%, transparent)',
+                      border: '1px solid color-mix(in srgb, var(--text) 10%, transparent)',
                       borderRadius: '6px',
                       padding: '5px 8px',
-                      color: '#fff',
+                      color: 'var(--text)',
                       fontSize: '0.78rem',
                     }}
                   />
@@ -255,11 +255,11 @@ export const ToolShortcutsPanel: React.FC<ToolShortcutsPanelProps> = ({
                     placeholder="Note content..."
                     rows={3}
                     style={{
-                      background: 'rgba(0, 0, 0, 0.3)',
-                      border: '1px solid rgba(255, 255, 255, 0.1)',
+                      background: 'color-mix(in srgb, var(--shadow-color) 30%, transparent)',
+                      border: '1px solid color-mix(in srgb, var(--text) 10%, transparent)',
                       borderRadius: '6px',
                       padding: '5px 8px',
-                      color: '#fff',
+                      color: 'var(--text)',
                       fontSize: '0.78rem',
                       fontFamily: 'inherit',
                     }}
@@ -270,9 +270,9 @@ export const ToolShortcutsPanel: React.FC<ToolShortcutsPanelProps> = ({
                       alignSelf: 'flex-end',
                       padding: '4px 12px',
                       borderRadius: '6px',
-                      backgroundColor: '#00e5ff',
+                      backgroundColor: 'var(--accent)',
                       border: 'none',
-                      color: '#000',
+                      color: 'var(--shadow-color)',
                       fontSize: '0.75rem',
                       fontWeight: 600,
                       cursor: 'pointer',
@@ -285,16 +285,16 @@ export const ToolShortcutsPanel: React.FC<ToolShortcutsPanelProps> = ({
 
               <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
                 {notes.length === 0 ? (
-                  <div style={{ fontSize: '0.74rem', color: '#64748b', fontStyle: 'italic' }}>
-                    No notes yet. Ask FRIDAY to save a note or click New Note above!
+                  <div style={{ fontSize: '0.74rem', color: 'var(--muted-dim)', fontStyle: 'italic' }}>
+                    No notes yet.
                   </div>
                 ) : (
                   notes.map((n) => (
                     <div
                       key={n.id}
                       style={{
-                        backgroundColor: 'rgba(255, 255, 255, 0.03)',
-                        border: '1px solid rgba(255, 255, 255, 0.06)',
+                        backgroundColor: 'color-mix(in srgb, var(--text) 3%, transparent)',
+                        border: '1px solid color-mix(in srgb, var(--text) 6%, transparent)',
                         borderRadius: '10px',
                         padding: '8px 10px',
                         display: 'flex',
@@ -303,7 +303,7 @@ export const ToolShortcutsPanel: React.FC<ToolShortcutsPanelProps> = ({
                       }}
                     >
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                        <span style={{ fontSize: '0.8rem', fontWeight: 600, color: '#f1f5f9' }}>
+                        <span style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--text)' }}>
                           {n.title}
                         </span>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
@@ -316,7 +316,7 @@ export const ToolShortcutsPanel: React.FC<ToolShortcutsPanelProps> = ({
                             style={{
                               background: 'none',
                               border: 'none',
-                              color: '#00e5ff',
+                              color: 'var(--accent)',
                               cursor: 'pointer',
                               fontSize: '0.7rem',
                             }}
@@ -325,13 +325,13 @@ export const ToolShortcutsPanel: React.FC<ToolShortcutsPanelProps> = ({
                           </button>
                           <button
                             onClick={() => handleDeleteNote(n.id)}
-                            style={{ background: 'none', border: 'none', color: '#f43f5e', cursor: 'pointer' }}
+                            style={{ background: 'none', border: 'none', color: 'var(--danger)', cursor: 'pointer' }}
                           >
                             <Trash2 size={13} />
                           </button>
                         </div>
                       </div>
-                      <p style={{ fontSize: '0.74rem', color: '#94a3b8', whiteSpace: 'pre-wrap' }}>
+                      <p style={{ fontSize: '0.74rem', color: 'var(--muted)', whiteSpace: 'pre-wrap' }}>
                         {n.content}
                       </p>
                     </div>

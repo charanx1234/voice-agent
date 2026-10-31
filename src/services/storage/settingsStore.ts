@@ -15,7 +15,7 @@ const DEFAULT_SETTINGS: FridaySettings = {
   speechVolume: 1.0,
   voiceId: 'default',
   ttsProvider: 'auto',
-  theme: 'midnight',
+  themeMode: 'auto',
   approvedFolders: [],
   requireToolConfirmations: {
     notes: false,
@@ -58,9 +58,20 @@ export class SettingsStore {
         if (model === 'gemini-2.5-flash-lite' || model === 'gemini-1.5-flash' || model === 'gemini-1.5-pro') {
           model = 'gemini-3.5-flash-lite';
         }
+
+        // v1 stored a fixed dark theme; keep those installs dark instead of flipping them.
+        const legacyTheme = typeof parsed.theme === 'string' ? parsed.theme : undefined;
+        const themeMode: FridaySettings['themeMode'] =
+          parsed.themeMode === 'light' || parsed.themeMode === 'dark' || parsed.themeMode === 'auto'
+            ? parsed.themeMode
+            : legacyTheme
+            ? 'dark'
+            : 'auto';
+
         return {
           ...DEFAULT_SETTINGS,
           ...parsed,
+          themeMode,
           modelName: model,
           // If env has key and stored doesn't, fallback to env
           apiKey: parsed.apiKey || process.env.GEMINI_API_KEY || '',

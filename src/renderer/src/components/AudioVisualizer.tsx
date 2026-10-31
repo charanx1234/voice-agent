@@ -9,7 +9,7 @@ interface AudioVisualizerProps {
 export const AudioVisualizer: React.FC<AudioVisualizerProps> = ({
   frequencies,
   isActive,
-  color = '#00e5ff',
+  color = 'var(--accent)',
 }) => {
   // Use 16 wave bars for a smooth, high-tech waveform
   const bars = Array.from({ length: 16 }).map((_, i) => {

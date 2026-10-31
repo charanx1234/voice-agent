@@ -3,6 +3,8 @@ import { projectSearchToolDefinition, executeProjectSearchTool } from './project
 import { webResearchToolDefinition, executeWebResearchTool } from './webResearchTool';
 import { appShortcutsToolDefinition, executeAppShortcutsTool, ALLOWED_APPLICATIONS } from './appShortcutsTool';
 import { memoryToolDefinitions, executeMemoryTool } from '../memory/memoryTool';
+import { reminderToolDefinitions, executeReminderTool } from '../reminders/remindersTool';
+import { dashboardToolDefinition, executeDashboardTool } from '../dashboard/dashboardTool';
 import { settingsStore } from '../storage/settingsStore';
 import { ToolConfirmationPayload } from '../../shared/types';
 
@@ -22,6 +24,8 @@ export class ToolRegistry {
     const allDefs = [
       ...notesToolDefinitions,
       ...memoryToolDefinitions,
+      ...reminderToolDefinitions,
+      dashboardToolDefinition,
       projectSearchToolDefinition,
       webResearchToolDefinition,
       appShortcutsToolDefinition,
@@ -99,6 +103,12 @@ export class ToolRegistry {
       }
       if (toolName === 'save_memory' || toolName === 'search_memory') {
         return await executeMemoryTool(toolName, args);
+      }
+      if (['create_reminder', 'list_reminders', 'complete_reminder'].includes(toolName)) {
+        return await executeReminderTool(toolName, args);
+      }
+      if (toolName === 'show_on_dashboard') {
+        return await executeDashboardTool(toolName, args);
       }
       if (toolName === 'search_project_folder') {
         return await executeProjectSearchTool(toolName, args);

@@ -5,6 +5,8 @@ import { notesStore } from '../services/storage/notesStore';
 import { geminiService } from '../services/ai/gemini';
 import { toolRegistry } from '../services/agent/toolRegistry';
 import { memoryService } from '../services/memory/memoryService';
+import { remindersService } from '../services/reminders/remindersService';
+import { dashboardBus } from '../services/dashboard/dashboardTool';
 import { ALLOWED_APPLICATIONS, executeAppShortcutsTool } from '../services/agent/appShortcutsTool';
 import { MemoryInputPayload, ToolConfirmationPayload } from '../shared/types';
 
@@ -193,6 +195,64 @@ export function registerIpcHandlers(getMainWindow: () => BrowserWindow | null): 
     } catch (err: any) {
       console.error('[IPC] conversation-clear failed:', err?.message);
       return false;
+    }
+  });
+
+  // Reminders
+  ipcMain.handle(IPC_CHANNELS.REMINDERS_LIST, async (_event, includeDone?: boolean) => {
+    try {
+      return await remindersService.list(Boolean(includeDone));
+    } catch (err: any) {
+      console.error('[IPC] reminders-list failed:', err?.message);
+      return [];
+    }
+  });
+
+  ipcMain.handle(IPC_CHANNELS.REMINDERS_COMPLETE, async (_event, idOrText: string) => {
+    try {
+      return (await remindersService.complete(idOrText)) || null;
+    } catch (err: any) {
+      console.error('[IPC] reminders-complete failed:', err?.message);
+      return null;
+    }
+  });
+
+  ipcMain.handle(IPC_CHANNELS.REMINDERS_DELETE, async (_event, idOrText: string) => {
+    try {
+      return await remindersService.remove(idOrText);
+    } catch (err: any) {
+      console.error('[IPC] reminders-delete failed:', err?.message);
+      return false;
+    }
+  });
+
+  // Push backend events to the renderer (reminders, dashboard output).
+  remindersService.on('changed', async () => {
+    const reminders = await remindersService.list(false);
+    getMainWindow()?.webContents.send(IPC_CHANNELS.REMINDERS_CHANGED, reminders);
+  });
+
+  remindersService.on('fired', (reminder) => {
+    getMainWindow()?.webContents.send(IPC_CHANNELS.REMINDER_FIRED, reminder);
+  });
+
+  dashboardBus.on('artifact', (artifact) => {
+    getMainWindow()?.webContents.send(IPC_CHANNELS.DASHBOARD_ARTIFACT, artifact);
+  });
+
+  // Grow the window when the dashboard is shown, shrink back when it closes.
+  ipcMain.on(IPC_CHANNELS.DASHBOARD_SET_OPEN, (_event, open: boolean) => {
+    const win = getMainWindow();
+    if (!win || win.isDestroyed()) return;
+
+    const [width, height] = win.getSize();
+
+    if (open) {
+      win.setMinimumSize(820, 640);
+      if (width < 1040) win.setSize(1040, Math.max(height, 720), true);
+    } else {
+      win.setMinimumSize(400, 640);
+      win.setSize(460, Math.max(height, 640), true);
     }
   });
 

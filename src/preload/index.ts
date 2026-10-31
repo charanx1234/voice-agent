@@ -1,5 +1,5 @@
 import { contextBridge, ipcRenderer } from 'electron';
-import { FridayApiBridge, ToolConfirmationPayload } from '../shared/types';
+import { DashboardArtifact, FridayApiBridge, ReminderItem, ToolConfirmationPayload } from '../shared/types';
 import { IPC_CHANNELS } from '../main/security';
 
 const confirmationCallbacks = new Map<string, (confirmed: boolean) => void>();
@@ -52,6 +52,33 @@ const apiBridge: FridayApiBridge = {
   getMemoryStats: () => ipcRenderer.invoke(IPC_CHANNELS.MEMORY_STATS),
   loadConversation: (limit?: number) => ipcRenderer.invoke(IPC_CHANNELS.CONVERSATION_LOAD, limit),
   clearConversation: () => ipcRenderer.invoke(IPC_CHANNELS.CONVERSATION_CLEAR),
+
+  // Reminders
+  listReminders: (includeDone?: boolean) =>
+    ipcRenderer.invoke(IPC_CHANNELS.REMINDERS_LIST, includeDone),
+  completeReminder: (idOrText: string) =>
+    ipcRenderer.invoke(IPC_CHANNELS.REMINDERS_COMPLETE, idOrText),
+  deleteReminder: (idOrText: string) =>
+    ipcRenderer.invoke(IPC_CHANNELS.REMINDERS_DELETE, idOrText),
+  onReminderFired: (callback: (reminder: ReminderItem) => void) => {
+    const handler = (_event: any, reminder: ReminderItem) => callback(reminder);
+    ipcRenderer.on(IPC_CHANNELS.REMINDER_FIRED, handler);
+    return () => ipcRenderer.removeListener(IPC_CHANNELS.REMINDER_FIRED, handler);
+  },
+  onRemindersChanged: (callback: (reminders: ReminderItem[]) => void) => {
+    const handler = (_event: any, reminders: ReminderItem[]) => callback(reminders);
+    ipcRenderer.on(IPC_CHANNELS.REMINDERS_CHANGED, handler);
+    return () => ipcRenderer.removeListener(IPC_CHANNELS.REMINDERS_CHANGED, handler);
+  },
+
+  // Dashboard
+  setDashboardOpen: (open: boolean) =>
+    ipcRenderer.send(IPC_CHANNELS.DASHBOARD_SET_OPEN, open),
+  onDashboardArtifact: (callback: (artifact: DashboardArtifact) => void) => {
+    const handler = (_event: any, artifact: DashboardArtifact) => callback(artifact);
+    ipcRenderer.on(IPC_CHANNELS.DASHBOARD_ARTIFACT, handler);
+    return () => ipcRenderer.removeListener(IPC_CHANNELS.DASHBOARD_ARTIFACT, handler);
+  },
 
   minimizeWindow: () => ipcRenderer.send(IPC_CHANNELS.MINIMIZE_WINDOW),
   closeWindow: () => ipcRenderer.send(IPC_CHANNELS.CLOSE_WINDOW),

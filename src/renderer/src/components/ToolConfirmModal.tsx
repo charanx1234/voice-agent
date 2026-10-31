@@ -15,7 +15,7 @@ export const ToolConfirmModal: React.FC<ToolConfirmModalProps> = ({ request, onR
       style={{
         position: 'fixed',
         inset: 0,
-        backgroundColor: 'rgba(4, 7, 13, 0.85)',
+        backgroundColor: 'color-mix(in srgb, var(--overlay) 85%, transparent)',
         backdropFilter: 'blur(8px)',
         zIndex: 60,
         display: 'flex',
@@ -28,14 +28,14 @@ export const ToolConfirmModal: React.FC<ToolConfirmModalProps> = ({ request, onR
         style={{
           width: '100%',
           maxWidth: '380px',
-          backgroundColor: '#0f172a',
-          border: '1px solid #f59e0b',
+          backgroundColor: 'var(--surface)',
+          border: '1px solid var(--warning)',
           borderRadius: '16px',
           padding: '20px',
           display: 'flex',
           flexDirection: 'column',
           gap: '14px',
-          boxShadow: '0 12px 30px rgba(0, 0, 0, 0.6), 0 0 20px rgba(245, 158, 11, 0.15)',
+          boxShadow: '0 12px 30px color-mix(in srgb, var(--shadow-color) 60%, transparent), 0 0 20px color-mix(in srgb, var(--warning) 15%, transparent)',
         }}
       >
         <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
@@ -44,37 +44,37 @@ export const ToolConfirmModal: React.FC<ToolConfirmModalProps> = ({ request, onR
               width: '36px',
               height: '36px',
               borderRadius: '50%',
-              backgroundColor: 'rgba(245, 158, 11, 0.15)',
+              backgroundColor: 'color-mix(in srgb, var(--warning) 15%, transparent)',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
-              color: '#f59e0b',
+              color: 'var(--warning)',
             }}
           >
             <ShieldAlert size={20} />
           </div>
           <div>
-            <h4 style={{ fontSize: '0.92rem', fontWeight: 600, color: '#f8fafc' }}>
+            <h4 style={{ fontSize: '0.92rem', fontWeight: 600, color: 'var(--text)' }}>
               Action Permission Required
             </h4>
-            <span style={{ fontSize: '0.72rem', color: '#94a3b8' }}>
+            <span style={{ fontSize: '0.72rem', color: 'var(--muted)' }}>
               Tool: {request.toolName}
             </span>
           </div>
         </div>
 
-        <p style={{ fontSize: '0.82rem', color: '#cbd5e1', lineHeight: '1.5' }}>
+        <p style={{ fontSize: '0.82rem', color: 'var(--muted)', lineHeight: '1.5' }}>
           {request.description}
         </p>
 
         {request.details && Object.keys(request.details).length > 0 && (
           <div
             style={{
-              backgroundColor: 'rgba(0, 0, 0, 0.35)',
+              backgroundColor: 'color-mix(in srgb, var(--shadow-color) 35%, transparent)',
               borderRadius: '8px',
               padding: '8px 10px',
               fontSize: '0.74rem',
-              color: '#94a3b8',
+              color: 'var(--muted)',
               fontFamily: 'var(--font-mono)',
               overflowX: 'auto',
             }}
@@ -90,9 +90,9 @@ export const ToolConfirmModal: React.FC<ToolConfirmModalProps> = ({ request, onR
             style={{
               padding: '7px 14px',
               borderRadius: '8px',
-              backgroundColor: 'rgba(255, 255, 255, 0.05)',
-              border: '1px solid rgba(255, 255, 255, 0.15)',
-              color: '#94a3b8',
+              backgroundColor: 'color-mix(in srgb, var(--text) 5%, transparent)',
+              border: '1px solid color-mix(in srgb, var(--text) 15%, transparent)',
+              color: 'var(--muted)',
               fontSize: '0.78rem',
               cursor: 'pointer',
               display: 'flex',
@@ -109,9 +109,9 @@ export const ToolConfirmModal: React.FC<ToolConfirmModalProps> = ({ request, onR
             style={{
               padding: '7px 16px',
               borderRadius: '8px',
-              backgroundColor: '#00e5ff',
+              backgroundColor: 'var(--accent)',
               border: 'none',
-              color: '#0a0e17',
+              color: 'var(--bg)',
               fontSize: '0.78rem',
               fontWeight: 600,
               cursor: 'pointer',

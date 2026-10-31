@@ -13,6 +13,7 @@ import {
   EyeOff,
   Plus,
   Trash2,
+  Moon,
 } from 'lucide-react';
 import { FridaySettings } from '@/shared/types';
 import { SUPPORTED_LANGUAGES } from '@/services/voice/languages';
@@ -45,7 +46,9 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   const [voiceId, setVoiceId] = useState(settings.voiceId || 'default');
   const [speechSpeed, setSpeechSpeed] = useState(settings.speechSpeed || 1.0);
   const [speechVolume, setSpeechVolume] = useState(settings.speechVolume || 1.0);
-  const [theme, setTheme] = useState(settings.theme || 'midnight');
+  const [themeMode, setThemeMode] = useState<FridaySettings['themeMode']>(
+    settings.themeMode || 'auto'
+  );
   const [approvedFolders, setApprovedFolders] = useState<string[]>(settings.approvedFolders || []);
   const [confirmations, setConfirmations] = useState(settings.requireToolConfirmations);
 
@@ -60,7 +63,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
       setVoiceId(settings.voiceId || 'default');
       setSpeechSpeed(settings.speechSpeed || 1.0);
       setSpeechVolume(settings.speechVolume || 1.0);
-      setTheme(settings.theme || 'midnight');
+      setThemeMode(settings.themeMode || 'auto');
       setApprovedFolders(settings.approvedFolders || []);
       setConfirmations(settings.requireToolConfirmations);
       setTestResult(null);
@@ -76,7 +79,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
       voiceId,
       speechSpeed,
       speechVolume,
-      theme,
+      themeMode,
       approvedFolders,
       requireToolConfirmations: confirmations,
     });
@@ -114,7 +117,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
       style={{
         position: 'fixed',
         inset: 0,
-        backgroundColor: 'rgba(4, 7, 13, 0.82)',
+        backgroundColor: 'color-mix(in srgb, var(--overlay) 82%, transparent)',
         backdropFilter: 'blur(10px)',
         zIndex: 50,
         display: 'flex',
@@ -128,12 +131,12 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
           width: '100%',
           maxWidth: '420px',
           maxHeight: '88vh',
-          backgroundColor: '#0c121d',
-          border: '1px solid rgba(0, 229, 255, 0.25)',
+          backgroundColor: 'var(--surface)',
+          border: '1px solid color-mix(in srgb, var(--accent) 25%, transparent)',
           borderRadius: '18px',
           display: 'flex',
           flexDirection: 'column',
-          boxShadow: '0 16px 40px rgba(0, 0, 0, 0.7), 0 0 20px rgba(0, 229, 255, 0.1)',
+          boxShadow: '0 16px 40px color-mix(in srgb, var(--shadow-color) 70%, transparent), 0 0 20px color-mix(in srgb, var(--accent) 10%, transparent)',
           overflow: 'hidden',
         }}
       >
@@ -144,19 +147,19 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
             alignItems: 'center',
             justifyContent: 'space-between',
             padding: '14px 18px',
-            borderBottom: '1px solid rgba(255, 255, 255, 0.08)',
+            borderBottom: '1px solid color-mix(in srgb, var(--text) 8%, transparent)',
           }}
         >
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <Sliders size={18} color="#00e5ff" />
-            <h3 style={{ fontSize: '1rem', fontWeight: 600, color: '#f1f5f9' }}>FRIDAY Settings</h3>
+            <Sliders size={18} color="var(--accent)" />
+            <h3 style={{ fontSize: '1rem', fontWeight: 600, color: 'var(--text)' }}>FRIDAY Settings</h3>
           </div>
           <button
             onClick={onClose}
             style={{
               background: 'none',
               border: 'none',
-              color: '#94a3b8',
+              color: 'var(--muted)',
               cursor: 'pointer',
               padding: '4px',
             }}
@@ -175,27 +178,80 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
             gap: '18px',
           }}
         >
+          {/* Section: Appearance */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+            <label
+              style={{
+                fontSize: '0.78rem',
+                fontWeight: 600,
+                color: 'var(--muted)',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px',
+              }}
+            >
+              <Moon size={14} color="var(--accent)" />
+              <span>APPEARANCE</span>
+            </label>
+
+            <div style={{ display: 'flex', gap: '6px' }}>
+              {(['auto', 'light', 'dark'] as const).map((mode) => {
+                const active = themeMode === mode;
+                return (
+                  <button
+                    key={mode}
+                    type="button"
+                    onClick={() => setThemeMode(mode)}
+                    style={{
+                      flex: 1,
+                      padding: '7px 8px',
+                      borderRadius: '9px',
+                      fontSize: '0.76rem',
+                      fontWeight: 600,
+                      cursor: 'pointer',
+                      backgroundColor: active
+                        ? 'color-mix(in srgb, var(--accent) 12%, transparent)'
+                        : 'color-mix(in srgb, var(--text) 4%, transparent)',
+                      border: `1px solid ${
+                        active
+                          ? 'color-mix(in srgb, var(--accent) 45%, transparent)'
+                          : 'color-mix(in srgb, var(--text) 10%, transparent)'
+                      }`,
+                      color: active ? 'var(--accent)' : 'var(--muted)',
+                    }}
+                  >
+                    {mode === 'auto' ? 'Auto' : mode === 'light' ? 'Light' : 'Dark'}
+                  </button>
+                );
+              })}
+            </div>
+
+            <span style={{ fontSize: '0.7rem', color: 'var(--muted-dim)' }}>
+              Auto follows your Windows theme.
+            </span>
+          </div>
+
           {/* Section: Gemini API Key */}
           <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
             <label
               style={{
                 fontSize: '0.78rem',
                 fontWeight: 600,
-                color: '#94a3b8',
+                color: 'var(--muted)',
                 display: 'flex',
                 alignItems: 'center',
                 gap: '6px',
               }}
             >
-              <Key size={14} color="#00e5ff" />
+              <Key size={14} color="var(--accent)" />
               <span>GOOGLE GEMINI API KEY</span>
             </label>
             <div
               style={{
                 display: 'flex',
                 alignItems: 'center',
-                backgroundColor: 'rgba(255, 255, 255, 0.04)',
-                border: '1px solid rgba(255, 255, 255, 0.1)',
+                backgroundColor: 'color-mix(in srgb, var(--text) 4%, transparent)',
+                border: '1px solid color-mix(in srgb, var(--text) 10%, transparent)',
                 borderRadius: '10px',
                 padding: '6px 10px',
               }}
@@ -204,20 +260,20 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                 type={showKey ? 'text' : 'password'}
                 value={apiKeyInput}
                 onChange={(e) => setApiKeyInput(e.target.value)}
-                placeholder="Paste your Gemini API key (AIza...)"
+                placeholder="Paste your API key"
                 style={{
                   flex: 1,
                   background: 'transparent',
                   border: 'none',
                   outline: 'none',
-                  color: '#f8fafc',
+                  color: 'var(--text)',
                   fontSize: '0.82rem',
                 }}
               />
               <button
                 type="button"
                 onClick={() => setShowKey(!showKey)}
-                style={{ background: 'none', border: 'none', color: '#64748b', cursor: 'pointer' }}
+                style={{ background: 'none', border: 'none', color: 'var(--muted-dim)', cursor: 'pointer' }}
               >
                 {showKey ? <EyeOff size={15} /> : <Eye size={15} />}
               </button>
@@ -231,9 +287,9 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                 style={{
                   padding: '5px 10px',
                   borderRadius: '8px',
-                  backgroundColor: 'rgba(0, 229, 255, 0.1)',
-                  border: '1px solid rgba(0, 229, 255, 0.3)',
-                  color: '#00e5ff',
+                  backgroundColor: 'color-mix(in srgb, var(--accent) 10%, transparent)',
+                  border: '1px solid color-mix(in srgb, var(--accent) 30%, transparent)',
+                  color: 'var(--accent)',
                   fontSize: '0.75rem',
                   fontWeight: 600,
                   cursor: isTesting ? 'default' : 'pointer',
@@ -247,7 +303,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                 rel="noreferrer"
                 style={{
                   fontSize: '0.73rem',
-                  color: '#64748b',
+                  color: 'var(--muted-dim)',
                   alignSelf: 'center',
                   textDecoration: 'underline',
                 }}
@@ -262,9 +318,9 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                   marginTop: '4px',
                   padding: '6px 10px',
                   borderRadius: '8px',
-                  backgroundColor: testResult.success ? 'rgba(52, 211, 153, 0.12)' : 'rgba(244, 63, 94, 0.12)',
-                  border: `1px solid ${testResult.success ? '#34d399' : '#f43f5e'}44`,
-                  color: testResult.success ? '#34d399' : '#f43f5e',
+                  backgroundColor: testResult.success ? 'color-mix(in srgb, var(--success) 12%, transparent)' : 'color-mix(in srgb, var(--danger) 12%, transparent)',
+                  border: `1px solid ${testResult.success ? 'var(--success)' : 'var(--danger)'}44`,
+                  color: testResult.success ? 'var(--success)' : 'var(--danger)',
                   fontSize: '0.74rem',
                   display: 'flex',
                   alignItems: 'center',
@@ -283,30 +339,30 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
               style={{
                 fontSize: '0.78rem',
                 fontWeight: 600,
-                color: '#94a3b8',
+                color: 'var(--muted)',
                 display: 'flex',
                 alignItems: 'center',
                 gap: '6px',
               }}
             >
-              <Globe size={14} color="#00e5ff" />
+              <Globe size={14} color="var(--accent)" />
               <span>PREFERRED INDIAN LANGUAGE</span>
             </label>
             <select
               value={language}
               onChange={(e) => setLanguage(e.target.value)}
               style={{
-                backgroundColor: 'rgba(255, 255, 255, 0.05)',
-                border: '1px solid rgba(255, 255, 255, 0.1)',
+                backgroundColor: 'color-mix(in srgb, var(--text) 5%, transparent)',
+                border: '1px solid color-mix(in srgb, var(--text) 10%, transparent)',
                 borderRadius: '10px',
                 padding: '8px 10px',
-                color: '#f8fafc',
+                color: 'var(--text)',
                 fontSize: '0.82rem',
                 outline: 'none',
               }}
             >
               {Object.values(SUPPORTED_LANGUAGES).map((l) => (
-                <option key={l.code} value={l.code} style={{ background: '#0f172a', color: '#fff' }}>
+                <option key={l.code} value={l.code} style={{ background: 'var(--surface)', color: 'var(--text)' }}>
                   {l.name} — {l.nativeName}
                 </option>
               ))}
@@ -314,25 +370,25 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
 
             {/* Voice Dropdown */}
             <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', marginTop: '2px' }}>
-              <label style={{ fontSize: '0.72rem', color: '#64748b' }}>VOICE MODEL</label>
+              <label style={{ fontSize: '0.72rem', color: 'var(--muted-dim)' }}>VOICE MODEL</label>
               <select
                 value={voiceId}
                 onChange={(e) => setVoiceId(e.target.value)}
                 style={{
-                  backgroundColor: 'rgba(255, 255, 255, 0.05)',
-                  border: '1px solid rgba(255, 255, 255, 0.1)',
+                  backgroundColor: 'color-mix(in srgb, var(--text) 5%, transparent)',
+                  border: '1px solid color-mix(in srgb, var(--text) 10%, transparent)',
                   borderRadius: '10px',
                   padding: '7px 10px',
-                  color: '#f8fafc',
+                  color: 'var(--text)',
                   fontSize: '0.78rem',
                   outline: 'none',
                 }}
               >
-                <option value="default" style={{ background: '#0f172a' }}>
+                <option value="default" style={{ background: 'var(--surface)' }}>
                   Automatic (Best match for {langConfig.name})
                 </option>
                 {voices.map((v) => (
-                  <option key={v.id} value={v.id} style={{ background: '#0f172a' }}>
+                  <option key={v.id} value={v.id} style={{ background: 'var(--surface)' }}>
                     {v.name}
                   </option>
                 ))}
@@ -348,9 +404,9 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                 marginTop: '2px',
                 padding: '4px 10px',
                 borderRadius: '8px',
-                backgroundColor: 'rgba(255, 255, 255, 0.05)',
-                border: '1px solid rgba(255, 255, 255, 0.1)',
-                color: '#cbd5e1',
+                backgroundColor: 'color-mix(in srgb, var(--text) 5%, transparent)',
+                border: '1px solid color-mix(in srgb, var(--text) 10%, transparent)',
+                color: 'var(--muted)',
                 fontSize: '0.75rem',
                 cursor: 'pointer',
                 display: 'flex',
@@ -358,16 +414,16 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                 gap: '5px',
               }}
             >
-              <Volume2 size={13} color="#00e5ff" />
+              <Volume2 size={13} color="var(--accent)" />
               <span>Test Spoken Voice</span>
             </button>
           </div>
 
           {/* Section: Speech Speed */}
           <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.75rem', color: '#94a3b8' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.75rem', color: 'var(--muted)' }}>
               <span>Speech Speed</span>
-              <span style={{ color: '#00e5ff', fontWeight: 600 }}>{speechSpeed}x</span>
+              <span style={{ color: 'var(--accent)', fontWeight: 600 }}>{speechSpeed}x</span>
             </div>
             <input
               type="range"
@@ -376,7 +432,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
               step="0.05"
               value={speechSpeed}
               onChange={(e) => setSpeechSpeed(parseFloat(e.target.value))}
-              style={{ accentColor: '#00e5ff' }}
+              style={{ accentColor: 'var(--accent)' }}
             />
           </div>
 
@@ -387,24 +443,24 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                 style={{
                   fontSize: '0.78rem',
                   fontWeight: 600,
-                  color: '#94a3b8',
+                  color: 'var(--muted)',
                   display: 'flex',
                   alignItems: 'center',
                   gap: '6px',
                 }}
               >
-                <FolderOpen size={14} color="#00e5ff" />
+                <FolderOpen size={14} color="var(--accent)" />
                 <span>APPROVED PROJECT FOLDERS</span>
               </label>
               <button
                 type="button"
                 onClick={handleAddFolder}
                 style={{
-                  background: 'rgba(0, 229, 255, 0.1)',
-                  border: '1px solid rgba(0, 229, 255, 0.3)',
+                  background: 'color-mix(in srgb, var(--accent) 10%, transparent)',
+                  border: '1px solid color-mix(in srgb, var(--accent) 30%, transparent)',
                   borderRadius: '6px',
                   padding: '3px 8px',
-                  color: '#00e5ff',
+                  color: 'var(--accent)',
                   fontSize: '0.72rem',
                   fontWeight: 600,
                   cursor: 'pointer',
@@ -420,7 +476,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
               {approvedFolders.length === 0 ? (
-                <div style={{ fontSize: '0.73rem', color: '#64748b', fontStyle: 'italic' }}>
+                <div style={{ fontSize: '0.73rem', color: 'var(--muted-dim)', fontStyle: 'italic' }}>
                   No folders approved. FRIDAY will only search folders you explicitly add here.
                 </div>
               ) : (
@@ -431,11 +487,11 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                       display: 'flex',
                       alignItems: 'center',
                       justifyContent: 'space-between',
-                      backgroundColor: 'rgba(255, 255, 255, 0.03)',
+                      backgroundColor: 'color-mix(in srgb, var(--text) 3%, transparent)',
                       padding: '4px 8px',
                       borderRadius: '8px',
                       fontSize: '0.72rem',
-                      color: '#cbd5e1',
+                      color: 'var(--muted)',
                     }}
                   >
                     <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '280px' }}>
@@ -444,7 +500,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                     <button
                       type="button"
                       onClick={() => handleRemoveFolder(fPath)}
-                      style={{ background: 'none', border: 'none', color: '#f43f5e', cursor: 'pointer' }}
+                      style={{ background: 'none', border: 'none', color: 'var(--danger)', cursor: 'pointer' }}
                     >
                       <Trash2 size={13} />
                     </button>
@@ -460,22 +516,22 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
               style={{
                 fontSize: '0.78rem',
                 fontWeight: 600,
-                color: '#94a3b8',
+                color: 'var(--muted)',
                 display: 'flex',
                 alignItems: 'center',
                 gap: '6px',
               }}
             >
-              <Shield size={14} color="#00e5ff" />
+              <Shield size={14} color="var(--accent)" />
               <span>PERMISSIONS & CONFIRMATIONS</span>
             </label>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', fontSize: '0.76rem', color: '#cbd5e1' }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', fontSize: '0.76rem', color: 'var(--muted)' }}>
               <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}>
                 <input
                   type="checkbox"
                   checked={confirmations.launchApps}
                   onChange={(e) => setConfirmations({ ...confirmations, launchApps: e.target.checked })}
-                  style={{ accentColor: '#00e5ff' }}
+                  style={{ accentColor: 'var(--accent)' }}
                 />
                 <span>Ask confirmation before opening applications</span>
               </label>
@@ -484,7 +540,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                   type="checkbox"
                   checked={confirmations.folderSearch}
                   onChange={(e) => setConfirmations({ ...confirmations, folderSearch: e.target.checked })}
-                  style={{ accentColor: '#00e5ff' }}
+                  style={{ accentColor: 'var(--accent)' }}
                 />
                 <span>Ask confirmation before searching approved folders</span>
               </label>
@@ -496,7 +552,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
         <div
           style={{
             padding: '12px 18px',
-            borderTop: '1px solid rgba(255, 255, 255, 0.08)',
+            borderTop: '1px solid color-mix(in srgb, var(--text) 8%, transparent)',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'flex-end',
@@ -510,8 +566,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
               padding: '6px 14px',
               borderRadius: '8px',
               backgroundColor: 'transparent',
-              border: '1px solid rgba(255, 255, 255, 0.12)',
-              color: '#94a3b8',
+              border: '1px solid color-mix(in srgb, var(--text) 12%, transparent)',
+              color: 'var(--muted)',
               fontSize: '0.8rem',
               cursor: 'pointer',
             }}
@@ -524,9 +580,9 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
             style={{
               padding: '6px 18px',
               borderRadius: '8px',
-              backgroundColor: '#00e5ff',
+              backgroundColor: 'var(--accent)',
               border: 'none',
-              color: '#0a0e17',
+              color: 'var(--bg)',
               fontSize: '0.8rem',
               fontWeight: 600,
               cursor: 'pointer',

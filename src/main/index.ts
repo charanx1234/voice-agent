@@ -2,6 +2,7 @@ import { app, BrowserWindow, shell } from 'electron';
 import path from 'path';
 import { registerIpcHandlers } from './ipc';
 import { memoryService } from '../services/memory/memoryService';
+import { remindersService } from '../services/reminders/remindersService';
 
 let mainWindow: BrowserWindow | null = null;
 const getMainWindow = (): BrowserWindow | null => mainWindow;
@@ -113,11 +114,18 @@ app.on('web-contents-created', (_event, contents) => {
 });
 
 app.whenReady().then(() => {
+  // Required for Windows toast notifications and grouping.
+  app.setAppUserModelId('com.friday.ai.companion');
+
   createWindow();
 
   // Open the memory database off the critical path so the first message is fast.
   memoryService.init().catch((err) => {
     console.error('[FRIDAY] Long-term memory unavailable:', err?.message);
+  });
+
+  remindersService.init().catch((err) => {
+    console.error('[FRIDAY] Reminders unavailable:', err?.message);
   });
 
   app.on('activate', () => {
@@ -130,6 +138,7 @@ app.whenReady().then(() => {
 // Persist the final memory snapshot before the process exits.
 app.on('will-quit', () => {
   memoryService.flushNow();
+  remindersService.flushNow();
 });
 
 app.on('window-all-closed', () => {
