@@ -7,8 +7,9 @@ import { toolRegistry } from '../services/agent/toolRegistry';
 import { memoryService } from '../services/memory/memoryService';
 import { remindersService } from '../services/reminders/remindersService';
 import { dashboardBus } from '../services/dashboard/dashboardTool';
+import { neuralVoiceService } from '../services/voice/neuralVoice';
 import { ALLOWED_APPLICATIONS, executeAppShortcutsTool } from '../services/agent/appShortcutsTool';
-import { MemoryInputPayload, ToolConfirmationPayload } from '../shared/types';
+import { MemoryInputPayload, SpeechSynthesisRequest, ToolConfirmationPayload } from '../shared/types';
 
 let handlersRegistered = false;
 
@@ -254,6 +255,15 @@ export function registerIpcHandlers(getMainWindow: () => BrowserWindow | null): 
       win.setMinimumSize(400, 640);
       win.setSize(460, Math.max(height, 640), true);
     }
+  });
+
+  // Neural speech synthesis (Edge, then Gemini fallback)
+  ipcMain.handle(IPC_CHANNELS.TTS_SYNTHESIZE, async (_event, request: SpeechSynthesisRequest) => {
+    return await neuralVoiceService.synthesize(request || { text: '' });
+  });
+
+  ipcMain.on(IPC_CHANNELS.TTS_CANCEL, () => {
+    neuralVoiceService.cancelAll();
   });
 
   // Window control

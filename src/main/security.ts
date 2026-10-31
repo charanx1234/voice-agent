@@ -29,6 +29,8 @@ export const IPC_CHANNELS = {
   REMINDER_FIRED: 'friday:reminder-fired',
   DASHBOARD_SET_OPEN: 'friday:dashboard-set-open',
   DASHBOARD_ARTIFACT: 'friday:dashboard-artifact',
+  TTS_SYNTHESIZE: 'friday:tts-synthesize',
+  TTS_CANCEL: 'friday:tts-cancel',
   MINIMIZE_WINDOW: 'friday:minimize-window',
   CLOSE_WINDOW: 'friday:close-window',
 } as const;

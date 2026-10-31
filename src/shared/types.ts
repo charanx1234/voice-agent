@@ -33,6 +33,10 @@ export interface FridaySettings {
   preferredLanguage: string; // e.g. 'te-IN' (Telugu), 'en-IN' (Indian English), 'hi-IN' (Hindi), 'ta-IN', 'kn-IN'
   speechSpeed: number; // 0.8 to 1.5 (default 1.0)
   speechVolume: number; // 0 to 1 (default 1.0)
+  /** Pitch offset in semitones (-3 to +3). */
+  pitch: number;
+  /** Preferred speech engine; 'auto' tries Edge, then Gemini, then the system voice. */
+  ttsEngine: 'auto' | 'edge' | 'gemini' | 'system';
   voiceId: string;
   ttsProvider: 'webspeech' | 'cloud' | 'auto';
   /** 'auto' follows the Windows theme; 'light' and 'dark' are manual overrides. */
@@ -112,6 +116,21 @@ export interface DashboardArtifact {
   content: string;
   language?: string;
   createdAt: string;
+}
+
+export interface SpeechSynthesisRequest {
+  text: string;
+  language?: string;
+  rate?: number;
+  pitch?: number;
+  volume?: number;
+}
+
+export interface SpeechSynthesisResult {
+  audioBase64: string;
+  mimeType: string;
+  voice: string;
+  engine: 'edge' | 'gemini';
 }
 
 export interface SearchMatch {
@@ -204,6 +223,10 @@ export interface FridayApiBridge {
   // Dashboard
   setDashboardOpen: (open: boolean) => void;
   onDashboardArtifact: (callback: (artifact: DashboardArtifact) => void) => () => void;
+
+  // Neural speech output
+  synthesizeSpeech: (request: SpeechSynthesisRequest) => Promise<SpeechSynthesisResult>;
+  cancelSpeech: () => void;
 
   // Window Controls
   minimizeWindow: () => void;

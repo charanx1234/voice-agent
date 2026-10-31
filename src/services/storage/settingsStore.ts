@@ -13,6 +13,8 @@ const DEFAULT_SETTINGS: FridaySettings = {
   preferredLanguage: process.env.DEFAULT_LANGUAGE || 'te-IN',
   speechSpeed: 1.0,
   speechVolume: 1.0,
+  pitch: 0,
+  ttsEngine: 'auto',
   voiceId: 'default',
   ttsProvider: 'auto',
   themeMode: 'auto',

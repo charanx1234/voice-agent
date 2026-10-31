@@ -46,6 +46,10 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   const [voiceId, setVoiceId] = useState(settings.voiceId || 'default');
   const [speechSpeed, setSpeechSpeed] = useState(settings.speechSpeed || 1.0);
   const [speechVolume, setSpeechVolume] = useState(settings.speechVolume || 1.0);
+  const [pitch, setPitch] = useState(settings.pitch ?? 0);
+  const [ttsEngine, setTtsEngine] = useState<FridaySettings['ttsEngine']>(
+    settings.ttsEngine || 'auto'
+  );
   const [themeMode, setThemeMode] = useState<FridaySettings['themeMode']>(
     settings.themeMode || 'auto'
   );
@@ -63,6 +67,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
       setVoiceId(settings.voiceId || 'default');
       setSpeechSpeed(settings.speechSpeed || 1.0);
       setSpeechVolume(settings.speechVolume || 1.0);
+      setPitch(settings.pitch ?? 0);
+      setTtsEngine(settings.ttsEngine || 'auto');
       setThemeMode(settings.themeMode || 'auto');
       setApprovedFolders(settings.approvedFolders || []);
       setConfirmations(settings.requireToolConfirmations);
@@ -79,6 +85,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
       voiceId,
       speechSpeed,
       speechVolume,
+      pitch,
+      ttsEngine,
       themeMode,
       approvedFolders,
       requireToolConfirmations: confirmations,
@@ -423,7 +431,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
           <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.75rem', color: 'var(--muted)' }}>
               <span>Speech Speed</span>
-              <span style={{ color: 'var(--accent)', fontWeight: 600 }}>{speechSpeed}x</span>
+              <span style={{ color: 'var(--accent)', fontWeight: 600 }}>{speechSpeed.toFixed(2)}x</span>
             </div>
             <input
               type="range"
@@ -434,6 +442,58 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
               onChange={(e) => setSpeechSpeed(parseFloat(e.target.value))}
               style={{ accentColor: 'var(--accent)' }}
             />
+          </div>
+
+          {/* Section: Pitch */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.75rem', color: 'var(--muted)' }}>
+              <span>Pitch</span>
+              <span style={{ color: 'var(--accent)', fontWeight: 600 }}>
+                {pitch > 0 ? `+${pitch}` : pitch} st
+              </span>
+            </div>
+            <input
+              type="range"
+              min="-3"
+              max="3"
+              step="0.5"
+              value={pitch}
+              onChange={(e) => setPitch(parseFloat(e.target.value))}
+              style={{ accentColor: 'var(--accent)' }}
+            />
+          </div>
+
+          {/* Section: Voice engine */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+            <label style={{ fontSize: '0.78rem', fontWeight: 600, color: 'var(--muted)' }}>
+              VOICE ENGINE
+            </label>
+            <select
+              value={ttsEngine}
+              onChange={(e) => setTtsEngine(e.target.value as FridaySettings['ttsEngine'])}
+              style={{
+                backgroundColor: 'color-mix(in srgb, var(--text) 5%, transparent)',
+                border: '1px solid color-mix(in srgb, var(--text) 10%, transparent)',
+                borderRadius: '10px',
+                padding: '7px 10px',
+                color: 'var(--text)',
+                fontSize: '0.78rem',
+                outline: 'none',
+              }}
+            >
+              <option value="auto" style={{ background: 'var(--surface)' }}>
+                Automatic — neural (Edge), then Gemini, then system
+              </option>
+              <option value="edge" style={{ background: 'var(--surface)' }}>
+                Edge neural voices (free)
+              </option>
+              <option value="gemini" style={{ background: 'var(--surface)' }}>
+                Gemini TTS (uses your API key)
+              </option>
+              <option value="system" style={{ background: 'var(--surface)' }}>
+                System voice (offline)
+              </option>
+            </select>
           </div>
 
           {/* Section: Approved Project Folders */}

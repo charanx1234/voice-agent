@@ -1,5 +1,11 @@
 import { contextBridge, ipcRenderer } from 'electron';
-import { DashboardArtifact, FridayApiBridge, ReminderItem, ToolConfirmationPayload } from '../shared/types';
+import {
+  DashboardArtifact,
+  FridayApiBridge,
+  ReminderItem,
+  SpeechSynthesisRequest,
+  ToolConfirmationPayload,
+} from '../shared/types';
 import { IPC_CHANNELS } from '../main/security';
 
 const confirmationCallbacks = new Map<string, (confirmed: boolean) => void>();
@@ -79,6 +85,11 @@ const apiBridge: FridayApiBridge = {
     ipcRenderer.on(IPC_CHANNELS.DASHBOARD_ARTIFACT, handler);
     return () => ipcRenderer.removeListener(IPC_CHANNELS.DASHBOARD_ARTIFACT, handler);
   },
+
+  // Neural speech output
+  synthesizeSpeech: (request: SpeechSynthesisRequest) =>
+    ipcRenderer.invoke(IPC_CHANNELS.TTS_SYNTHESIZE, request),
+  cancelSpeech: () => ipcRenderer.send(IPC_CHANNELS.TTS_CANCEL),
 
   minimizeWindow: () => ipcRenderer.send(IPC_CHANNELS.MINIMIZE_WINDOW),
   closeWindow: () => ipcRenderer.send(IPC_CHANNELS.CLOSE_WINDOW),

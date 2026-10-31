@@ -25,7 +25,11 @@ FRIDAY understands and speaks **Telugu (తెలుగు)**, **Indian English*
   - **English (US)**: `en-US`
 - **Voice Pipeline**:
   - **Input**: Microphone audio capture with real-time waveform visualization, sending audio to Gemini Multimodal Audio understanding.
-  - **Output**: Multi-tier speech synthesis prioritizing installed neural Indian voices (`Microsoft Mohan`, `Microsoft Shruti`, `Microsoft Neerja`, `Microsoft Swara`, etc.) with adjustable speed and volume.
+  - **Output**: Neural text-to-speech with a **female voice** — Microsoft Edge neural voices (free, no key) such as `en-IN-NeerjaExpressiveNeural`, `te-IN-ShrutiNeural`, `hi-IN-SwaraNeural`, `ta-IN-PallaviNeural`, `kn-IN-SapnaNeural` and `en-US-AriaNeural`.
+  - **Fallback chain**: Edge neural → Gemini TTS (`gemini-2.5-flash-preview-tts`, warm female `Kore`) → installed system voice, preferring female voices so it never drops to a male default.
+  - **Natural delivery**: speech is split into sentence chunks, synthesized in a pipeline (the next chunk is generated while the current one plays), with adjustable speed, **pitch (−3…+3 semitones)** and volume. Markdown, code fences and URLs are cleaned before speaking.
+  - **Real lip-sync**: the robot's mouth is driven by the analysed audio waveform, not a simulated animation.
+  - **Barge-in**: talking over FRIDAY (or tapping the mic/robot) cancels synthesis mid-sentence and starts listening immediately.
 
 ### 3. Controlled Agent Capabilities (Useful Work)
 FRIDAY distinguishes between answering questions and executing actions, and never pretends a task was finished without verifying it:
@@ -234,10 +238,11 @@ All tests should pass:
  ✓ tests/hardening.test.ts (13 tests)
  ✓ tests/memory.test.ts (22 tests)
  ✓ tests/voice.test.ts (9 tests)
+ ✓ tests/tts.test.ts (14 tests)
  ✓ tests/greetings.test.ts (6 tests)
  ✓ tests/reminders.test.ts (10 tests)
- Test Files  8 passed (8)
-      Tests  71 passed (71)
+ Test Files  9 passed (9)
+      Tests  85 passed (85)
 ```
 
 ---

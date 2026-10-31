@@ -342,7 +342,9 @@ export function useVoiceAssistant() {
         languageCode?: string;
         rate?: number;
         volume?: number;
+        pitch?: number;
         voiceId?: string;
+        engine?: 'auto' | 'edge' | 'gemini' | 'system';
         audioBase64?: string;
       } = {}
     ) => {
@@ -361,7 +363,9 @@ export function useVoiceAssistant() {
             languageCode: options.languageCode,
             rate: options.rate,
             volume: options.volume,
+            pitch: options.pitch,
             voiceId: options.voiceId,
+            engine: options.engine,
             onError: () => setRobotState('error'),
           });
         }

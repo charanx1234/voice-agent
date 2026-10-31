@@ -27,6 +27,8 @@ export const App: React.FC = () => {
     preferredLanguage: 'te-IN',
     speechSpeed: 1.0,
     speechVolume: 1.0,
+    pitch: 0,
+    ttsEngine: 'auto',
     voiceId: 'default',
     ttsProvider: 'auto',
     themeMode: 'auto',
@@ -263,7 +265,9 @@ export const App: React.FC = () => {
             languageCode: response.detectedLanguage || settings.preferredLanguage,
             rate: settings.speechSpeed,
             volume: settings.speechVolume,
+            pitch: settings.pitch,
             voiceId: settings.voiceId,
+            engine: settings.ttsEngine,
             audioBase64: response.audioBase64,
           });
         } else {
@@ -570,7 +574,9 @@ export const App: React.FC = () => {
             languageCode: settings.preferredLanguage,
             rate: settings.speechSpeed,
             volume: settings.speechVolume,
+            pitch: settings.pitch,
             voiceId: settings.voiceId,
+            engine: settings.ttsEngine,
           })
         }
         onSelectApprovedFolder={() => window.fridayAPI.selectApprovedFolder()}
@@ -600,3 +606,4 @@ export const App: React.FC = () => {
     </div>
   );
 };
+
