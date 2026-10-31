@@ -26,7 +26,7 @@ const DEFAULT_SETTINGS: FridaySettings = {
     notes: false,
     folderSearch: true,
     webResearch: false,
-    launchApps: true,
+    launchApps: false,
   },
   modelName: process.env.GEMINI_MODEL || 'gemini-3.5-flash-lite',
   soundMuted: false,
@@ -72,6 +72,20 @@ export class SettingsStore {
             : legacyTheme
             ? 'dark'
             : 'auto';
+
+        // One-time migration: older installs shipped with launchApps
+        // confirmation on. App launching now resolves registered applications
+        // safely, so it is prompt-free by default; the user can still re-enable
+        // the confirmation in Settings and it will stay enabled.
+        if (parsed.launchAppsConfirmMigrated !== true) {
+          parsed.launchAppsConfirmMigrated = true;
+          if (parsed.requireToolConfirmations?.launchApps === true) {
+            parsed.requireToolConfirmations = {
+              ...parsed.requireToolConfirmations,
+              launchApps: false,
+            };
+          }
+        }
 
         // Voice preferences: derive sensible defaults for older installs.
         const preferredLanguage = parsed.preferredLanguage || DEFAULT_SETTINGS.preferredLanguage;
