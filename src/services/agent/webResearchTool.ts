@@ -67,7 +67,7 @@ function fetchDuckDuckGoResults(query: string): Promise<WebSearchResultItem[]> {
       apiUrl,
       {
         headers: {
-          'User-Agent': 'FRIDAY-Desktop-Companion/1.0',
+          'User-Agent': 'FRIDAY-Assistant/1.0',
         },
         timeout: 7000,
       },
@@ -134,7 +134,7 @@ function fetchWikipediaFallback(query: string): Promise<WebSearchResultItem[]> {
       .get(
         wikiUrl,
         {
-          headers: { 'User-Agent': 'FRIDAY-Desktop-Companion/1.0' },
+          headers: { 'User-Agent': 'FRIDAY-Assistant/1.0' },
           timeout: 5000,
         },
         (res) => {

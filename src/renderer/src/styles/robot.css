@@ -50,7 +50,7 @@
     transform: translateY(0px) rotate(0deg);
   }
   50% {
-    transform: translateY(-8px) rotate(0.4deg);
+    transform: translateY(-4px) rotate(0.2deg);
   }
 }
 
@@ -91,10 +91,10 @@
 
 @keyframes robot-error-droop {
   0%, 100% {
-    transform: translateY(4px) rotate(-1deg);
+    transform: translateY(2px) rotate(-0.5deg);
   }
   50% {
-    transform: translateY(7px) rotate(1deg);
+    transform: translateY(4px) rotate(0.5deg);
   }
 }
 

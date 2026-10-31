@@ -25,7 +25,7 @@ export const SUPPORTED_LANGUAGES: Record<string, LanguageConfig> = {
     code: 'en-IN',
     name: 'English (India)',
     nativeName: 'English (India)',
-    sampleGreeting: "Hello! I am FRIDAY, your desktop AI companion. How can I help you today?",
+    sampleGreeting: "Hello! I am FRIDAY, your personal AI assistant. What are we working on?",
     preferredVoices: ['en-IN', 'English (India)', 'Microsoft Neerja', 'Microsoft Ravi', 'Google English (India)', 'en-GB', 'en-US'],
     systemInstructionSnippet:
       'The user prefers Indian English or general English. Respond in polite, friendly, helpful, conversational Indian English.',
@@ -64,7 +64,7 @@ export const SUPPORTED_LANGUAGES: Record<string, LanguageConfig> = {
     code: 'en-US',
     name: 'English (US)',
     nativeName: 'English (US)',
-    sampleGreeting: "Hi there! I'm FRIDAY. How can I assist you today?",
+    sampleGreeting: "Hi, I'm FRIDAY. What do you need?",
     preferredVoices: ['en-US', 'Microsoft Zira', 'Microsoft David', 'Google US English'],
     systemInstructionSnippet:
       'The user prefers standard English. Respond warmly, clearly, and concisely.',

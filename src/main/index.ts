@@ -33,7 +33,7 @@ function createWindow(): void {
     height: 740,
     minWidth: 400,
     minHeight: 640,
-    title: 'FRIDAY — AI Desktop Companion',
+    title: 'FRIDAY — AI Assistant',
     backgroundColor: '#0a0d14',
     frame: false, // Sleek modern frameless desktop companion
     titleBarStyle: 'hidden',

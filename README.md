@@ -1,6 +1,6 @@
-# FRIDAY — AI Desktop Companion 🤖✨
+# FRIDAY — Personal AI Assistant 🤖
 
-**FRIDAY** is a friendly, intelligent, and expressive Windows desktop AI companion powered by **Google Gemini** with native multilingual Indian voice conversation capabilities and a 2D animated robot character.
+**FRIDAY** is an intelligent, opinionated personal AI assistant for Windows, powered by **Google Gemini** with native multilingual Indian voice conversation capabilities and a 2D animated robot character.
 
 FRIDAY understands and speaks **Telugu (తెలుగు)**, **Indian English**, **Hindi (हिन्दी)**, **Tamil (தமிழ்)**, and **Kannada (ಕನ್ನಡ)**, responds naturally with lip-synced mouth animations and audio waveforms, and performs real tasks on your PC with your permission.
 
@@ -145,7 +145,7 @@ To build and launch FRIDAY on your desktop:
 ```powershell
 npm start
 ```
-*FRIDAY will open as a sleek, frameless desktop companion on your screen!*
+*FRIDAY opens as a compact, frameless assistant window on your screen.*
 
 ### Running in Hot-Reload Development Mode:
 If you are modifying the React frontend:
@@ -206,7 +206,7 @@ npm run dev
 - Click **Allow** to launch the tool safely.
 
 ### 4. Using Long-Term Memory
-- Just talk normally. Tell FRIDAY *"I'm Ram, I prefer Telugu replies, and I'm building a desktop AI companion"* — it extracts and stores the durable parts automatically.
+- Just talk normally. Tell FRIDAY *"I'm Ram, I prefer Telugu replies, and I'm building a desktop assistant"* — it extracts and stores the durable parts automatically.
 - Explicitly ask: *"Remember that my office is on the third floor"* — this works even offline.
 - Ask later: *"What am I building?"* or *"Which language should you reply in?"* — the relevant memories are retrieved semantically and used in the answer.
 - Click the **brain icon** in the control bar to open the memory panel:
@@ -240,10 +240,11 @@ All tests should pass:
  ✓ tests/voice.test.ts (9 tests)
  ✓ tests/tts.test.ts (14 tests)
  ✓ tests/logger.test.ts (5 tests)
+ ✓ tests/persona.test.ts (9 tests)
  ✓ tests/greetings.test.ts (6 tests)
  ✓ tests/reminders.test.ts (10 tests)
- Test Files  10 passed (10)
-      Tests  90 passed (90)
+ Test Files  11 passed (11)
+      Tests  99 passed (99)
 ```
 
 ---
@@ -288,6 +289,6 @@ Both are **GUI-subsystem** executables: launching them from Explorer or a shortc
 
 ## 🛡️ License
 
-MIT License. Built with ❤️ for desktop AI companion development.
+MIT License. Built with ❤️ for desktop AI assistant development.
 
 

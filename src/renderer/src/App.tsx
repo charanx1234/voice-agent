@@ -411,7 +411,7 @@ export const App: React.FC = () => {
             FRIDAY
           </span>
           <span style={{ fontSize: '0.68rem', color: 'var(--muted-dim)', fontWeight: 500 }}>
-            AI COMPANION
+            AI ASSISTANT
           </span>
         </div>
 
