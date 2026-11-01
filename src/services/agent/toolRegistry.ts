@@ -7,9 +7,49 @@ import { memoryToolDefinitions, executeMemoryTool } from '../memory/memoryTool';
 import { reminderToolDefinitions, executeReminderTool } from '../reminders/remindersTool';
 import { dashboardToolDefinition, executeDashboardTool } from '../dashboard/dashboardTool';
 import { settingsStore } from '../storage/settingsStore';
+import { accentIdFromName, defaultVoiceForAccent } from '../voice/voiceCatalog';
 import { ToolConfirmationPayload } from '../../shared/types';
 
 export type ConfirmationRequester = (payload: ToolConfirmationPayload) => Promise<boolean>;
+
+export const voiceAccentToolDefinition = {
+  name: 'set_voice_accent',
+  description:
+    "Switches FRIDAY's English speaking accent — American, British or Indian. Use whenever the user asks FRIDAY to talk, speak or sound in a particular accent (e.g. \"speak in a British accent\"). Applies from the next reply.",
+  parameters: {
+    type: 'OBJECT',
+    properties: {
+      accent: {
+        type: 'STRING',
+        description:
+          'The accent to switch to: "American", "British" or "Indian" (or en-US, en-GB, en-IN).',
+      },
+    },
+    required: ['accent'],
+  },
+};
+
+export function executeVoiceAccentTool(args: Record<string, any>): any {
+  const accentId = accentIdFromName(args.accent);
+  if (!accentId) {
+    return {
+      success: false,
+      error: `"${args.accent || ''}" is not a supported accent. FRIDAY can speak American, British or Indian English.`,
+    };
+  }
+
+  const voice = defaultVoiceForAccent(accentId);
+  settingsStore.saveSettings({ voiceAccent: accentId, ttsVoice: voice });
+
+  return {
+    success: true,
+    accent: accentId,
+    voice,
+    message: `FRIDAY now speaks with a ${
+      accentId === 'en-US' ? 'American' : accentId === 'en-GB' ? 'British' : 'Indian'
+    } accent.`,
+  };
+}
 
 export class ToolRegistry {
   private confirmationRequester?: ConfirmationRequester;
@@ -30,6 +70,7 @@ export class ToolRegistry {
       projectSearchToolDefinition,
       webResearchToolDefinition,
       researchToolDefinition,
+      voiceAccentToolDefinition,
       appShortcutsToolDefinition,
     ];
 
@@ -120,6 +161,9 @@ export class ToolRegistry {
       }
       if (toolName === 'deep_research') {
         return await executeResearchTool(toolName, args);
+      }
+      if (toolName === 'set_voice_accent') {
+        return executeVoiceAccentTool(args);
       }
       if (toolName === 'show_on_dashboard') {
         return await executeDashboardTool(toolName, args);

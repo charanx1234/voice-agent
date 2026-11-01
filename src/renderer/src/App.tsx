@@ -254,6 +254,19 @@ export const App: React.FC = () => {
 
         setMessages((prev) => [...prev, assistantMsg]);
 
+        // An accent switch must apply to this very reply, so refresh settings
+        // before speaking and speak with the freshly saved voice.
+        let effectiveSettings = settings;
+        if (response.toolCalls?.some((call) => call.toolName === 'set_voice_accent')) {
+          try {
+            const fresh = await window.fridayAPI.getSettings();
+            setSettings(fresh);
+            effectiveSettings = fresh;
+          } catch {
+            // fall back to the cached settings
+          }
+        }
+
         // Failures are shown as errors, never spoken as if they were answers.
         if (failed) {
           setRobotState('error');
@@ -264,14 +277,14 @@ export const App: React.FC = () => {
         // Speak response aloud
         if (!isMuted) {
           await speakResponse(response.text, {
-            languageCode: response.detectedLanguage || settings.preferredLanguage,
-            rate: settings.speechSpeed,
-            volume: settings.speechVolume,
-            pitch: settings.pitch,
-            voiceId: settings.voiceId,
-            voice: settings.ttsVoice,
-            accent: settings.voiceAccent,
-            engine: settings.ttsEngine,
+            languageCode: response.detectedLanguage || effectiveSettings.preferredLanguage,
+            rate: effectiveSettings.speechSpeed,
+            volume: effectiveSettings.speechVolume,
+            pitch: effectiveSettings.pitch,
+            voiceId: effectiveSettings.voiceId,
+            voice: effectiveSettings.ttsVoice,
+            accent: effectiveSettings.voiceAccent,
+            engine: effectiveSettings.ttsEngine,
             audioBase64: response.audioBase64,
           });
         } else {

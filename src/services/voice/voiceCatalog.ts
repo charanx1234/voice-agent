@@ -108,6 +108,24 @@ export function defaultVoiceForAccent(accentId?: string): string {
   return getAccent(accentId).defaultVoice;
 }
 
+/**
+ * Maps a spoken or typed accent name ("American", "UK", "Indian", "en-GB")
+ * to an accent id; null when nothing fits. Used by the set_voice_accent tool
+ * so the user can switch accents conversationally.
+ */
+export function accentIdFromName(name?: string): AccentGroup['id'] | null {
+  const value = (name || '').toLowerCase().trim();
+  if (!value) return null;
+
+  const byId = ACCENTS.find((accent) => accent.id.toLowerCase() === value);
+  if (byId) return byId.id;
+
+  if (/american|united states|\bus\b|\busa\b/.test(value)) return 'en-US';
+  if (/british|\buk\b|\bbritain\b|england|london|\bgb\b/.test(value)) return 'en-GB';
+  if (/indian|india|desi|\bin\b/.test(value)) return 'en-IN';
+  return null;
+}
+
 export function findVoice(voiceId?: string): CatalogVoice | undefined {
   if (!voiceId) return undefined;
   for (const accent of ACCENTS) {
