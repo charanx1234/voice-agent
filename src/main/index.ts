@@ -57,12 +57,17 @@ function createWindow(): void {
 
   // Only the microphone is ever granted; every other permission request is denied.
   mainWindow.webContents.session.setPermissionRequestHandler(
-    (_webContents, permission, callback) => {
-      callback(permission === 'media');
+    (_webContents, permission, callback, details) => {
+      const mediaDetails = details as Electron.MediaAccessPermissionRequest;
+      const audioOnly =
+        permission === 'media' &&
+        (!mediaDetails.mediaTypes ||
+          (mediaDetails.mediaTypes.includes('audio') && !mediaDetails.mediaTypes.includes('video')));
+      callback(audioOnly);
     }
   );
-  mainWindow.webContents.session.setPermissionCheckHandler((_webContents, permission) => {
-    return permission === 'media';
+  mainWindow.webContents.session.setPermissionCheckHandler((_webContents, permission, _origin, details) => {
+    return permission === 'media' && details.mediaType !== 'video';
   });
 
   // Open external links safely in system browser, not inside the Electron companion window

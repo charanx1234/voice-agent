@@ -45,6 +45,24 @@
   animation: robot-error-droop 3s ease-in-out infinite;
 }
 
+.mood-enthusiastic .robot-head-container {
+  animation-duration: 1.5s;
+}
+
+.mood-patient .robot-head-container,
+.mood-supportive .robot-head-container {
+  animation-duration: 5.5s;
+}
+
+.mood-playful .robot-head-container {
+  animation: robot-playful 1.8s ease-in-out infinite;
+}
+
+@keyframes robot-playful {
+  0%, 100% { transform: translateY(-2px) rotate(-1deg); }
+  50% { transform: translateY(-7px) rotate(1deg) scale(1.02); }
+}
+
 @keyframes robot-float {
   0%, 100% {
     transform: translateY(0px) rotate(0deg);
@@ -193,6 +211,19 @@
   animation: eye-scan 1.8s ease-in-out infinite alternate;
 }
 
+.mood-enthusiastic .robot-eye {
+  transform: scaleY(1.12);
+}
+
+.mood-patient .robot-eye,
+.mood-supportive .robot-eye {
+  transform: scaleY(0.94);
+}
+
+.mood-playful .robot-eye {
+  transform: scaleX(1.08) rotate(-2deg);
+}
+
 @keyframes eye-scan {
   0% { transform: translateX(-5px); }
   100% { transform: translateX(5px); }
@@ -209,4 +240,3 @@
   fill: var(--danger);
   filter: drop-shadow(0 0 4px color-mix(in srgb, var(--danger) 50%, transparent));
 }
-

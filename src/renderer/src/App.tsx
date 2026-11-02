@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Minus, X, Sparkles, AlertCircle } from 'lucide-react';
 import { RobotCharacter } from './components/RobotCharacter';
 import { AudioVisualizer } from './components/AudioVisualizer';
@@ -10,15 +10,20 @@ import { ToolShortcutsPanel } from './components/ToolShortcutsPanel';
 import { MemoryPanel } from './components/MemoryPanel';
 import { Dashboard } from './components/Dashboard';
 import { useVoiceAssistant } from './hooks/useVoiceAssistant';
+import { useHandsFree } from './hooks/useHandsFree';
 import {
   ChatMessage,
+  ConversationMood,
   DashboardArtifact,
   FridaySettings,
+  PersonalityMode,
   ReminderItem,
   ToolConfirmationPayload,
+  VoiceProsodySummary,
 } from '@/shared/types';
 import { pickGreeting } from '@/services/voice/greetings';
 import { isLikelySilence } from '@/services/voice/micErrors';
+import { applyMoodToSpeech } from '@/services/ai/mood';
 
 export const App: React.FC = () => {
   const [settings, setSettings] = useState<FridaySettings>({
@@ -44,6 +49,9 @@ export const App: React.FC = () => {
     modelName: 'gemini-3.5-flash-lite',
     soundMuted: false,
     memoryEnabled: true,
+    personalityMode: 'moderate',
+    handsFreeEnabled: true,
+    handsFreeSilenceTimeoutMs: 25_000,
   });
 
   const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -53,12 +61,14 @@ export const App: React.FC = () => {
   const [memoryOpen, setMemoryOpen] = useState(false);
   const [memoryCount, setMemoryCount] = useState(0);
   const [recordingSeconds, setRecordingSeconds] = useState(0);
+  const [liveTranscript, setLiveTranscript] = useState('');
   const [artifacts, setArtifacts] = useState<DashboardArtifact[]>([]);
   const [activeArtifactId, setActiveArtifactId] = useState<string | null>(null);
   const [dashboardOpen, setDashboardOpen] = useState(false);
   const [reminders, setReminders] = useState<ReminderItem[]>([]);
   const [pendingConfirmation, setPendingConfirmation] =
     useState<ToolConfirmationPayload | null>(null);
+  const [currentMood, setCurrentMood] = useState<ConversationMood>('calm');
 
   const {
     robotState,
@@ -74,6 +84,20 @@ export const App: React.FC = () => {
     speakResponse,
     interrupt,
   } = useVoiceAssistant();
+
+  // Hands-free (wake word) state, read from timers/callbacks via refs.
+  const robotStateRef = useRef(robotState);
+  robotStateRef.current = robotState;
+  const messagesRef = useRef<ChatMessage[]>([]);
+  messagesRef.current = messages;
+  const requestIdRef = useRef(0);
+  const standbyPendingRef = useRef(false);
+  const goStandbyRef = useRef<() => void>(() => undefined);
+  const handsFreeRef = useRef<{ mode: 'off' | 'standby' | 'active'; wake: () => void; goStandby: () => void }>({
+    mode: 'off',
+    wake: () => undefined,
+    goStandby: () => undefined,
+  });
 
   /** Applies the resolved theme: 'auto' mirrors the Windows light/dark setting. */
   const applyTheme = useCallback((mode: FridaySettings['themeMode'] = 'auto') => {
@@ -108,6 +132,7 @@ export const App: React.FC = () => {
         const loaded = await api.getSettings();
         setSettings(loaded);
         setIsMuted(loaded.soundMuted);
+        setHandsFreeEnabled(loaded.handsFreeEnabled !== false);
         applyTheme(loaded.themeMode);
 
         // Restore the persisted transcript so context survives a restart.
@@ -200,6 +225,9 @@ export const App: React.FC = () => {
       await window.fridayAPI.saveSettings(updates);
       const refreshed = await window.fridayAPI.getSettings();
       setSettings(refreshed);
+      if (updates.handsFreeEnabled !== undefined) {
+        setHandsFreeEnabled(refreshed.handsFreeEnabled !== false);
+      }
       applyTheme(refreshed.themeMode);
     }
   };
@@ -214,7 +242,12 @@ export const App: React.FC = () => {
 
   // Handle sending a typed or spoken message
   const handleSendMessage = useCallback(
-    async (text: string, audioBase64?: string, audioMimeType?: string) => {
+    async (
+      text: string,
+      audioBase64?: string,
+      audioMimeType?: string,
+      prosody?: VoiceProsodySummary
+    ) => {
       if (!text && !audioBase64) return;
 
       const userMsg: ChatMessage = {
@@ -226,7 +259,9 @@ export const App: React.FC = () => {
       };
 
       setMessages((prev) => [...prev, userMsg]);
+      setLiveTranscript('');
       setRobotState('thinking');
+      const requestId = ++requestIdRef.current;
 
       try {
         if (!window.fridayAPI) {
@@ -237,9 +272,13 @@ export const App: React.FC = () => {
           message: text,
           audioBase64,
           audioMimeType,
-          conversationHistory: messages,
+          conversationHistory: messagesRef.current,
           language: settings.preferredLanguage,
+          prosody,
         });
+
+        // User interrupted (barge-in) while this was in flight: drop the stale reply.
+        if (requestId !== requestIdRef.current) return;
 
         const failed = Boolean(response.error);
         const assistantMsg: ChatMessage = {
@@ -257,7 +296,11 @@ export const App: React.FC = () => {
         // An accent switch must apply to this very reply, so refresh settings
         // before speaking and speak with the freshly saved voice.
         let effectiveSettings = settings;
-        if (response.toolCalls?.some((call) => call.toolName === 'set_voice_accent')) {
+        if (
+          response.toolCalls?.some(
+            (call) => call.toolName === 'set_voice_accent' || call.toolName === 'set_personality_mode'
+          )
+        ) {
           try {
             const fresh = await window.fridayAPI.getSettings();
             setSettings(fresh);
@@ -274,13 +317,21 @@ export const App: React.FC = () => {
           return;
         }
 
+        const mood = response.mood || 'calm';
+        setCurrentMood(mood);
+        const moodSpeech = applyMoodToSpeech(
+          effectiveSettings.speechSpeed,
+          effectiveSettings.pitch,
+          mood
+        );
+
         // Speak response aloud
         if (!isMuted) {
           await speakResponse(response.text, {
             languageCode: response.detectedLanguage || effectiveSettings.preferredLanguage,
-            rate: effectiveSettings.speechSpeed,
+            rate: moodSpeech.rate,
             volume: effectiveSettings.speechVolume,
-            pitch: effectiveSettings.pitch,
+            pitch: moodSpeech.pitch,
             voiceId: effectiveSettings.voiceId,
             voice: effectiveSettings.ttsVoice,
             accent: effectiveSettings.voiceAccent,
@@ -289,6 +340,12 @@ export const App: React.FC = () => {
           });
         } else {
           setRobotState('idle');
+        }
+
+        // The model called enter_standby ("go offline"): go quiet after the farewell.
+        if (standbyPendingRef.current) {
+          standbyPendingRef.current = false;
+          goStandbyRef.current();
         }
       } catch (err: any) {
         setRobotState('error');
@@ -320,9 +377,18 @@ export const App: React.FC = () => {
 
   // Toggle microphone
   const handleToggleMic = async () => {
+    // Hands-free owns the persistent microphone session. A mic click wakes it
+    // instead of creating a second competing MediaStream.
+    if (handsFreeEnabled && handsFreeRef.current.mode !== 'off') {
+      if (handsFreeRef.current.mode === 'standby') handsFreeRef.current.wake();
+      else handsFreeRef.current.goStandby();
+      return;
+    }
+
     if (isListening) {
       // User finished speaking: stop recorder and send to Gemini
-      const { audioBase64, mimeType, recognizedText, peakLevel } = await stopListening();
+      const { audioBase64, mimeType, recognizedText, peakLevel, prosody } = await stopListening();
+      setLiveTranscript('');
 
       if (!audioBase64) {
         setRobotState('idle');
@@ -342,11 +408,11 @@ export const App: React.FC = () => {
         return;
       }
 
-      handleSendMessage(recognizedText, audioBase64, mimeType);
+      handleSendMessage(recognizedText, audioBase64, mimeType, prosody);
     } else {
       // User tapped mic to speak
       try {
-        await startListening(settings.preferredLanguage);
+        await startListening(settings.preferredLanguage, (transcript) => setLiveTranscript(transcript));
       } catch (err: any) {
         setRobotState('error');
         appendNotice(err?.message || 'Could not start the microphone.', true);
@@ -370,6 +436,85 @@ export const App: React.FC = () => {
 
     return () => clearInterval(timer);
   }, [isListening]);
+
+  // ---- Hands-free: always-on wake word, barge-in and standby ----
+  const [handsFreeEnabled, setHandsFreeEnabled] = useState<boolean>(() => {
+    try {
+      return window.localStorage.getItem('friday:handsFree') !== 'off';
+    } catch {
+      return true;
+    }
+  });
+
+  const sendRef = useRef(handleSendMessage);
+  sendRef.current = handleSendMessage;
+  const speakRef = useRef(speakResponse);
+  speakRef.current = speakResponse;
+
+  const handsFree = useHandsFree({
+    enabled: handsFreeEnabled,
+    language: settings.preferredLanguage,
+    silenceTimeoutMs: settings.handsFreeSilenceTimeoutMs,
+    isSpeaking: () => robotStateRef.current === 'speaking',
+    isBusy: () => robotStateRef.current === 'thinking',
+    onBargeIn: () => {
+      // Invalidate any in-flight reply and stop talking so we hear the user first.
+      requestIdRef.current += 1;
+      standbyPendingRef.current = false;
+      interrupt();
+    },
+    onSpeechActivity: (speaking) => {
+      if (speaking) setRobotState('listening');
+    },
+    onTranscript: (text) => setLiveTranscript(text),
+    onUtterance: ({ audioBase64, mimeType, peakLevel, recognizedText, prosody }) => {
+      if (isLikelySilence(peakLevel)) return;
+      void sendRef.current(recognizedText, audioBase64, mimeType, prosody);
+    },
+    onWake: (command) => {
+      if (command) {
+        void sendRef.current(command);
+      } else {
+        const text = 'Yes?';
+        setMessages((prev) => [
+          ...prev,
+          { id: `msg_${Date.now()}_wake`, role: 'assistant', text, timestamp: Date.now() },
+        ]);
+        void speakRef.current(text, {
+          languageCode: settings.preferredLanguage,
+          rate: applyMoodToSpeech(settings.speechSpeed, settings.pitch, currentMood).rate,
+          volume: settings.speechVolume,
+          pitch: applyMoodToSpeech(settings.speechSpeed, settings.pitch, currentMood).pitch,
+          voiceId: settings.voiceId,
+          voice: settings.ttsVoice,
+          accent: settings.voiceAccent,
+          engine: settings.ttsEngine,
+        });
+      }
+    },
+    onError: (message) => appendNotice(message, true),
+  });
+  handsFreeRef.current = handsFree;
+  goStandbyRef.current = handsFree.goStandby;
+
+  // "Go offline": the model calls enter_standby; go quiet once the farewell is spoken.
+  useEffect(() => {
+    if (!window.fridayAPI?.onStandbyRequested) return undefined;
+    return window.fridayAPI.onStandbyRequested(() => {
+      standbyPendingRef.current = true;
+    });
+  }, []);
+
+  const handleToggleHandsFree = () => {
+    const next = !handsFreeEnabled;
+    setHandsFreeEnabled(next);
+    void handleSaveSettings({ handsFreeEnabled: next });
+    try {
+      window.localStorage.setItem('friday:handsFree', next ? 'on' : 'off');
+    } catch {
+      // storage unavailable; preference simply resets next launch
+    }
+  };
 
   const handleToolResponse = (confirmed: boolean) => {
     if (pendingConfirmation && window.fridayAPI) {
@@ -523,6 +668,7 @@ export const App: React.FC = () => {
               state={robotState}
               amplitude={amplitude}
               frequencies={frequencies}
+              mood={currentMood}
               onClick={interrupt}
             />
 
@@ -531,6 +677,20 @@ export const App: React.FC = () => {
               frequencies={frequencies}
               isActive={isListening || robotState === 'speaking'}
             />
+            {liveTranscript && (
+              <div
+                style={{
+                  maxWidth: '84%',
+                  marginTop: '10px',
+                  color: 'var(--muted)',
+                  fontSize: '0.78rem',
+                  textAlign: 'center',
+                  lineHeight: 1.4,
+                }}
+              >
+                {liveTranscript}
+              </div>
+            )}
           </div>
 
           {/* Conversation Transcript (Collapsible) */}
@@ -552,6 +712,10 @@ export const App: React.FC = () => {
             memoryCount={memoryCount}
             transcriptOpen={transcriptOpen}
             recordingSeconds={recordingSeconds}
+            handsFreeMode={handsFree.mode}
+            personalityMode={settings.personalityMode}
+            currentMood={currentMood}
+            onToggleHandsFree={handleToggleHandsFree}
             onToggleMic={handleToggleMic}
             onSendMessage={(txt) => handleSendMessage(txt)}
             onToggleMute={() => {

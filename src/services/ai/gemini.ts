@@ -4,8 +4,9 @@ import { buildSystemInstruction } from './personality';
 import { buildConversationBrief } from './conversationContext';
 import { toolRegistry } from '../agent/toolRegistry';
 import { memoryService } from '../memory/memoryService';
-import { ChatMessage, ToolCallRecord } from '../../shared/types';
+import { ChatMessage, ConversationMood, ToolCallRecord, VoiceProsodySummary } from '../../shared/types';
 import { detectLanguageFromText } from '../voice/languages';
+import { analyzeMood, buildMoodInstruction, MoodAnalysis } from './mood';
 
 /**
  * Models tried, in order, when the configured model is unavailable.
@@ -86,6 +87,7 @@ export interface SendMessageParams {
   audioMimeType?: string;
   conversationHistory: ChatMessage[];
   language?: string;
+  prosody?: VoiceProsodySummary;
 }
 
 export interface SendMessageResult {
@@ -93,6 +95,8 @@ export interface SendMessageResult {
   detectedLanguage: string;
   toolCalls?: ToolCallRecord[];
   error?: string;
+  mood?: ConversationMood;
+  safetyOverride?: boolean;
 }
 
 export class GeminiService {
@@ -144,11 +148,49 @@ export class GeminiService {
     };
   }
 
+  /**
+   * Wake-word gate for hands-free standby mode. One cheap audio call, no
+   * persona, tools, history or memory side effects: it only decides whether
+   * the clip mentions "Friday" and returns what was said.
+   */
+  public async transcribeUtterance(
+    audioBase64: string,
+    audioMimeType?: string
+  ): Promise<string> {
+    const settings = settingsStore.getSettings();
+    const client = this.getClient();
+    const model = client.getGenerativeModel({ model: settings.modelName });
+
+    const result = await model.generateContent({
+      contents: [
+        {
+          role: 'user',
+          parts: [
+            {
+              inlineData: {
+                mimeType: audioMimeType || 'audio/webm',
+                data: audioBase64,
+              },
+            },
+            {
+              text: 'Wake-word gate. Listen to the audio. If the speaker says the wake word "Friday" (for example "Hey Friday" or "Friday"), reply exactly in the form WAKE|<everything they said, verbatim, in the language spoken>. If the audio does not mention "Friday", reply exactly NONE. No other text, no explanations.',
+            },
+          ],
+        },
+      ],
+    });
+
+    const response = await result.response;
+    return (response.text() || '').trim();
+  }
+
   public async sendMessage(params: SendMessageParams): Promise<SendMessageResult> {
     const settings = settingsStore.getSettings();
     const preferredLang = params.language || settings.preferredLanguage || 'te-IN';
     const candidates = buildModelCandidates(settings.modelName);
     const userText = (params.message || '').trim();
+    const moodAnalysis = analyzeMood(userText, params.prosody);
+    const moodInstruction = buildMoodInstruction(moodAnalysis, settings.personalityMode);
 
     // Local, per-turn situation brief: mode, topic, follow-up, stated constraints.
     const conversationBrief = buildConversationBrief(params.conversationHistory, userText || 'voice message').text;
@@ -175,7 +217,9 @@ export class GeminiService {
           preferredLang,
           state,
           memoryBlock,
-          conversationBrief
+          conversationBrief,
+          moodAnalysis,
+          moodInstruction
         );
 
         if (modelName !== settings.modelName) {
@@ -237,20 +281,36 @@ export class GeminiService {
     preferredLang: string,
     state: { toolsExecuted: boolean },
     memoryBlock = '',
-    conversationBrief = ''
+    conversationBrief = '',
+    moodAnalysis: MoodAnalysis = analyzeMood('', undefined),
+    moodInstruction = ''
   ): Promise<SendMessageResult> {
     const client = this.getClient();
-    const systemInstruction = buildSystemInstruction(preferredLang, memoryBlock, conversationBrief);
+    const currentSettings = settingsStore.getSettings();
     const toolDeclarations = toolRegistry.getGeminiToolDeclarations();
 
-    const model = client.getGenerativeModel({
-      model: modelName,
-      systemInstruction: {
-        role: 'system',
-        parts: [{ text: systemInstruction }],
-      },
-      tools: toolDeclarations as any,
-    });
+    const createModel = (personalityMode: typeof currentSettings.personalityMode) =>
+      client.getGenerativeModel({
+        model: modelName,
+        systemInstruction: {
+          role: 'system',
+          parts: [
+            {
+              text: buildSystemInstruction(
+                preferredLang,
+                memoryBlock,
+                conversationBrief,
+                personalityMode,
+                moodAnalysis.mood,
+                moodInstruction
+              ),
+            },
+          ],
+        },
+        tools: toolDeclarations as any,
+      });
+
+    let model = createModel(currentSettings.personalityMode);
 
     // Prepare conversation history (keep last 10 turns to conserve context window)
     const formattedHistory: any[] = [];
@@ -335,6 +395,12 @@ export class GeminiService {
       );
       contents.push(buildToolResponseTurn(functionResponses));
 
+      // Apply presentation-only settings immediately to the next model turn;
+      // tool declarations, memory and execution logic remain unchanged.
+      if (calls.some((call: any) => call.name === 'set_personality_mode')) {
+        model = createModel(settingsStore.getSettings().personalityMode);
+      }
+
       result = await model.generateContent({ contents });
       response = await result.response;
     }
@@ -346,6 +412,8 @@ export class GeminiService {
       text,
       detectedLanguage,
       toolCalls: toolRecords.length > 0 ? toolRecords : undefined,
+      mood: moodAnalysis.mood,
+      safetyOverride: moodAnalysis.safetyOverride,
     };
   }
 }

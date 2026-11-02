@@ -1,4 +1,6 @@
 import { ipcMain, dialog, shell, BrowserWindow } from 'electron';
+import fs from 'fs';
+import path from 'path';
 import { IPC_CHANNELS } from './security';
 import { settingsStore } from '../services/storage/settingsStore';
 import { notesStore } from '../services/storage/notesStore';
@@ -11,6 +13,7 @@ import { neuralVoiceService } from '../services/voice/neuralVoice';
 import { systemHealthService } from '../services/system/healthService';
 import { getLogDirectory, readRecentLogLines } from './backend/logger';
 import { ALLOWED_APPLICATIONS, executeAppShortcutsTool } from '../services/agent/appShortcutsTool';
+import { standbyEmitter } from '../services/agent/toolRegistry';
 import { MemoryInputPayload, SpeechSynthesisRequest, ToolConfirmationPayload } from '../shared/types';
 
 let handlersRegistered = false;
@@ -100,7 +103,7 @@ export function registerIpcHandlers(getMainWindow: () => BrowserWindow | null): 
   // Open path in Explorer
   ipcMain.handle(IPC_CHANNELS.OPEN_PATH, async (_event, targetPath: string) => {
     try {
-      if (targetPath) {
+      if (targetPath && isApprovedProjectPath(targetPath)) {
         await shell.openPath(targetPath);
         return true;
       }
@@ -252,6 +255,24 @@ export function registerIpcHandlers(getMainWindow: () => BrowserWindow | null): 
     getMainWindow()?.webContents.send(IPC_CHANNELS.DASHBOARD_ARTIFACT, artifact);
   });
 
+  // Hands-free: the model asks to go to standby (user said "go offline").
+  standbyEmitter.on('standby-requested', () => {
+    getMainWindow()?.webContents.send(IPC_CHANNELS.STANDBY_REQUESTED);
+  });
+
+  // Hands-free: wake-word gate transcription for standby listening.
+  ipcMain.handle(
+    IPC_CHANNELS.TRANSCRIBE_UTTERANCE,
+    async (_event, audioBase64: string, audioMimeType?: string) => {
+      try {
+        const reply = await geminiService.transcribeUtterance(audioBase64, audioMimeType);
+        return { success: true, reply };
+      } catch (err: any) {
+        return { success: false, error: err?.message || 'Transcription failed.' };
+      }
+    }
+  );
+
   // Grow the window when the dashboard is shown, shrink back when it closes.
   ipcMain.on(IPC_CHANNELS.DASHBOARD_SET_OPEN, (_event, open: boolean) => {
     const win = getMainWindow();
@@ -342,3 +363,21 @@ export function registerIpcHandlers(getMainWindow: () => BrowserWindow | null): 
   });
 }
 
+/** Renderer file-opening is limited to files inside an approved project root. */
+function isApprovedProjectPath(targetPath: string): boolean {
+  try {
+    const settings = settingsStore.getSettings();
+    const resolvedTarget = fs.realpathSync.native(path.resolve(targetPath));
+    return (settings.approvedFolders || []).some((folder) => {
+      try {
+        const root = fs.realpathSync.native(folder);
+        const relative = path.relative(root, resolvedTarget);
+        return relative !== '' && !relative.startsWith('..') && !path.isAbsolute(relative);
+      } catch {
+        return false;
+      }
+    });
+  } catch {
+    return false;
+  }
+}

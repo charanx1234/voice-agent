@@ -114,6 +114,15 @@ const apiBridge: FridayApiBridge = {
   openLogsFolder: () => ipcRenderer.invoke(IPC_CHANNELS.LOGS_OPEN_FOLDER),
   readLogs: (limit?: number) => ipcRenderer.invoke(IPC_CHANNELS.LOGS_READ, limit),
 
+  // Hands-free standby / wake word
+  transcribeUtterance: (audioBase64: string, audioMimeType?: string) =>
+    ipcRenderer.invoke(IPC_CHANNELS.TRANSCRIBE_UTTERANCE, audioBase64, audioMimeType),
+  onStandbyRequested: (callback: () => void) => {
+    const handler = () => callback();
+    ipcRenderer.on(IPC_CHANNELS.STANDBY_REQUESTED, handler);
+    return () => ipcRenderer.removeListener(IPC_CHANNELS.STANDBY_REQUESTED, handler);
+  },
+
   minimizeWindow: () => ipcRenderer.send(IPC_CHANNELS.MINIMIZE_WINDOW),
   closeWindow: () => ipcRenderer.send(IPC_CHANNELS.CLOSE_WINDOW),
 };

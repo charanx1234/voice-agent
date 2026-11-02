@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { RobotState } from '@/shared/types';
+import { ConversationMood, RobotState } from '@/shared/types';
 import '../styles/robot.css';
 
 interface RobotCharacterProps {
@@ -7,6 +7,7 @@ interface RobotCharacterProps {
   amplitude: number; // 0.0 to 1.0 driven by real audio playback/mic
   frequencies?: number[];
   onClick?: () => void;
+  mood?: ConversationMood;
 }
 
 export const RobotCharacter: React.FC<RobotCharacterProps> = ({
@@ -14,6 +15,7 @@ export const RobotCharacter: React.FC<RobotCharacterProps> = ({
   amplitude,
   frequencies = [0, 0, 0, 0, 0],
   onClick,
+  mood = 'calm',
 }) => {
   const [isBlinking, setIsBlinking] = useState(false);
 
@@ -77,7 +79,7 @@ export const RobotCharacter: React.FC<RobotCharacterProps> = ({
 
   return (
     <div
-      className={`robot-stage state-${state}`}
+      className={`robot-stage state-${state} mood-${mood}`}
       onClick={onClick}
       title="Click to interact with FRIDAY"
       style={{ cursor: 'pointer' }}

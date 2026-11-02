@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
-import { RobotState, ChatMessage, FridaySettings } from '@/shared/types';
+import { RobotState, VoiceProsodySummary } from '@/shared/types';
 import { AudioAnalyser } from '@/services/voice/audioAnalyser';
 import { VoiceManager, VoiceOption } from '@/services/voice/voiceManager';
 import { describeMicError } from '@/services/voice/micErrors';
@@ -11,6 +11,7 @@ export interface StopListeningResult {
   /** Highest absolute sample value in the recording (0-1). Near zero means silence. */
   peakLevel: number;
   durationMs: number;
+  prosody: VoiceProsodySummary;
 }
 
 /** Decodes the recording and reports its peak level, so silent captures can be caught. */
@@ -287,6 +288,13 @@ export function useVoiceAssistant() {
           recognizedText: liveTranscriptRef.current.trim(),
           peakLevel,
           durationMs,
+          prosody: {
+            peakLevel,
+            durationMs,
+            speechRate: liveTranscriptRef.current.trim()
+              ? (liveTranscriptRef.current.trim().split(/\s+/).length / durationMs) * 60_000
+              : undefined,
+          },
         });
       };
 

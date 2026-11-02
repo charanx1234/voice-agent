@@ -42,6 +42,7 @@ export class VoiceManager {
   private analyser: AudioAnalyser;
   private currentUtterance: SpeechSynthesisUtterance | null = null;
   private currentAudioElement: HTMLAudioElement | null = null;
+  private finishCurrentAudio: (() => void) | null = null;
   private isSpeaking = false;
   private availableVoices: SpeechSynthesisVoice[] = [];
   private onStateChangeCallback?: (isSpeaking: boolean) => void;
@@ -189,8 +190,11 @@ export class VoiceManager {
 
       const finish = () => {
         if (this.currentAudioElement === audio) this.currentAudioElement = null;
+        if (this.finishCurrentAudio === finish) this.finishCurrentAudio = null;
         resolve();
       };
+
+      this.finishCurrentAudio = finish;
 
       audio.onended = finish;
       audio.onerror = finish;
@@ -272,11 +276,15 @@ export class VoiceManager {
       window.speechSynthesis.cancel();
     }
 
-    if (this.currentAudioElement) {
-      this.currentAudioElement.pause();
-      this.currentAudioElement.currentTime = 0;
+    const currentAudio = this.currentAudioElement;
+    if (currentAudio) {
+      this.finishCurrentAudio?.();
+      currentAudio.pause();
+      currentAudio.currentTime = 0;
       this.currentAudioElement = null;
     }
+
+    this.finishCurrentAudio = null;
 
     this.currentUtterance = null;
     if (this.isSpeaking) this.emitState(false);

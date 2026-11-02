@@ -66,6 +66,13 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   const [themeMode, setThemeMode] = useState<FridaySettings['themeMode']>(
     settings.themeMode || 'auto'
   );
+  const [personalityMode, setPersonalityMode] = useState<FridaySettings['personalityMode']>(
+    settings.personalityMode || 'moderate'
+  );
+  const [handsFreeEnabled, setHandsFreeEnabled] = useState(settings.handsFreeEnabled !== false);
+  const [handsFreeSilenceTimeoutMs, setHandsFreeSilenceTimeoutMs] = useState(
+    settings.handsFreeSilenceTimeoutMs || 25_000
+  );
   const [approvedFolders, setApprovedFolders] = useState<string[]>(settings.approvedFolders || []);
   const [confirmations, setConfirmations] = useState(settings.requireToolConfirmations);
 
@@ -86,6 +93,9 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
       setPitch(settings.pitch ?? 0);
       setTtsEngine(settings.ttsEngine || 'auto');
       setThemeMode(settings.themeMode || 'auto');
+      setPersonalityMode(settings.personalityMode || 'moderate');
+      setHandsFreeEnabled(settings.handsFreeEnabled !== false);
+      setHandsFreeSilenceTimeoutMs(settings.handsFreeSilenceTimeoutMs || 25_000);
       setApprovedFolders(settings.approvedFolders || []);
       setConfirmations(settings.requireToolConfirmations);
       setTestResult(null);
@@ -106,6 +116,9 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
       pitch,
       ttsEngine,
       themeMode,
+      personalityMode,
+      handsFreeEnabled,
+      handsFreeSilenceTimeoutMs,
       approvedFolders,
       requireToolConfirmations: confirmations,
     });
@@ -290,6 +303,75 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
 
             <span style={{ fontSize: '0.7rem', color: 'var(--muted-dim)' }}>
               Auto follows your Windows theme.
+            </span>
+          </div>
+
+          {/* Section: Personality */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+            <label
+              style={{
+                fontSize: '0.78rem',
+                fontWeight: 600,
+                color: 'var(--muted)',
+              }}
+            >
+              PERSONALITY MODE
+            </label>
+            <select
+              value={personalityMode}
+              onChange={(event) => setPersonalityMode(event.target.value as FridaySettings['personalityMode'])}
+              style={{
+                backgroundColor: 'color-mix(in srgb, var(--text) 5%, transparent)',
+                border: '1px solid color-mix(in srgb, var(--text) 10%, transparent)',
+                borderRadius: '10px',
+                padding: '8px 10px',
+                color: 'var(--text)',
+                fontSize: '0.82rem',
+                outline: 'none',
+              }}
+            >
+              <option value="simple" style={{ background: 'var(--surface)' }}>Simple — warm and gentle</option>
+              <option value="moderate" style={{ background: 'var(--surface)' }}>Moderate — warm and firm</option>
+              <option value="roast" style={{ background: 'var(--surface)' }}>Roast — sarcastic and playful</option>
+            </select>
+            <span style={{ fontSize: '0.7rem', color: 'var(--muted-dim)' }}>
+              Personality changes wording and delivery only. Tools and decisions stay the same.
+            </span>
+          </div>
+
+          {/* Section: Hands-free microphone */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+            <label
+              style={{
+                fontSize: '0.78rem',
+                fontWeight: 600,
+                color: 'var(--muted)',
+              }}
+            >
+              HANDS-FREE MICROPHONE
+            </label>
+            <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', fontSize: '0.78rem', color: 'var(--text)' }}>
+              <input
+                type="checkbox"
+                checked={handsFreeEnabled}
+                onChange={(event) => setHandsFreeEnabled(event.target.checked)}
+              />
+              Keep wake-word detection available in standby
+            </label>
+            <label style={{ fontSize: '0.7rem', color: 'var(--muted-dim)' }}>
+              Return to standby after {Math.round(handsFreeSilenceTimeoutMs / 1000)} seconds of silence
+            </label>
+            <input
+              type="range"
+              min={5_000}
+              max={120_000}
+              step={5_000}
+              value={handsFreeSilenceTimeoutMs}
+              onChange={(event) => setHandsFreeSilenceTimeoutMs(Number(event.target.value))}
+              disabled={!handsFreeEnabled}
+            />
+            <span style={{ fontSize: '0.68rem', color: 'var(--muted-dim)' }}>
+              Microphone access is visible in the status bar and can be disabled here at any time.
             </span>
           </div>
 

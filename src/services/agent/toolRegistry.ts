@@ -9,8 +9,25 @@ import { dashboardToolDefinition, executeDashboardTool } from '../dashboard/dash
 import { settingsStore } from '../storage/settingsStore';
 import { accentIdFromName, defaultVoiceForAccent } from '../voice/voiceCatalog';
 import { ToolConfirmationPayload } from '../../shared/types';
+import { EventEmitter } from 'events';
+import { PersonalityMode } from '../../shared/types';
 
 export type ConfirmationRequester = (payload: ToolConfirmationPayload) => Promise<boolean>;
+
+/** Fired when the model decides FRIDAY should go to standby. */
+export const standbyEmitter = new EventEmitter();
+standbyEmitter.setMaxListeners(20);
+
+export const enterStandbyToolDefinition = {
+  name: 'enter_standby',
+  description:
+    "Puts FRIDAY into hands-free standby: she stops the active conversation, stays quiet, and listens only for her wake word ('Hey Friday'). Call this when the user says something like go offline, go to sleep, standby, stop listening, that's all for now, or goodbye in hands-free mode. Reply with a one-line farewell in the user's language before going quiet.",
+  parameters: {
+    type: 'OBJECT',
+    properties: {},
+    required: [],
+  },
+};
 
 export const voiceAccentToolDefinition = {
   name: 'set_voice_accent',
@@ -51,6 +68,48 @@ export function executeVoiceAccentTool(args: Record<string, any>): any {
   };
 }
 
+export const personalityModeToolDefinition = {
+  name: 'set_personality_mode',
+  description:
+    'Changes FRIDAY presentation style only. Use when the user asks for simple, moderate, balanced, roast, sarcastic or playful behaviour. Intelligence, tools, information and actions stay exactly the same.',
+  parameters: {
+    type: 'OBJECT',
+    properties: {
+      mode: {
+        type: 'STRING',
+        description: 'One of: simple, moderate, roast.',
+      },
+    },
+    required: ['mode'],
+  },
+};
+
+export function executePersonalityModeTool(args: Record<string, any>): any {
+  const value = String(args.mode || '').toLowerCase().trim();
+  const aliases: Record<string, PersonalityMode> = {
+    simple: 'simple',
+    gentle: 'simple',
+    caring: 'simple',
+    moderate: 'moderate',
+    balanced: 'moderate',
+    normal: 'moderate',
+    roast: 'roast',
+    sarcastic: 'roast',
+    playful: 'roast',
+  };
+  const mode = aliases[value];
+  if (!mode) {
+    return { success: false, error: 'Choose simple, moderate or roast.' };
+  }
+
+  settingsStore.saveSettings({ personalityMode: mode });
+  return {
+    success: true,
+    mode,
+    message: `FRIDAY personality mode changed to ${mode}.`,
+  };
+}
+
 export class ToolRegistry {
   private confirmationRequester?: ConfirmationRequester;
 
@@ -71,6 +130,8 @@ export class ToolRegistry {
       webResearchToolDefinition,
       researchToolDefinition,
       voiceAccentToolDefinition,
+      personalityModeToolDefinition,
+      enterStandbyToolDefinition,
       appShortcutsToolDefinition,
     ];
 
@@ -165,6 +226,17 @@ export class ToolRegistry {
       if (toolName === 'set_voice_accent') {
         return executeVoiceAccentTool(args);
       }
+      if (toolName === 'set_personality_mode') {
+        return executePersonalityModeTool(args);
+      }
+      if (toolName === 'enter_standby') {
+        try {
+          standbyEmitter.emit('standby-requested');
+        } catch (err: any) {
+          console.warn('[ToolRegistry] Standby notification failed:', err?.message);
+        }
+        return { success: true, standby: true, message: 'FRIDAY is going to standby.' };
+      }
       if (toolName === 'show_on_dashboard') {
         return await executeDashboardTool(toolName, args);
       }
@@ -190,4 +262,3 @@ export class ToolRegistry {
 }
 
 export const toolRegistry = new ToolRegistry();
-

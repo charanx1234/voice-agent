@@ -31,6 +31,9 @@ const DEFAULT_SETTINGS: FridaySettings = {
   modelName: process.env.GEMINI_MODEL || 'gemini-3.5-flash-lite',
   soundMuted: false,
   memoryEnabled: true,
+  personalityMode: 'moderate',
+  handsFreeEnabled: true,
+  handsFreeSilenceTimeoutMs: 25_000,
 };
 
 export class SettingsStore {
@@ -98,6 +101,18 @@ export class SettingsStore {
             ? parsed.ttsVoice
             : defaultVoiceForAccent(voiceAccent);
 
+        const personalityMode: FridaySettings['personalityMode'] =
+          parsed.personalityMode === 'simple' ||
+          parsed.personalityMode === 'moderate' ||
+          parsed.personalityMode === 'roast'
+            ? parsed.personalityMode
+            : DEFAULT_SETTINGS.personalityMode;
+
+        const silenceTimeout = Number(parsed.handsFreeSilenceTimeoutMs);
+        const handsFreeSilenceTimeoutMs = Number.isFinite(silenceTimeout)
+          ? Math.min(120_000, Math.max(5_000, Math.round(silenceTimeout)))
+          : DEFAULT_SETTINGS.handsFreeSilenceTimeoutMs;
+
         return {
           ...DEFAULT_SETTINGS,
           ...parsed,
@@ -105,6 +120,9 @@ export class SettingsStore {
           voiceAccent,
           ttsVoice,
           modelName: model,
+          personalityMode,
+          handsFreeEnabled: parsed.handsFreeEnabled !== false,
+          handsFreeSilenceTimeoutMs,
           // If env has key and stored doesn't, fallback to env
           apiKey: parsed.apiKey || process.env.GEMINI_API_KEY || '',
           hasCustomKey: Boolean(parsed.apiKey || process.env.GEMINI_API_KEY),
@@ -170,4 +188,3 @@ export class SettingsStore {
 }
 
 export const settingsStore = new SettingsStore();
-

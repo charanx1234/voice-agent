@@ -84,4 +84,19 @@ describe('FRIDAY persona', () => {
     expect(viaWrapper).toContain('MEMORY BLOCK');
     expect(PERSONA_VERSION).toBeGreaterThanOrEqual(2);
   });
+
+  it('keeps personality modes separate from the shared tool contract', () => {
+    const simple = buildPersonaInstruction({ personalityMode: 'simple' });
+    const moderate = buildPersonaInstruction({ personalityMode: 'moderate' });
+    const roast = buildPersonaInstruction({ personalityMode: 'roast' });
+
+    expect(simple).toContain('PERSONALITY MODE: SIMPLE');
+    expect(moderate).toContain('PERSONALITY MODE: MODERATE');
+    expect(roast).toContain('PERSONALITY MODE: ROAST');
+    for (const tool of ['save_note', 'create_reminder', 'search_web', 'set_personality_mode']) {
+      expect(simple).toContain(tool);
+      expect(moderate).toContain(tool);
+      expect(roast).toContain(tool);
+    }
+  });
 });

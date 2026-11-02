@@ -8,6 +8,24 @@ export type RobotState =
   | 'interrupted'
   | 'error';
 
+export type PersonalityMode = 'simple' | 'moderate' | 'roast';
+
+export type ConversationMood =
+  | 'calm'
+  | 'enthusiastic'
+  | 'patient'
+  | 'supportive'
+  | 'focused'
+  | 'playful';
+
+/** Local, uncertain voice/context cues used only to shape presentation. */
+export interface VoiceProsodySummary {
+  peakLevel: number;
+  durationMs: number;
+  speechRate?: number;
+  pauseRatio?: number;
+}
+
 export interface ChatMessage {
   id: string;
   role: 'user' | 'assistant' | 'system';
@@ -56,6 +74,12 @@ export interface FridaySettings {
   soundMuted: boolean;
   /** Long-term memory: extract facts from conversations and use them in replies. */
   memoryEnabled: boolean;
+  /** Presentation personality; intelligence and tools are shared by all modes. */
+  personalityMode: PersonalityMode;
+  /** Hands-free wake-word listener preference. */
+  handsFreeEnabled: boolean;
+  /** Silence duration before active hands-free mode returns to standby. */
+  handsFreeSilenceTimeoutMs: number;
 }
 
 export interface NoteItem {
@@ -208,11 +232,14 @@ export interface FridayApiBridge {
     audioMimeType?: string;
     conversationHistory: ChatMessage[];
     language?: string;
+    prosody?: VoiceProsodySummary;
   }) => Promise<{
     text: string;
     detectedLanguage?: string;
     toolCalls?: ToolCallRecord[];
     audioBase64?: string;
+    mood?: ConversationMood;
+    safetyOverride?: boolean;
     error?: string;
   }>;
 
@@ -274,6 +301,10 @@ export interface FridayApiBridge {
   openLogsFolder: () => Promise<boolean>;
   readLogs: (limit?: number) => Promise<string[]>;
 
+  // Hands-free standby / wake word
+  transcribeUtterance: (audioBase64: string, audioMimeType?: string) => Promise<{ success: boolean; reply?: string; error?: string }>;
+  onStandbyRequested: (callback: () => void) => () => void;
+
   // Window Controls
   minimizeWindow: () => void;
   closeWindow: () => void;
@@ -284,4 +315,3 @@ declare global {
     fridayAPI: FridayApiBridge;
   }
 }
-

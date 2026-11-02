@@ -23,6 +23,10 @@ interface ControlBarProps {
   memoryCount: number;
   transcriptOpen: boolean;
   recordingSeconds?: number;
+  handsFreeMode?: 'off' | 'standby' | 'active';
+  personalityMode?: 'simple' | 'moderate' | 'roast';
+  currentMood?: string;
+  onToggleHandsFree?: () => void;
   onToggleMic: () => void;
   onSendMessage: (text: string) => void;
   onToggleMute: () => void;
@@ -41,6 +45,10 @@ export const ControlBar: React.FC<ControlBarProps> = ({
   memoryCount,
   transcriptOpen,
   recordingSeconds = 0,
+  handsFreeMode = 'off',
+  onToggleHandsFree,
+  personalityMode = 'moderate',
+  currentMood = 'calm',
   onToggleMic,
   onSendMessage,
   onToggleMute,
@@ -85,6 +93,9 @@ export const ControlBar: React.FC<ControlBarProps> = ({
       case 'error':
         return { label: 'Service Error', color: 'var(--danger)', bg: 'color-mix(in srgb, var(--danger) 15%, transparent)' };
       default:
+        if (handsFreeMode === 'standby') {
+          return { label: 'Standby \u2014 say "Hey Friday"', color: 'var(--muted)', bg: 'color-mix(in srgb, var(--muted) 10%, transparent)' };
+        }
         return { label: 'FRIDAY Ready', color: 'var(--muted)', bg: 'color-mix(in srgb, var(--muted) 10%, transparent)' };
     }
   };
@@ -102,31 +113,37 @@ export const ControlBar: React.FC<ControlBarProps> = ({
           padding: '4px 6px',
         }}
       >
-        {/* Status indicator */}
-        <div
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: '6px',
-            backgroundColor: status.bg,
-            padding: '4px 10px',
-            borderRadius: '16px',
-            border: `1px solid ${status.color}33`,
-          }}
-        >
+        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
           <div
             style={{
-              width: '8px',
-              height: '8px',
-              borderRadius: '50%',
-              backgroundColor: status.color,
-              boxShadow: `0 0 8px ${status.color}`,
-              animation: isListening || state === 'speaking' ? 'pulse 1.4s infinite' : 'none',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px',
+              backgroundColor: status.bg,
+              padding: '4px 10px',
+              borderRadius: '16px',
+              border: `1px solid ${status.color}33`,
             }}
-          />
-          <span style={{ fontSize: '0.78rem', fontWeight: 600, color: status.color }}>
-            {status.label}
-          </span>
+          >
+            <div
+              style={{
+                width: '8px',
+                height: '8px',
+                borderRadius: '50%',
+                backgroundColor: status.color,
+                boxShadow: `0 0 8px ${status.color}`,
+                animation: isListening || state === 'speaking' ? 'pulse 1.4s infinite' : 'none',
+              }}
+            />
+            <span style={{ fontSize: '0.78rem', fontWeight: 600, color: status.color }}>
+              {status.label}
+            </span>
+          </div>
+          {handsFreeMode !== 'off' && (
+            <span style={{ fontSize: '0.66rem', color: 'var(--muted-dim)' }} title="Microphone access is active">
+              MIC ACTIVE · {personalityMode.toUpperCase()} · {currentMood}
+            </span>
+          )}
         </div>
 
         {/* Action icons (Shortcuts, Transcript, Mute, Settings) */}
@@ -241,6 +258,26 @@ export const ControlBar: React.FC<ControlBarProps> = ({
           </button>
         </div>
       </div>
+
+      {onToggleHandsFree && (
+        <div style={{ display: 'flex', justifyContent: 'center' }}>
+          <button
+            onClick={onToggleHandsFree}
+            title={handsFreeMode === 'off' ? 'Turn on hands-free (say "Hey Friday")' : 'Turn off hands-free'}
+            style={{
+              background: 'none',
+              border: '1px solid color-mix(in srgb, var(--accent) 35%, transparent)',
+              borderRadius: '12px',
+              padding: '2px 10px',
+              fontSize: '0.7rem',
+              color: handsFreeMode === 'off' ? 'var(--muted)' : 'var(--accent)',
+              cursor: 'pointer',
+            }}
+          >
+            {handsFreeMode === 'off' ? 'Hands-free: off' : handsFreeMode === 'standby' ? 'Hands-free: standby' : 'Hands-free: on'}
+          </button>
+        </div>
+      )}
 
       {/* Main Microphone Button */}
       <div style={{ display: 'flex', justifyContent: 'center', margin: '2px 0' }}>
