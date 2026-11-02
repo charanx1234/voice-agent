@@ -24,6 +24,7 @@ import {
 import { pickGreeting } from '@/services/voice/greetings';
 import { isLikelySilence } from '@/services/voice/micErrors';
 import { applyMoodToSpeech } from '@/services/ai/mood';
+import { takeCompleteSpeechChunks } from '@/services/voice/speechText';
 
 export const App: React.FC = () => {
   const [settings, setSettings] = useState<FridaySettings>({
@@ -62,6 +63,7 @@ export const App: React.FC = () => {
   const [memoryCount, setMemoryCount] = useState(0);
   const [recordingSeconds, setRecordingSeconds] = useState(0);
   const [liveTranscript, setLiveTranscript] = useState('');
+  const [streamingResponse, setStreamingResponse] = useState('');
   const [artifacts, setArtifacts] = useState<DashboardArtifact[]>([]);
   const [activeArtifactId, setActiveArtifactId] = useState<string | null>(null);
   const [dashboardOpen, setDashboardOpen] = useState(false);
@@ -82,6 +84,7 @@ export const App: React.FC = () => {
     startListening,
     stopListening,
     speakResponse,
+    enqueueSpeech,
     interrupt,
   } = useVoiceAssistant();
 
@@ -91,6 +94,11 @@ export const App: React.FC = () => {
   const messagesRef = useRef<ChatMessage[]>([]);
   messagesRef.current = messages;
   const requestIdRef = useRef(0);
+  const activeStreamIdRef = useRef<string | null>(null);
+  const streamBufferRef = useRef('');
+  const streamedResponseRef = useRef('');
+  const streamedSpeechQueuedRef = useRef(false);
+  const streamSpeechOptionsRef = useRef<any>({});
   const standbyPendingRef = useRef(false);
   const goStandbyRef = useRef<() => void>(() => undefined);
   const handsFreeRef = useRef<{ mode: 'off' | 'standby' | 'active'; wake: () => void; goStandby: () => void }>({
@@ -98,6 +106,25 @@ export const App: React.FC = () => {
     wake: () => undefined,
     goStandby: () => undefined,
   });
+
+  useEffect(() => {
+    if (!window.fridayAPI?.onResponseStream) return undefined;
+    return window.fridayAPI.onResponseStream((event) => {
+      if (!event.requestId || event.requestId !== activeStreamIdRef.current) return;
+      if (event.type === 'delta' && event.text) {
+        streamedResponseRef.current += event.text;
+        setStreamingResponse(streamedResponseRef.current);
+        streamBufferRef.current += event.text;
+
+        const extracted = takeCompleteSpeechChunks(streamBufferRef.current);
+        streamBufferRef.current = extracted.remainder;
+        for (const chunk of extracted.complete) {
+          streamedSpeechQueuedRef.current = true;
+          enqueueSpeech(chunk, streamSpeechOptionsRef.current);
+        }
+      }
+    });
+  }, [enqueueSpeech]);
 
   /** Applies the resolved theme: 'auto' mirrors the Windows light/dark setting. */
   const applyTheme = useCallback((mode: FridaySettings['themeMode'] = 'auto') => {
@@ -260,8 +287,25 @@ export const App: React.FC = () => {
 
       setMessages((prev) => [...prev, userMsg]);
       setLiveTranscript('');
+      setStreamingResponse('');
       setRobotState('thinking');
       const requestId = ++requestIdRef.current;
+      const streamId = `response_${Date.now()}_${requestId}`;
+      activeStreamIdRef.current = streamId;
+      streamBufferRef.current = '';
+      streamedResponseRef.current = '';
+      streamedSpeechQueuedRef.current = false;
+      const initialMoodSpeech = applyMoodToSpeech(settings.speechSpeed, settings.pitch, currentMood);
+      streamSpeechOptionsRef.current = {
+        languageCode: settings.preferredLanguage,
+        rate: initialMoodSpeech.rate,
+        volume: settings.speechVolume,
+        pitch: initialMoodSpeech.pitch,
+        voiceId: settings.voiceId,
+        voice: settings.ttsVoice,
+        accent: settings.voiceAccent,
+        engine: settings.ttsEngine,
+      };
 
       try {
         if (!window.fridayAPI) {
@@ -275,10 +319,11 @@ export const App: React.FC = () => {
           conversationHistory: messagesRef.current,
           language: settings.preferredLanguage,
           prosody,
+          requestId: streamId,
         });
 
         // User interrupted (barge-in) while this was in flight: drop the stale reply.
-        if (requestId !== requestIdRef.current) return;
+        if (requestId !== requestIdRef.current || response.cancelled) return;
 
         const failed = Boolean(response.error);
         const assistantMsg: ChatMessage = {
@@ -292,6 +337,8 @@ export const App: React.FC = () => {
         };
 
         setMessages((prev) => [...prev, assistantMsg]);
+        setStreamingResponse('');
+        activeStreamIdRef.current = null;
 
         // An accent switch must apply to this very reply, so refresh settings
         // before speaking and speak with the freshly saved voice.
@@ -325,19 +372,29 @@ export const App: React.FC = () => {
           mood
         );
 
-        // Speak response aloud
+        const speechOptions = {
+          languageCode: response.detectedLanguage || effectiveSettings.preferredLanguage,
+          rate: moodSpeech.rate,
+          volume: effectiveSettings.speechVolume,
+          pitch: moodSpeech.pitch,
+          voiceId: effectiveSettings.voiceId,
+          voice: effectiveSettings.ttsVoice,
+          accent: effectiveSettings.voiceAccent,
+          engine: effectiveSettings.ttsEngine,
+        };
+        streamSpeechOptionsRef.current = speechOptions;
+
+        // Streamed sentence audio is already queued while Gemini was generating.
+        // Flush the final incomplete phrase, or use the legacy full-response path
+        // when the provider returned no stream text.
         if (!isMuted) {
-          await speakResponse(response.text, {
-            languageCode: response.detectedLanguage || effectiveSettings.preferredLanguage,
-            rate: moodSpeech.rate,
-            volume: effectiveSettings.speechVolume,
-            pitch: moodSpeech.pitch,
-            voiceId: effectiveSettings.voiceId,
-            voice: effectiveSettings.ttsVoice,
-            accent: effectiveSettings.voiceAccent,
-            engine: effectiveSettings.ttsEngine,
-            audioBase64: response.audioBase64,
-          });
+          if (streamedSpeechQueuedRef.current) {
+            if (streamBufferRef.current.trim()) {
+              enqueueSpeech(streamBufferRef.current, speechOptions);
+            }
+          } else {
+            await speakResponse(response.text, { ...speechOptions, audioBase64: response.audioBase64 });
+          }
         } else {
           setRobotState('idle');
         }
@@ -358,7 +415,7 @@ export const App: React.FC = () => {
         setMessages((prev) => [...prev, errorMsg]);
       }
     },
-    [messages, settings, isMuted, speakResponse, setRobotState]
+    [messages, settings, isMuted, currentMood, speakResponse, enqueueSpeech, setRobotState]
   );
 
   // Visible feedback for voice problems, instead of a silent "Service Error" badge.
@@ -408,7 +465,10 @@ export const App: React.FC = () => {
         return;
       }
 
-      handleSendMessage(recognizedText, audioBase64, mimeType, prosody);
+      // When local/browser recognition produced a final transcript, send text
+      // directly instead of making Gemini decode the same audio again. Audio
+      // remains the fallback when recognition is unavailable.
+      handleSendMessage(recognizedText, recognizedText ? undefined : audioBase64, mimeType, prosody);
     } else {
       // User tapped mic to speak
       try {
@@ -461,6 +521,10 @@ export const App: React.FC = () => {
       // Invalidate any in-flight reply and stop talking so we hear the user first.
       requestIdRef.current += 1;
       standbyPendingRef.current = false;
+      window.fridayAPI?.cancelResponse(activeStreamIdRef.current || undefined);
+      activeStreamIdRef.current = null;
+      streamBufferRef.current = '';
+      setStreamingResponse('');
       interrupt();
     },
     onSpeechActivity: (speaking) => {
@@ -469,7 +533,12 @@ export const App: React.FC = () => {
     onTranscript: (text) => setLiveTranscript(text),
     onUtterance: ({ audioBase64, mimeType, peakLevel, recognizedText, prosody }) => {
       if (isLikelySilence(peakLevel)) return;
-      void sendRef.current(recognizedText, audioBase64, mimeType, prosody);
+      void sendRef.current(
+        recognizedText,
+        recognizedText ? undefined : audioBase64,
+        mimeType,
+        prosody
+      );
     },
     onWake: (command) => {
       if (command) {
@@ -669,7 +738,13 @@ export const App: React.FC = () => {
               amplitude={amplitude}
               frequencies={frequencies}
               mood={currentMood}
-              onClick={interrupt}
+              onClick={() => {
+                requestIdRef.current += 1;
+                window.fridayAPI?.cancelResponse(activeStreamIdRef.current || undefined);
+                activeStreamIdRef.current = null;
+                setStreamingResponse('');
+                interrupt();
+              }}
             />
 
             {/* Live Audio Visualizer */}
@@ -689,6 +764,23 @@ export const App: React.FC = () => {
                 }}
               >
                 {liveTranscript}
+              </div>
+            )}
+            {streamingResponse && (
+              <div
+                style={{
+                  maxWidth: '88%',
+                  marginTop: '10px',
+                  padding: '8px 12px',
+                  borderRadius: '12px',
+                  background: 'color-mix(in srgb, var(--accent) 8%, transparent)',
+                  color: 'var(--text)',
+                  fontSize: '0.8rem',
+                  lineHeight: 1.45,
+                  textAlign: 'left',
+                }}
+              >
+                {streamingResponse}
               </div>
             )}
           </div>

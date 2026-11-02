@@ -5,6 +5,8 @@ export const IPC_CHANNELS = {
   SAVE_SETTINGS: 'friday:save-settings',
   TEST_CONNECTION: 'friday:test-connection',
   SEND_MESSAGE: 'friday:send-message',
+  CANCEL_RESPONSE: 'friday:cancel-response',
+  RESPONSE_STREAM: 'friday:response-stream',
   TOOL_CONFIRM_RESPONSE: 'friday:tool-confirm-response',
   TOOL_CONFIRM_REQUEST: 'friday:tool-confirm-request',
   SELECT_FOLDER: 'friday:select-folder',
@@ -48,4 +50,3 @@ export function sanitizePath(inputPath: string): string {
   // Prevent directory traversal attacks
   return inputPath.replace(/\0/g, '').trim();
 }
-

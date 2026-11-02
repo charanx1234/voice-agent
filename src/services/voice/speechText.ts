@@ -74,6 +74,26 @@ export function chunkForSpeech(text: string, maxChars = 220): string[] {
   return chunks.filter((chunk) => chunk.length > 0);
 }
 
+/** Pulls only safe sentence-sized text from a still-arriving model stream. */
+export function takeCompleteSpeechChunks(
+  buffer: string,
+  maxChars = 220
+): { complete: string[]; remainder: string } {
+  const clean = buffer || '';
+  const matches = [...clean.matchAll(/(?<=[.!?…])(?:\s+|$)/g)];
+  const last = matches.at(-1);
+  const boundary = last?.index === undefined ? 0 : last.index + last[0].length;
+
+  if (!boundary && clean.length <= maxChars) return { complete: [], remainder: clean };
+
+  const splitAt = boundary || Math.max(0, clean.lastIndexOf(' ', maxChars));
+  if (splitAt <= 0) return { complete: [], remainder: clean };
+  return {
+    complete: chunkForSpeech(clean.slice(0, splitAt), maxChars),
+    remainder: clean.slice(splitAt).trimStart(),
+  };
+}
+
 const FEMALE_HINTS = [
   'zira', 'aria', 'jenny', 'neerja', 'swara', 'pallavi', 'sapna', 'shruti',
   'heera', 'sonia', 'libby', 'michelle', 'ava', 'emma', 'female', 'woman',

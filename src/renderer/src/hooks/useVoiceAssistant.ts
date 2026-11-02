@@ -390,6 +390,29 @@ export function useVoiceAssistant() {
     [isMuted]
   );
 
+  const enqueueSpeech = useCallback(
+    (
+      text: string,
+      options: {
+        languageCode?: string;
+        rate?: number;
+        volume?: number;
+        pitch?: number;
+        voiceId?: string;
+        voice?: string;
+        accent?: string;
+        engine?: 'auto' | 'edge' | 'gemini' | 'system';
+      } = {}
+    ) => {
+      if (isMuted) return;
+      voiceManagerRef.current?.enqueueSpeech(text, {
+        ...options,
+        onError: () => setRobotState('error'),
+      });
+    },
+    [isMuted]
+  );
+
   return {
     robotState,
     setRobotState,
@@ -402,6 +425,7 @@ export function useVoiceAssistant() {
     startListening,
     stopListening,
     speakResponse,
+    enqueueSpeech,
     interrupt,
   };
 }

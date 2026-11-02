@@ -72,7 +72,19 @@ export function registerIpcHandlers(getMainWindow: () => BrowserWindow | null): 
 
   // Chat / Voice message
   ipcMain.handle(IPC_CHANNELS.SEND_MESSAGE, async (_event, payload) => {
-    return await geminiService.sendMessage(payload);
+    return await geminiService.sendMessage(payload, {
+      onStream: (event) => {
+        if (!payload?.requestId) return;
+        _event.sender.send(IPC_CHANNELS.RESPONSE_STREAM, {
+          ...event,
+          requestId: payload.requestId,
+        });
+      },
+    });
+  });
+
+  ipcMain.on(IPC_CHANNELS.CANCEL_RESPONSE, (_event, requestId?: string) => {
+    geminiService.cancelRequest(requestId);
   });
 
   // Select folder via native dialog

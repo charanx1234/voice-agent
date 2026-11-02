@@ -34,6 +34,11 @@ interface SynthesisResponse {
   engine: 'edge' | 'gemini';
 }
 
+interface QueuedSpeech {
+  text: string;
+  options: SpeakOptions;
+}
+
 /**
  * Voice output: neural TTS (Edge, then Gemini) with real waveform lip-sync,
  * pipelined sentence playback, and a female-preferring system fallback.
@@ -47,6 +52,8 @@ export class VoiceManager {
   private availableVoices: SpeechSynthesisVoice[] = [];
   private onStateChangeCallback?: (isSpeaking: boolean) => void;
   private generation = 0;
+  private speechQueue: QueuedSpeech[] = [];
+  private queueRunning = false;
 
   constructor(analyser: AudioAnalyser) {
     this.analyser = analyser;
@@ -137,6 +144,52 @@ export class VoiceManager {
         this.emitState(false);
         options.onEnd?.();
       }
+    }
+  }
+
+  /** Queues complete sentences so the first streamed sentence can play immediately. */
+  public enqueueSpeech(text: string, options: SpeakOptions = {}): void {
+    const spoken = cleanForSpeech(text);
+    if (!spoken) return;
+    this.speechQueue.push({ text: spoken, options });
+    if (this.queueRunning) return;
+
+    this.queueRunning = true;
+    const generation = this.generation;
+    void this.drainSpeechQueue(generation);
+  }
+
+  private async drainSpeechQueue(generation: number): Promise<void> {
+    this.emitState(true);
+    try {
+      while (this.speechQueue.length > 0 && generation === this.generation) {
+        const item = this.speechQueue.shift();
+        if (!item) break;
+
+        try {
+          const wantsNeural =
+            (item.options.engine || 'auto') !== 'system' &&
+            Boolean(window.fridayAPI?.synthesizeSpeech);
+          if (wantsNeural) {
+            try {
+              await this.speakNeural(item.text, item.options.languageCode || 'te-IN', item.options, generation);
+              continue;
+            } catch (err: any) {
+              if (generation !== this.generation) return;
+              console.warn('[VoiceManager] Streamed neural speech failed:', err?.message);
+            }
+          }
+          await this.speakSystem(item.text, item.options.languageCode || 'te-IN', item.options);
+        } catch (err: any) {
+          item.options.onError?.(err);
+        }
+      }
+    } finally {
+      if (generation === this.generation) {
+        this.analyser.disconnect();
+        this.emitState(false);
+      }
+      this.queueRunning = false;
     }
   }
 
@@ -264,6 +317,7 @@ export class VoiceManager {
   /** Immediate interruption / barge-in: cancels synthesis and playback. */
   public stop(): void {
     this.generation++;
+    this.speechQueue = [];
     this.analyser.disconnect();
 
     try {

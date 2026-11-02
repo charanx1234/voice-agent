@@ -4,9 +4,16 @@ import { buildSystemInstruction } from './personality';
 import { buildConversationBrief } from './conversationContext';
 import { toolRegistry } from '../agent/toolRegistry';
 import { memoryService } from '../memory/memoryService';
-import { ChatMessage, ConversationMood, ToolCallRecord, VoiceProsodySummary } from '../../shared/types';
+import {
+  ChatMessage,
+  ConversationMood,
+  ResponseStreamEvent,
+  ToolCallRecord,
+  VoiceProsodySummary,
+} from '../../shared/types';
 import { detectLanguageFromText } from '../voice/languages';
 import { analyzeMood, buildMoodInstruction, MoodAnalysis } from './mood';
+import { getLocalResponse } from './localResponses';
 
 /**
  * Models tried, in order, when the configured model is unavailable.
@@ -88,6 +95,11 @@ export interface SendMessageParams {
   conversationHistory: ChatMessage[];
   language?: string;
   prosody?: VoiceProsodySummary;
+  requestId?: string;
+}
+
+export interface SendMessageHooks {
+  onStream?: (event: Omit<ResponseStreamEvent, 'requestId'>) => void;
 }
 
 export interface SendMessageResult {
@@ -97,9 +109,13 @@ export interface SendMessageResult {
   error?: string;
   mood?: ConversationMood;
   safetyOverride?: boolean;
+  cancelled?: boolean;
 }
 
 export class GeminiService {
+  private cachedClient: { apiKey: string; client: GoogleGenerativeAI } | null = null;
+  private readonly activeRequests = new Map<string, AbortController>();
+
   private getClient(apiKeyOverride?: string): GoogleGenerativeAI {
     const key = apiKeyOverride || settingsStore.getRawApiKey();
     if (!key) {
@@ -107,7 +123,18 @@ export class GeminiService {
         'Gemini API key is not configured. Please enter your API key in Settings or set GEMINI_API_KEY in .env.'
       );
     }
-    return new GoogleGenerativeAI(key);
+    if (this.cachedClient?.apiKey === key) return this.cachedClient.client;
+    const client = new GoogleGenerativeAI(key);
+    this.cachedClient = { apiKey: key, client };
+    return client;
+  }
+
+  public cancelRequest(requestId?: string): void {
+    if (requestId) {
+      this.activeRequests.get(requestId)?.abort();
+      return;
+    }
+    for (const controller of this.activeRequests.values()) controller.abort();
   }
 
   public async testConnection(apiKeyOverride?: string): Promise<{
@@ -184,7 +211,10 @@ export class GeminiService {
     return (response.text() || '').trim();
   }
 
-  public async sendMessage(params: SendMessageParams): Promise<SendMessageResult> {
+  public async sendMessage(
+    params: SendMessageParams,
+    hooks: SendMessageHooks = {}
+  ): Promise<SendMessageResult> {
     const settings = settingsStore.getSettings();
     const preferredLang = params.language || settings.preferredLanguage || 'te-IN';
     const candidates = buildModelCandidates(settings.modelName);
@@ -192,6 +222,32 @@ export class GeminiService {
     const moodAnalysis = analyzeMood(userText, params.prosody);
     const moodInstruction = buildMoodInstruction(moodAnalysis, settings.personalityMode);
 
+    const localResponse = !params.audioBase64
+      ? getLocalResponse(userText, preferredLang)
+      : null;
+    if (localResponse) {
+      void memoryService.appendExchange(userText, localResponse.text, {
+        language: localResponse.detectedLanguage,
+      });
+      hooks.onStream?.({ type: 'delta', text: localResponse.text });
+      hooks.onStream?.({ type: 'complete' });
+      return { ...localResponse, mood: moodAnalysis.mood, safetyOverride: moodAnalysis.safetyOverride };
+    }
+
+    const controller = new AbortController();
+    if (params.requestId) this.activeRequests.set(params.requestId, controller);
+
+    const startedAt = Date.now();
+    let firstTokenAt = 0;
+    const streamHook = (event: Omit<ResponseStreamEvent, 'requestId'>) => {
+      if (event.type === 'delta' && event.text && !firstTokenAt) {
+        firstTokenAt = Date.now();
+        console.info(`[GeminiTiming] first-token=${firstTokenAt - startedAt}ms`);
+      }
+      hooks.onStream?.(event);
+    };
+
+    try {
     // Local, per-turn situation brief: mode, topic, follow-up, stated constraints.
     const conversationBrief = buildConversationBrief(params.conversationHistory, userText || 'voice message').text;
 
@@ -199,6 +255,7 @@ export class GeminiService {
     let memoryBlock = '';
     try {
       memoryBlock = await memoryService.buildContextBlock(userText || 'voice message');
+      console.info(`[GeminiTiming] memory=${Date.now() - startedAt}ms`);
     } catch (err: any) {
       console.warn('[GeminiService] Memory retrieval skipped:', err?.message);
     }
@@ -219,7 +276,9 @@ export class GeminiService {
           memoryBlock,
           conversationBrief,
           moodAnalysis,
-          moodInstruction
+          moodInstruction,
+          controller.signal,
+          streamHook
         );
 
         if (modelName !== settings.modelName) {
@@ -234,9 +293,16 @@ export class GeminiService {
         });
         memoryService.enqueueExtraction(userText, result.text);
 
+        console.info(`[GeminiTiming] total=${Date.now() - startedAt}ms`);
+        streamHook({ type: 'complete' });
         return result;
       } catch (err: any) {
         lastError = err;
+
+        if (controller.signal.aborted || isAbortError(err)) {
+          streamHook({ type: 'cancelled' });
+          return { text: '', detectedLanguage: preferredLang, cancelled: true };
+        }
 
         if (state.toolsExecuted) {
           console.error(
@@ -256,6 +322,7 @@ export class GeminiService {
     }
 
     console.error('[GeminiService] Error generating response:', lastError);
+    streamHook({ type: 'error', error: lastError?.message || 'Unknown Gemini error' });
 
     const errorText = `I could not complete that request: ${
       lastError?.message || 'please check your connection and API key.'
@@ -272,6 +339,9 @@ export class GeminiService {
       detectedLanguage: params.language || 'en-IN',
       error: lastError?.message || 'Unknown Gemini error',
     };
+    } finally {
+    if (params.requestId) this.activeRequests.delete(params.requestId);
+    }
   }
 
   /** Runs one conversation attempt against a single model. Throws on API failure. */
@@ -283,7 +353,9 @@ export class GeminiService {
     memoryBlock = '',
     conversationBrief = '',
     moodAnalysis: MoodAnalysis = analyzeMood('', undefined),
-    moodInstruction = ''
+    moodInstruction = '',
+    signal?: AbortSignal,
+    onStream?: (event: Omit<ResponseStreamEvent, 'requestId'>) => void
   ): Promise<SendMessageResult> {
     const client = this.getClient();
     const currentSettings = settingsStore.getSettings();
@@ -345,8 +417,7 @@ export class GeminiService {
     }
     contents.push({ role: 'user', parts: userParts });
 
-    let result: any = await model.generateContent({ contents });
-    let response: any = await result.response;
+    let response: any = await this.generateStream(model, contents, signal, onStream);
 
     const toolRecords: ToolCallRecord[] = [];
 
@@ -401,8 +472,7 @@ export class GeminiService {
         model = createModel(settingsStore.getSettings().personalityMode);
       }
 
-      result = await model.generateContent({ contents });
-      response = await result.response;
+      response = await this.generateStream(model, contents, signal, onStream);
     }
 
     const text = response.text() || 'I have completed your request.';
@@ -416,6 +486,47 @@ export class GeminiService {
       safetyOverride: moodAnalysis.safetyOverride,
     };
   }
+
+  private async generateStream(
+    model: any,
+    contents: any[],
+    signal?: AbortSignal,
+    onStream?: (event: Omit<ResponseStreamEvent, 'requestId'>) => void
+  ): Promise<any> {
+    const result = await model.generateContentStream({ contents }, { signal });
+    let streamedText = '';
+
+    for await (const chunk of result.stream) {
+      if (signal?.aborted) throw new Error('Response cancelled.');
+      try {
+        const delta = String(chunk.text?.() || '');
+        if (delta) {
+          streamedText += delta;
+          onStream?.({ type: 'delta', text: delta });
+        }
+      } catch {
+        // Function-call chunks do not have text; the final response still carries the call.
+      }
+    }
+
+    const response = await result.response;
+    // Some SDK versions expose text only on the final response. Emit it if the
+    // stream did not expose it, without duplicating already delivered content.
+    if (!streamedText) {
+      try {
+        const finalText = String(response.text?.() || '');
+        if (finalText) onStream?.({ type: 'delta', text: finalText });
+      } catch {
+        // Tool-only responses have no text.
+      }
+    }
+    return response;
+  }
+}
+
+function isAbortError(error: any): boolean {
+  const message = String(error?.message || error || '').toLowerCase();
+  return message.includes('abort') || message.includes('cancel');
 }
 
 export const geminiService = new GeminiService();

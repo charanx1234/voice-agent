@@ -78,6 +78,7 @@ export class MemoryService {
   private conversationStore?: ConversationStore;
   private extractor?: MemoryExtractor;
   private initPromise?: Promise<void>;
+  private readonly contextCache = new Map<string, { block: string; expiresAt: number }>();
 
   /** Serialises background extraction so turns are processed in order. */
   private extractionChain: Promise<void> = Promise.resolve();
@@ -148,6 +149,10 @@ export class MemoryService {
   public async buildContextBlock(userText: string): Promise<string> {
     if (!this.isEnabled()) return '';
 
+    const cacheKey = userText.trim().toLowerCase();
+    const cached = this.contextCache.get(cacheKey);
+    if (cached && cached.expiresAt > Date.now()) return cached.block;
+
     const services = await this.ready();
     if (!services || !userText.trim()) return '';
 
@@ -168,7 +173,13 @@ export class MemoryService {
         }
       }
 
-      return formatMemoryContext(Array.from(merged.values()));
+      const block = formatMemoryContext(Array.from(merged.values()));
+      if (this.contextCache.size >= 32) {
+        const oldest = this.contextCache.keys().next().value;
+        if (oldest) this.contextCache.delete(oldest);
+      }
+      this.contextCache.set(cacheKey, { block, expiresAt: Date.now() + 20_000 });
+      return block;
     } catch (err: any) {
       this.log(`[MemoryService] Context build failed: ${err?.message}`);
       return '';
@@ -260,6 +271,7 @@ export class MemoryService {
 
     if (added + updated > 0) {
       this.log(`[MemoryService] ${added} new, ${updated} updated (${outcome.method}).`);
+      this.contextCache.clear();
     }
 
     return { added, updated, skipped, method: outcome.method };

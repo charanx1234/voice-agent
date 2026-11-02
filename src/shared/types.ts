@@ -26,6 +26,13 @@ export interface VoiceProsodySummary {
   pauseRatio?: number;
 }
 
+export interface ResponseStreamEvent {
+  requestId: string;
+  type: 'delta' | 'complete' | 'cancelled' | 'error';
+  text?: string;
+  error?: string;
+}
+
 export interface ChatMessage {
   id: string;
   role: 'user' | 'assistant' | 'system';
@@ -233,6 +240,7 @@ export interface FridayApiBridge {
     conversationHistory: ChatMessage[];
     language?: string;
     prosody?: VoiceProsodySummary;
+    requestId?: string;
   }) => Promise<{
     text: string;
     detectedLanguage?: string;
@@ -241,7 +249,10 @@ export interface FridayApiBridge {
     mood?: ConversationMood;
     safetyOverride?: boolean;
     error?: string;
+    cancelled?: boolean;
   }>;
+  cancelResponse: (requestId?: string) => void;
+  onResponseStream: (callback: (event: ResponseStreamEvent) => void) => () => void;
 
   // Tool Confirmations
   respondToolConfirmation: (id: string, confirmed: boolean) => void;

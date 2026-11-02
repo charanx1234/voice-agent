@@ -118,6 +118,7 @@ function collectStream(stream: NodeJS.ReadableStream, timeoutMs: number): Promis
  */
 export class NeuralVoiceService {
   private readonly cache = new Map<string, NeuralVoiceResult>();
+  private readonly inFlight = new Map<string, Promise<NeuralVoiceResult>>();
   private readonly active = new Set<MsEdgeTTS>();
   private readonly cacheLimit = 40;
 
@@ -138,27 +139,39 @@ export class NeuralVoiceService {
     const cached = this.cache.get(cacheKey);
     if (cached) return cached;
 
+    const pending = this.inFlight.get(cacheKey);
+    if (pending) return pending;
+
     const preferred = settingsStore.getSettings().ttsEngine || 'auto';
     const order: Array<'edge' | 'gemini'> =
       preferred === 'gemini' ? ['gemini', 'edge'] : preferred === 'system' ? [] : ['edge', 'gemini'];
 
-    let lastError: Error | undefined;
-    for (const engine of order) {
-      try {
-        const result =
-          engine === 'edge'
-            ? await this.synthesizeEdge(text, voice, rate, pitch, volume)
-            : await this.synthesizeGemini(text);
+    const synthesis = (async () => {
+      let lastError: Error | undefined;
+      for (const engine of order) {
+        try {
+          const result =
+            engine === 'edge'
+              ? await this.synthesizeEdge(text, voice, rate, pitch, volume)
+              : await this.synthesizeGemini(text);
 
-        this.remember(cacheKey, result);
-        return result;
-      } catch (err: any) {
-        lastError = err instanceof Error ? err : new Error(String(err?.message || err));
-        console.warn(`[NeuralVoice] ${engine} failed: ${lastError.message}`);
+          this.remember(cacheKey, result);
+          return result;
+        } catch (err: any) {
+          lastError = err instanceof Error ? err : new Error(String(err?.message || err));
+          console.warn(`[NeuralVoice] ${engine} failed: ${lastError.message}`);
+        }
       }
-    }
 
-    throw lastError || new Error('No neural voice engine is available.');
+      throw lastError || new Error('No neural voice engine is available.');
+    })();
+
+    this.inFlight.set(cacheKey, synthesis);
+    try {
+      return await synthesis;
+    } finally {
+      this.inFlight.delete(cacheKey);
+    }
   }
 
   private remember(key: string, result: NeuralVoiceResult): void {
@@ -284,4 +297,3 @@ export class NeuralVoiceService {
 }
 
 export const neuralVoiceService = new NeuralVoiceService();
-

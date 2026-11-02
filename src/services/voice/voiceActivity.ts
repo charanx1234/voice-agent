@@ -16,18 +16,18 @@ export interface VadOptions {
 }
 
 export const DEFAULT_VAD_OPTIONS: VadOptions = {
-  startThreshold: 0.14,
-  endThreshold: 0.06,
-  speechStartMs: 180,
-  speechEndMs: 800,
+  startThreshold: 0.12,
+  endThreshold: 0.055,
+  speechStartMs: 120,
+  speechEndMs: 600,
 };
 
 /** Barge-in during TTS playback: stricter, so speaker echo does not trigger it. */
 export const BARGE_IN_VAD_OPTIONS: VadOptions = {
-  startThreshold: 0.3,
-  endThreshold: 0.1,
-  speechStartMs: 450,
-  speechEndMs: 700,
+  startThreshold: 0.18,
+  endThreshold: 0.075,
+  speechStartMs: 120,
+  speechEndMs: 500,
 };
 
 export type VadEvent =

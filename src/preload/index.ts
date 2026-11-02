@@ -7,6 +7,7 @@ import {
   TaskItem,
   SpeechSynthesisRequest,
   ToolConfirmationPayload,
+  ResponseStreamEvent,
 } from '../shared/types';
 import { IPC_CHANNELS } from '../main/security';
 
@@ -22,6 +23,12 @@ const apiBridge: FridayApiBridge = {
   },
 
   sendMessage: (payload) => ipcRenderer.invoke(IPC_CHANNELS.SEND_MESSAGE, payload),
+  cancelResponse: (requestId?: string) => ipcRenderer.send(IPC_CHANNELS.CANCEL_RESPONSE, requestId),
+  onResponseStream: (callback: (event: ResponseStreamEvent) => void) => {
+    const handler = (_event: any, payload: ResponseStreamEvent) => callback(payload);
+    ipcRenderer.on(IPC_CHANNELS.RESPONSE_STREAM, handler);
+    return () => ipcRenderer.removeListener(IPC_CHANNELS.RESPONSE_STREAM, handler);
+  },
 
   respondToolConfirmation: (id: string, confirmed: boolean) => {
     ipcRenderer.send(IPC_CHANNELS.TOOL_CONFIRM_RESPONSE, { id, confirmed });
@@ -128,4 +135,3 @@ const apiBridge: FridayApiBridge = {
 };
 
 contextBridge.exposeInMainWorld('fridayAPI', apiBridge);
-

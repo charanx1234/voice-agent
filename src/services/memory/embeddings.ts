@@ -145,6 +145,8 @@ export class EmbeddingService {
   private readonly getApiKey: () => string;
   private readonly log: (message: string) => void;
   private readonly timeoutMs: number;
+  private readonly queryCache = new Map<string, { value: EmbeddingVector; usedAt: number }>();
+  private readonly cacheLimit = 64;
 
   constructor(options: EmbeddingServiceOptions) {
     this.getApiKey = options.getApiKey;
@@ -155,6 +157,12 @@ export class EmbeddingService {
   /** Embeds text with Gemini, falling back to the local hashed embedding. */
   public async embed(text: string, role: EmbeddingRole = 'document'): Promise<EmbeddingVector> {
     const clean = (text || '').trim();
+    const cacheKey = `${role}:${clean.toLowerCase()}`;
+    const cached = this.queryCache.get(cacheKey);
+    if (cached) {
+      cached.usedAt = Date.now();
+      return cached.value;
+    }
     const apiKey = this.getApiKey();
 
     if (clean && apiKey) {
@@ -162,7 +170,7 @@ export class EmbeddingService {
         try {
           const vector = await this.embedWithGemini(clean, role, model, apiKey);
           if (vector.length > 0) {
-            return { vector, model, usedFallback: false };
+            return this.remember(cacheKey, { vector, model, usedFallback: false });
           }
         } catch (err: any) {
           this.log(`[Embeddings] ${model} failed: ${err?.message}`);
@@ -170,11 +178,20 @@ export class EmbeddingService {
       }
     }
 
-    return {
+    return this.remember(cacheKey, {
       vector: localEmbedding(clean),
       model: LOCAL_EMBEDDING_MODEL,
       usedFallback: true,
-    };
+    });
+  }
+
+  private remember(key: string, value: EmbeddingVector): EmbeddingVector {
+    if (this.queryCache.size >= this.cacheLimit) {
+      const oldest = [...this.queryCache.entries()].sort((a, b) => a[1].usedAt - b[1].usedAt)[0];
+      if (oldest) this.queryCache.delete(oldest[0]);
+    }
+    this.queryCache.set(key, { value, usedAt: Date.now() });
+    return value;
   }
 
   private async embedWithGemini(
