@@ -306,6 +306,10 @@ export function registerIpcHandlers(getMainWindow: () => BrowserWindow | null): 
     return await neuralVoiceService.synthesize(request || { text: '' });
   });
 
+  ipcMain.handle(IPC_CHANNELS.ELEVENLABS_USAGE, async () => {
+    return await neuralVoiceService.getUsage(true);
+  });
+
   ipcMain.on(IPC_CHANNELS.TTS_CANCEL, () => {
     neuralVoiceService.cancelAll();
   });

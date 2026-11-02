@@ -8,6 +8,7 @@ import {
   SpeechSynthesisRequest,
   ToolConfirmationPayload,
   ResponseStreamEvent,
+  ElevenLabsUsage,
 } from '../shared/types';
 import { IPC_CHANNELS } from '../main/security';
 
@@ -98,6 +99,8 @@ const apiBridge: FridayApiBridge = {
   // Neural speech output
   synthesizeSpeech: (request: SpeechSynthesisRequest) =>
     ipcRenderer.invoke(IPC_CHANNELS.TTS_SYNTHESIZE, request),
+  getElevenLabsUsage: (): Promise<ElevenLabsUsage> =>
+    ipcRenderer.invoke(IPC_CHANNELS.ELEVENLABS_USAGE),
   cancelSpeech: () => ipcRenderer.send(IPC_CHANNELS.TTS_CANCEL),
 
   // Tasks

@@ -1,6 +1,8 @@
 import { MsEdgeTTS, OUTPUT_FORMAT } from 'msedge-tts';
+import WebSocket from 'ws';
 import { settingsStore } from '../storage/settingsStore';
 import { resolveVoiceId } from './voiceCatalog';
+import { ElevenLabsUsage } from '../../shared/types';
 
 export interface NeuralVoiceRequest {
   text: string;
@@ -12,13 +14,19 @@ export interface NeuralVoiceRequest {
   rate?: number; // playback multiplier, 0.7 - 1.3
   pitch?: number; // semitones, -3 .. +3
   volume?: number; // 0 - 1
+  elevenLabsVoiceId?: string;
+  elevenLabsModel?: 'eleven_flash_v2_5' | 'eleven_multilingual_v2';
+  elevenLabsStability?: number;
+  elevenLabsSimilarityBoost?: number;
+  elevenLabsStyle?: number;
+  elevenLabsSpeakerBoost?: boolean;
 }
 
 export interface NeuralVoiceResult {
   audioBase64: string;
   mimeType: 'audio/mpeg' | 'audio/wav';
   voice: string;
-  engine: 'edge' | 'gemini';
+  engine: 'elevenlabs' | 'edge' | 'gemini';
 }
 
 /** Female neural voice per supported locale. */
@@ -37,6 +45,7 @@ const GEMINI_VOICE = 'Kore'; // warm female voice
 const MAX_TEXT_LENGTH = 1500;
 const SYNTHESIS_TIMEOUT_MS = 15_000;
 const SOLUTION_TIMEOUT = 20_000;
+const ELEVENLABS_TIMEOUT = 20_000;
 
 /** Default voice for a language (kept for callers that only know the language). */
 export function voiceForLanguage(language?: string): string {
@@ -113,14 +122,17 @@ function collectStream(stream: NodeJS.ReadableStream, timeoutMs: number): Promis
 }
 
 /**
- * Neural TTS with a fallback chain: Edge neural voices (free, no key) followed by
- * Gemini TTS (existing key). Playback happens in the renderer.
+ * Neural TTS with a secure fallback chain: ElevenLabs Flash when configured,
+ * then Edge neural voices, Gemini TTS, and finally the renderer's system voice.
+ * Playback happens in the renderer; provider keys remain in Electron main.
  */
 export class NeuralVoiceService {
   private readonly cache = new Map<string, NeuralVoiceResult>();
   private readonly inFlight = new Map<string, Promise<NeuralVoiceResult>>();
   private readonly active = new Set<MsEdgeTTS>();
+  private readonly activeSockets = new Set<WebSocket>();
   private readonly cacheLimit = 40;
+  private usageCache: { value: ElevenLabsUsage; expiresAt: number } | null = null;
 
   public async synthesize(request: NeuralVoiceRequest): Promise<NeuralVoiceResult> {
     const text = (request.text || '').trim().slice(0, MAX_TEXT_LENGTH);
@@ -142,16 +154,30 @@ export class NeuralVoiceService {
     const pending = this.inFlight.get(cacheKey);
     if (pending) return pending;
 
-    const preferred = settingsStore.getSettings().ttsEngine || 'auto';
-    const order: Array<'edge' | 'gemini'> =
-      preferred === 'gemini' ? ['gemini', 'edge'] : preferred === 'system' ? [] : ['edge', 'gemini'];
+    const settings = settingsStore.getSettings();
+    const preferred = settings.ttsEngine || 'auto';
+    const elevenConfigured = Boolean(settingsStore.getElevenLabsApiKey() && (request.elevenLabsVoiceId || settings.elevenLabsVoiceId));
+    const order: Array<'elevenlabs' | 'edge' | 'gemini'> =
+      preferred === 'elevenlabs'
+        ? ['elevenlabs', 'edge', 'gemini']
+        : preferred === 'gemini'
+        ? ['gemini', 'edge']
+        : preferred === 'edge'
+        ? ['edge', 'gemini']
+        : preferred === 'system'
+        ? []
+        : elevenConfigured
+        ? ['elevenlabs', 'edge', 'gemini']
+        : ['edge', 'gemini'];
 
     const synthesis = (async () => {
       let lastError: Error | undefined;
       for (const engine of order) {
         try {
           const result =
-            engine === 'edge'
+            engine === 'elevenlabs'
+              ? await this.synthesizeElevenLabs(text, request)
+              : engine === 'edge'
               ? await this.synthesizeEdge(text, voice, rate, pitch, volume)
               : await this.synthesizeGemini(text);
 
@@ -159,7 +185,9 @@ export class NeuralVoiceService {
           return result;
         } catch (err: any) {
           lastError = err instanceof Error ? err : new Error(String(err?.message || err));
-          console.warn(`[NeuralVoice] ${engine} failed: ${lastError.message}`);
+          const secret = settingsStore.getElevenLabsApiKey();
+          const safeMessage = secret ? lastError.message.replaceAll(secret, '[redacted]') : lastError.message;
+          console.warn(`[NeuralVoice] ${engine} failed: ${safeMessage}`);
         }
       }
 
@@ -171,6 +199,143 @@ export class NeuralVoiceService {
       return await synthesis;
     } finally {
       this.inFlight.delete(cacheKey);
+    }
+  }
+
+  /**
+   * Streams partial text through ElevenLabs' backend WebSocket. The key remains
+   * in the Electron main process; the renderer receives only generated audio.
+   */
+  private async synthesizeElevenLabs(
+    text: string,
+    request: NeuralVoiceRequest
+  ): Promise<NeuralVoiceResult> {
+    const apiKey = settingsStore.getElevenLabsApiKey();
+    const settings = settingsStore.getSettings();
+    const voiceId = request.elevenLabsVoiceId || settings.elevenLabsVoiceId;
+    if (!apiKey) throw new Error('ElevenLabs is not configured. Set ELEVENLABS_API_KEY in the backend environment.');
+    if (!voiceId) throw new Error('ElevenLabs voice ID is not configured.');
+
+    const model = request.elevenLabsModel || settings.elevenLabsModel || 'eleven_flash_v2_5';
+    const languageCode = request.language?.split('-')[0];
+    const query = new URLSearchParams({
+      model_id: model,
+      output_format: 'mp3_22050_32',
+      auto_mode: 'true',
+      inactivity_timeout: '20',
+    });
+    if (languageCode) query.set('language_code', languageCode);
+
+    const socket = new WebSocket(
+      `wss://api.elevenlabs.io/v1/text-to-speech/${encodeURIComponent(voiceId)}/stream-input?${query.toString()}`,
+      { headers: { 'xi-api-key': apiKey } }
+    );
+    this.activeSockets.add(socket);
+
+    return new Promise((resolve, reject) => {
+      const chunks: Buffer[] = [];
+      let settled = false;
+      const timer = setTimeout(() => finish(new Error('ElevenLabs speech synthesis timed out.')), ELEVENLABS_TIMEOUT);
+
+      const finish = (error?: Error) => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timer);
+        this.activeSockets.delete(socket);
+        try {
+          if (socket.readyState === WebSocket.OPEN || socket.readyState === WebSocket.CONNECTING) {
+            socket.close();
+          }
+        } catch {
+          // already closed
+        }
+        if (error) reject(error);
+        else if (chunks.length === 0) reject(new Error('ElevenLabs returned no audio.'));
+        else resolve({
+          audioBase64: Buffer.concat(chunks).toString('base64'),
+          mimeType: 'audio/mpeg',
+          voice: voiceId,
+          engine: 'elevenlabs',
+        });
+      };
+
+      socket.on('open', () => {
+        const clamp = (value: number | undefined, fallback: number) =>
+          Math.min(1, Math.max(0, Number.isFinite(value) ? value! : fallback));
+
+        socket.send(JSON.stringify({
+          text: ' ',
+          voice_settings: {
+            stability: clamp(request.elevenLabsStability ?? settings.elevenLabsStability, 0.42),
+            similarity_boost: clamp(
+              request.elevenLabsSimilarityBoost ?? settings.elevenLabsSimilarityBoost,
+              0.78
+            ),
+            style: clamp(request.elevenLabsStyle ?? settings.elevenLabsStyle, 0.18),
+            use_speaker_boost: request.elevenLabsSpeakerBoost ?? settings.elevenLabsSpeakerBoost,
+            speed: Math.min(1.2, Math.max(0.7, request.rate || 1)),
+          },
+          generation_config: { chunk_length_schedule: [80, 120, 180, 240] },
+        }));
+        // The complete sentence arrives from Gemini's text stream; flush it now
+        // so ElevenLabs starts audio without waiting for another sentence.
+        socket.send(JSON.stringify({ text: `${text.trim()} `, flush: true }));
+        socket.send(JSON.stringify({ text: '' }));
+      });
+
+      socket.on('message', (raw: WebSocket.RawData) => {
+        try {
+          const payload = JSON.parse(raw.toString());
+          if (payload.audio) chunks.push(Buffer.from(payload.audio, 'base64'));
+          if (payload.error || payload.message?.toLowerCase?.().includes('quota')) {
+            const status = payload.code ? ` (${payload.code})` : '';
+            finish(new Error(`ElevenLabs request failed${status}: ${String(payload.message || payload.error)}`));
+          } else if (payload.isFinal === true) {
+            finish();
+          }
+        } catch {
+          finish(new Error('ElevenLabs returned an invalid audio message.'));
+        }
+      });
+
+      socket.on('error', (error: Error) => finish(new Error(`ElevenLabs connection failed: ${error.message}`)));
+      socket.on('close', () => {
+        if (!settled) finish(new Error('ElevenLabs connection closed before audio completed.'));
+      });
+    });
+  }
+
+  public async getUsage(force = false): Promise<ElevenLabsUsage> {
+    const apiKey = settingsStore.getElevenLabsApiKey();
+    if (!apiKey) return { configured: false, available: false };
+    if (!force && this.usageCache && this.usageCache.expiresAt > Date.now()) return this.usageCache.value;
+
+    try {
+      const response = await fetch('https://api.elevenlabs.io/v1/user/subscription', {
+        headers: { 'xi-api-key': apiKey },
+      });
+      if (!response.ok) {
+        const value = { configured: true, available: false, error: `ElevenLabs usage request failed (${response.status}).` };
+        this.usageCache = { value, expiresAt: Date.now() + 30_000 };
+        return value;
+      }
+      const body: any = await response.json();
+      const value: ElevenLabsUsage = {
+        configured: true,
+        available: true,
+        tier: body.tier,
+        status: body.status,
+        characterCount: Number(body.character_count) || 0,
+        characterLimit: Number(body.character_limit) || 0,
+        remainingCharacters: Math.max(0, (Number(body.character_limit) || 0) - (Number(body.character_count) || 0)),
+        resetAt: body.next_character_count_reset_unix ?? null,
+      };
+      this.usageCache = { value, expiresAt: Date.now() + 30_000 };
+      return value;
+    } catch {
+      const value = { configured: true, available: false, error: 'ElevenLabs usage is temporarily unavailable.' };
+      this.usageCache = { value, expiresAt: Date.now() + 15_000 };
+      return value;
     }
   }
 
@@ -289,6 +454,14 @@ export class NeuralVoiceService {
       }
     }
     this.active.clear();
+    for (const socket of this.activeSockets) {
+      try {
+        socket.close();
+      } catch {
+        // ignore
+      }
+    }
+    this.activeSockets.clear();
   }
 
   public getCacheSize(): number {

@@ -32,6 +32,7 @@ export const IPC_CHANNELS = {
   DASHBOARD_SET_OPEN: 'friday:dashboard-set-open',
   DASHBOARD_ARTIFACT: 'friday:dashboard-artifact',
   TTS_SYNTHESIZE: 'friday:tts-synthesize',
+  ELEVENLABS_USAGE: 'friday:elevenlabs-usage',
   TTS_CANCEL: 'friday:tts-cancel',
   TASKS_LIST: 'friday:tasks-list',
   TASKS_COMPLETE: 'friday:tasks-complete',

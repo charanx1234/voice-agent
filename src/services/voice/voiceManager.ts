@@ -9,7 +9,7 @@ export interface VoiceOption {
   isDefault: boolean;
 }
 
-export type SpeechEngine = 'auto' | 'edge' | 'gemini' | 'system';
+export type SpeechEngine = 'auto' | 'elevenlabs' | 'edge' | 'gemini' | 'system';
 
 export interface SpeakOptions {
   languageCode?: string;
@@ -22,6 +22,12 @@ export interface SpeakOptions {
   /** English accent fallback when no explicit voice is chosen. */
   accent?: string;
   engine?: SpeechEngine;
+  elevenLabsVoiceId?: string;
+  elevenLabsModel?: 'eleven_flash_v2_5' | 'eleven_multilingual_v2';
+  elevenLabsStability?: number;
+  elevenLabsSimilarityBoost?: number;
+  elevenLabsStyle?: number;
+  elevenLabsSpeakerBoost?: boolean;
   onStart?: () => void;
   onEnd?: () => void;
   onError?: (err: any) => void;
@@ -212,6 +218,12 @@ export class VoiceManager {
         volume: options.volume,
         voice: options.voice,
         accent: options.accent,
+        elevenLabsVoiceId: options.elevenLabsVoiceId,
+        elevenLabsModel: options.elevenLabsModel,
+        elevenLabsStability: options.elevenLabsStability,
+        elevenLabsSimilarityBoost: options.elevenLabsSimilarityBoost,
+        elevenLabsStyle: options.elevenLabsStyle,
+        elevenLabsSpeakerBoost: options.elevenLabsSpeakerBoost,
       });
 
     let pending = request(chunks[0]);

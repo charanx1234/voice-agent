@@ -15,7 +15,7 @@ import {
   Trash2,
   Moon,
 } from 'lucide-react';
-import { FridaySettings } from '@/shared/types';
+import { ElevenLabsUsage, FridaySettings } from '@/shared/types';
 import { SUPPORTED_LANGUAGES } from '@/services/voice/languages';
 import {
   ACCENTS,
@@ -63,6 +63,19 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   const [ttsEngine, setTtsEngine] = useState<FridaySettings['ttsEngine']>(
     settings.ttsEngine || 'auto'
   );
+  const [elevenLabsVoiceId, setElevenLabsVoiceId] = useState(settings.elevenLabsVoiceId || '');
+  const [elevenLabsModel, setElevenLabsModel] = useState<FridaySettings['elevenLabsModel']>(
+    settings.elevenLabsModel || 'eleven_flash_v2_5'
+  );
+  const [elevenLabsStability, setElevenLabsStability] = useState(settings.elevenLabsStability ?? 0.42);
+  const [elevenLabsSimilarityBoost, setElevenLabsSimilarityBoost] = useState(
+    settings.elevenLabsSimilarityBoost ?? 0.78
+  );
+  const [elevenLabsStyle, setElevenLabsStyle] = useState(settings.elevenLabsStyle ?? 0.18);
+  const [elevenLabsSpeakerBoost, setElevenLabsSpeakerBoost] = useState(
+    settings.elevenLabsSpeakerBoost !== false
+  );
+  const [elevenLabsUsage, setElevenLabsUsage] = useState<ElevenLabsUsage | null>(null);
   const [themeMode, setThemeMode] = useState<FridaySettings['themeMode']>(
     settings.themeMode || 'auto'
   );
@@ -92,6 +105,13 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
       setSpeechVolume(settings.speechVolume || 1.0);
       setPitch(settings.pitch ?? 0);
       setTtsEngine(settings.ttsEngine || 'auto');
+      setElevenLabsVoiceId(settings.elevenLabsVoiceId || '');
+      setElevenLabsModel(settings.elevenLabsModel || 'eleven_flash_v2_5');
+      setElevenLabsStability(settings.elevenLabsStability ?? 0.42);
+      setElevenLabsSimilarityBoost(settings.elevenLabsSimilarityBoost ?? 0.78);
+      setElevenLabsStyle(settings.elevenLabsStyle ?? 0.18);
+      setElevenLabsSpeakerBoost(settings.elevenLabsSpeakerBoost !== false);
+      setElevenLabsUsage(null);
       setThemeMode(settings.themeMode || 'auto');
       setPersonalityMode(settings.personalityMode || 'moderate');
       setHandsFreeEnabled(settings.handsFreeEnabled !== false);
@@ -99,6 +119,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
       setApprovedFolders(settings.approvedFolders || []);
       setConfirmations(settings.requireToolConfirmations);
       setTestResult(null);
+      void window.fridayAPI?.getElevenLabsUsage().then(setElevenLabsUsage);
     }
   }, [isOpen, settings]);
 
@@ -115,6 +136,12 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
       speechVolume,
       pitch,
       ttsEngine,
+      elevenLabsVoiceId,
+      elevenLabsModel,
+      elevenLabsStability,
+      elevenLabsSimilarityBoost,
+      elevenLabsStyle,
+      elevenLabsSpeakerBoost,
       themeMode,
       personalityMode,
       handsFreeEnabled,
@@ -773,7 +800,10 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
               }}
             >
               <option value="auto" style={{ background: 'var(--surface)' }}>
-                Automatic — neural (Edge), then Gemini, then system
+                Automatic — ElevenLabs, Edge, Gemini, then system
+              </option>
+              <option value="elevenlabs" style={{ background: 'var(--surface)' }}>
+                ElevenLabs Flash (low-latency, expressive)
               </option>
               <option value="edge" style={{ background: 'var(--surface)' }}>
                 Edge neural voices (free)
@@ -785,6 +815,74 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                 System voice (offline)
               </option>
             </select>
+          </div>
+
+          {/* Section: ElevenLabs */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+            <label style={{ fontSize: '0.78rem', fontWeight: 600, color: 'var(--muted)' }}>
+              ELEVENLABS VOICE
+            </label>
+            <span style={{ fontSize: '0.7rem', color: 'var(--muted-dim)' }}>
+              The API key stays in the backend environment as <code>ELEVENLABS_API_KEY</code>. It is never stored in FRIDAY settings or sent to the renderer.
+            </span>
+            <input
+              value={elevenLabsVoiceId}
+              onChange={(event) => setElevenLabsVoiceId(event.target.value)}
+              placeholder="ElevenLabs voice ID"
+              style={{
+                background: 'color-mix(in srgb, var(--text) 5%, transparent)',
+                border: '1px solid color-mix(in srgb, var(--text) 10%, transparent)',
+                borderRadius: '9px',
+                padding: '8px 10px',
+                color: 'var(--text)',
+                fontSize: '0.78rem',
+                outline: 'none',
+              }}
+            />
+            <select
+              value={elevenLabsModel}
+              onChange={(event) => setElevenLabsModel(event.target.value as FridaySettings['elevenLabsModel'])}
+              style={{
+                background: 'color-mix(in srgb, var(--text) 5%, transparent)',
+                border: '1px solid color-mix(in srgb, var(--text) 10%, transparent)',
+                borderRadius: '9px',
+                padding: '7px 10px',
+                color: 'var(--text)',
+                fontSize: '0.78rem',
+                outline: 'none',
+              }}
+            >
+              <option value="eleven_flash_v2_5" style={{ background: 'var(--surface)' }}>Flash v2.5 — fastest</option>
+              <option value="eleven_multilingual_v2" style={{ background: 'var(--surface)' }}>Multilingual v2 — richer long-form delivery</option>
+            </select>
+            <label style={{ fontSize: '0.72rem', color: 'var(--muted)' }}>
+              Stability {elevenLabsStability.toFixed(2)}
+              <input type="range" min="0" max="1" step="0.01" value={elevenLabsStability} onChange={(event) => setElevenLabsStability(Number(event.target.value))} style={{ width: '100%', accentColor: 'var(--accent)' }} />
+            </label>
+            <label style={{ fontSize: '0.72rem', color: 'var(--muted)' }}>
+              Similarity {elevenLabsSimilarityBoost.toFixed(2)}
+              <input type="range" min="0" max="1" step="0.01" value={elevenLabsSimilarityBoost} onChange={(event) => setElevenLabsSimilarityBoost(Number(event.target.value))} style={{ width: '100%', accentColor: 'var(--accent)' }} />
+            </label>
+            <label style={{ fontSize: '0.72rem', color: 'var(--muted)' }}>
+              Expressiveness {elevenLabsStyle.toFixed(2)}
+              <input type="range" min="0" max="1" step="0.01" value={elevenLabsStyle} onChange={(event) => setElevenLabsStyle(Number(event.target.value))} style={{ width: '100%', accentColor: 'var(--accent)' }} />
+            </label>
+            <label style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.72rem', color: 'var(--muted)' }}>
+              <input type="checkbox" checked={elevenLabsSpeakerBoost} onChange={(event) => setElevenLabsSpeakerBoost(event.target.checked)} />
+              Speaker boost
+            </label>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px', fontSize: '0.7rem', color: 'var(--muted-dim)' }}>
+              <span>
+                {elevenLabsUsage?.available
+                  ? `${elevenLabsUsage.remainingCharacters?.toLocaleString() || 0} characters remaining`
+                  : settings.elevenLabsConfigured
+                  ? elevenLabsUsage?.error || 'Usage unavailable'
+                  : 'Backend key not configured'}
+              </span>
+              <button type="button" onClick={() => void window.fridayAPI?.getElevenLabsUsage().then(setElevenLabsUsage)} style={{ background: 'none', border: 'none', color: 'var(--accent)', cursor: 'pointer', fontSize: '0.7rem' }}>
+                Refresh usage
+              </button>
+            </div>
           </div>
 
           {/* Section: Approved Project Folders */}

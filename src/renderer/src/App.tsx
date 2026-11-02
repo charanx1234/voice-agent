@@ -38,6 +38,13 @@ export const App: React.FC = () => {
     voiceId: 'default',
     voiceAccent: 'en-IN',
     ttsVoice: 'en-IN-NeerjaExpressiveNeural',
+    elevenLabsVoiceId: '',
+    elevenLabsModel: 'eleven_flash_v2_5',
+    elevenLabsStability: 0.42,
+    elevenLabsSimilarityBoost: 0.78,
+    elevenLabsStyle: 0.18,
+    elevenLabsSpeakerBoost: true,
+    elevenLabsConfigured: false,
     ttsProvider: 'auto',
     themeMode: 'auto',
     approvedFolders: [],
@@ -305,6 +312,12 @@ export const App: React.FC = () => {
         voice: settings.ttsVoice,
         accent: settings.voiceAccent,
         engine: settings.ttsEngine,
+        elevenLabsVoiceId: settings.elevenLabsVoiceId,
+        elevenLabsModel: settings.elevenLabsModel,
+        elevenLabsStability: settings.elevenLabsStability,
+        elevenLabsSimilarityBoost: settings.elevenLabsSimilarityBoost,
+        elevenLabsStyle: settings.elevenLabsStyle,
+        elevenLabsSpeakerBoost: settings.elevenLabsSpeakerBoost,
       };
 
       try {
@@ -381,6 +394,12 @@ export const App: React.FC = () => {
           voice: effectiveSettings.ttsVoice,
           accent: effectiveSettings.voiceAccent,
           engine: effectiveSettings.ttsEngine,
+          elevenLabsVoiceId: effectiveSettings.elevenLabsVoiceId,
+          elevenLabsModel: effectiveSettings.elevenLabsModel,
+          elevenLabsStability: effectiveSettings.elevenLabsStability,
+          elevenLabsSimilarityBoost: effectiveSettings.elevenLabsSimilarityBoost,
+          elevenLabsStyle: effectiveSettings.elevenLabsStyle,
+          elevenLabsSpeakerBoost: effectiveSettings.elevenLabsSpeakerBoost,
         };
         streamSpeechOptionsRef.current = speechOptions;
 
@@ -558,6 +577,12 @@ export const App: React.FC = () => {
           voice: settings.ttsVoice,
           accent: settings.voiceAccent,
           engine: settings.ttsEngine,
+          elevenLabsVoiceId: settings.elevenLabsVoiceId,
+          elevenLabsModel: settings.elevenLabsModel,
+          elevenLabsStability: settings.elevenLabsStability,
+          elevenLabsSimilarityBoost: settings.elevenLabsSimilarityBoost,
+          elevenLabsStyle: settings.elevenLabsStyle,
+          elevenLabsSpeakerBoost: settings.elevenLabsSpeakerBoost,
         });
       }
     },
@@ -852,6 +877,12 @@ export const App: React.FC = () => {
             voice: settings.ttsVoice,
             accent: settings.voiceAccent,
             engine: settings.ttsEngine,
+            elevenLabsVoiceId: settings.elevenLabsVoiceId,
+            elevenLabsModel: settings.elevenLabsModel,
+            elevenLabsStability: settings.elevenLabsStability,
+            elevenLabsSimilarityBoost: settings.elevenLabsSimilarityBoost,
+            elevenLabsStyle: settings.elevenLabsStyle,
+            elevenLabsSpeakerBoost: settings.elevenLabsSpeakerBoost,
           })
         }
         onSelectApprovedFolder={() => window.fridayAPI.selectApprovedFolder()}

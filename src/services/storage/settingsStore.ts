@@ -5,8 +5,14 @@ import dotenv from 'dotenv';
 import { FridaySettings } from '../../shared/types';
 import { accentForLanguage, defaultVoiceForAccent } from '../voice/voiceCatalog';
 
-// Load .env if present in project root
+// Load backend-only environment files. The packaged app also accepts a private
+// .env beside its user data, while the renderer never receives these values.
 dotenv.config();
+try {
+  dotenv.config({ path: path.join(app.getPath('userData'), '.env'), override: true });
+} catch {
+  // Electron may not have finished initialising in tests.
+}
 
 const DEFAULT_SETTINGS: FridaySettings = {
   apiKey: process.env.GEMINI_API_KEY || '',
@@ -19,6 +25,15 @@ const DEFAULT_SETTINGS: FridaySettings = {
   voiceId: 'default',
   voiceAccent: 'en-IN',
   ttsVoice: 'en-IN-NeerjaExpressiveNeural',
+  elevenLabsVoiceId: process.env.ELEVENLABS_VOICE_ID || '',
+  elevenLabsModel: process.env.ELEVENLABS_MODEL === 'eleven_multilingual_v2'
+    ? 'eleven_multilingual_v2'
+    : 'eleven_flash_v2_5',
+  elevenLabsStability: 0.42,
+  elevenLabsSimilarityBoost: 0.78,
+  elevenLabsStyle: 0.18,
+  elevenLabsSpeakerBoost: true,
+  elevenLabsConfigured: Boolean(process.env.ELEVENLABS_API_KEY),
   ttsProvider: 'auto',
   themeMode: 'auto',
   approvedFolders: [],
@@ -108,6 +123,16 @@ export class SettingsStore {
             ? parsed.personalityMode
             : DEFAULT_SETTINGS.personalityMode;
 
+        const elevenLabsModel: FridaySettings['elevenLabsModel'] =
+          parsed.elevenLabsModel === 'eleven_multilingual_v2'
+            ? 'eleven_multilingual_v2'
+            : 'eleven_flash_v2_5';
+
+        const bounded = (value: unknown, fallback: number) => {
+          const parsedValue = Number(value);
+          return Number.isFinite(parsedValue) ? Math.min(1, Math.max(0, parsedValue)) : fallback;
+        };
+
         const silenceTimeout = Number(parsed.handsFreeSilenceTimeoutMs);
         const handsFreeSilenceTimeoutMs = Number.isFinite(silenceTimeout)
           ? Math.min(120_000, Math.max(5_000, Math.round(silenceTimeout)))
@@ -121,6 +146,19 @@ export class SettingsStore {
           ttsVoice,
           modelName: model,
           personalityMode,
+          elevenLabsVoiceId:
+            typeof parsed.elevenLabsVoiceId === 'string'
+              ? parsed.elevenLabsVoiceId.trim()
+              : DEFAULT_SETTINGS.elevenLabsVoiceId,
+          elevenLabsModel,
+          elevenLabsStability: bounded(parsed.elevenLabsStability, DEFAULT_SETTINGS.elevenLabsStability),
+          elevenLabsSimilarityBoost: bounded(
+            parsed.elevenLabsSimilarityBoost,
+            DEFAULT_SETTINGS.elevenLabsSimilarityBoost
+          ),
+          elevenLabsStyle: bounded(parsed.elevenLabsStyle, DEFAULT_SETTINGS.elevenLabsStyle),
+          elevenLabsSpeakerBoost: parsed.elevenLabsSpeakerBoost !== false,
+          elevenLabsConfigured: Boolean(process.env.ELEVENLABS_API_KEY),
           handsFreeEnabled: parsed.handsFreeEnabled !== false,
           handsFreeSilenceTimeoutMs,
           // If env has key and stored doesn't, fallback to env
@@ -159,6 +197,11 @@ export class SettingsStore {
 
   public getRawApiKey(): string {
     return this.settings.apiKey || process.env.GEMINI_API_KEY || '';
+  }
+
+  /** ElevenLabs secrets are backend environment-only and never persisted or returned. */
+  public getElevenLabsApiKey(): string {
+    return process.env.ELEVENLABS_API_KEY || '';
   }
 
   public saveSettings(updates: Partial<FridaySettings>): void {

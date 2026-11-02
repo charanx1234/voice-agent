@@ -354,7 +354,13 @@ export function useVoiceAssistant() {
         voiceId?: string;
         voice?: string;
         accent?: string;
-        engine?: 'auto' | 'edge' | 'gemini' | 'system';
+        engine?: 'auto' | 'elevenlabs' | 'edge' | 'gemini' | 'system';
+        elevenLabsVoiceId?: string;
+        elevenLabsModel?: 'eleven_flash_v2_5' | 'eleven_multilingual_v2';
+        elevenLabsStability?: number;
+        elevenLabsSimilarityBoost?: number;
+        elevenLabsStyle?: number;
+        elevenLabsSpeakerBoost?: boolean;
         audioBase64?: string;
       } = {}
     ) => {
@@ -401,7 +407,13 @@ export function useVoiceAssistant() {
         voiceId?: string;
         voice?: string;
         accent?: string;
-        engine?: 'auto' | 'edge' | 'gemini' | 'system';
+        engine?: 'auto' | 'elevenlabs' | 'edge' | 'gemini' | 'system';
+        elevenLabsVoiceId?: string;
+        elevenLabsModel?: 'eleven_flash_v2_5' | 'eleven_multilingual_v2';
+        elevenLabsStability?: number;
+        elevenLabsSimilarityBoost?: number;
+        elevenLabsStyle?: number;
+        elevenLabsSpeakerBoost?: boolean;
       } = {}
     ) => {
       if (isMuted) return;

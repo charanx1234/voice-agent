@@ -60,13 +60,22 @@ export interface FridaySettings {
   speechVolume: number; // 0 to 1 (default 1.0)
   /** Pitch offset in semitones (-3 to +3). */
   pitch: number;
-  /** Preferred speech engine; 'auto' tries Edge, then Gemini, then the system voice. */
-  ttsEngine: 'auto' | 'edge' | 'gemini' | 'system';
+  /** Preferred speech engine; auto uses ElevenLabs when configured, then existing fallbacks. */
+  ttsEngine: 'auto' | 'elevenlabs' | 'edge' | 'gemini' | 'system';
   voiceId: string;
   /** Accent used for English speech: American, British or Indian. */
   voiceAccent: 'en-US' | 'en-GB' | 'en-IN';
   /** Chosen neural voice id from the Edge catalogue. */
   ttsVoice: string;
+  /** ElevenLabs voice/model settings; the API key is never stored here. */
+  elevenLabsVoiceId: string;
+  elevenLabsModel: 'eleven_flash_v2_5' | 'eleven_multilingual_v2';
+  elevenLabsStability: number;
+  elevenLabsSimilarityBoost: number;
+  elevenLabsStyle: number;
+  elevenLabsSpeakerBoost: boolean;
+  /** Safe status only; the secret remains backend-only in ELEVENLABS_API_KEY. */
+  elevenLabsConfigured: boolean;
   ttsProvider: 'webspeech' | 'cloud' | 'auto';
   /** 'auto' follows the Windows theme; 'light' and 'dark' are manual overrides. */
   themeMode: 'auto' | 'light' | 'dark';
@@ -188,6 +197,12 @@ export interface SpeechSynthesisRequest {
   rate?: number;
   pitch?: number;
   volume?: number;
+  elevenLabsVoiceId?: string;
+  elevenLabsModel?: 'eleven_flash_v2_5' | 'eleven_multilingual_v2';
+  elevenLabsStability?: number;
+  elevenLabsSimilarityBoost?: number;
+  elevenLabsStyle?: number;
+  elevenLabsSpeakerBoost?: boolean;
 }
 
 export interface SpeechSynthesisResult {
@@ -195,6 +210,18 @@ export interface SpeechSynthesisResult {
   mimeType: string;
   voice: string;
   engine: 'edge' | 'gemini';
+}
+
+export interface ElevenLabsUsage {
+  configured: boolean;
+  available: boolean;
+  tier?: string;
+  status?: string;
+  characterCount?: number;
+  characterLimit?: number;
+  remainingCharacters?: number;
+  resetAt?: number | null;
+  error?: string;
 }
 
 export interface SearchMatch {
@@ -297,6 +324,7 @@ export interface FridayApiBridge {
 
   // Neural speech output
   synthesizeSpeech: (request: SpeechSynthesisRequest) => Promise<SpeechSynthesisResult>;
+  getElevenLabsUsage: () => Promise<ElevenLabsUsage>;
   cancelSpeech: () => void;
 
   // Tasks
