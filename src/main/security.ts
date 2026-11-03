@@ -45,6 +45,7 @@ export const IPC_CHANNELS = {
   LOGS_READ: 'friday:logs-read',
   MINIMIZE_WINDOW: 'friday:minimize-window',
   CLOSE_WINDOW: 'friday:close-window',
+  CLIPBOARD_WRITE: 'friday:clipboard-write',
 } as const;
 
 export function sanitizePath(inputPath: string): string {

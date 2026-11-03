@@ -68,9 +68,9 @@ describe('Speech text preparation', () => {
     expect(cleaned).toContain('code block');
   });
 
-  it('splits speech into sentence chunks', () => {
+  it('keeps nearby sentences together for connected provider prosody', () => {
     const chunks = chunkForSpeech('First sentence. Second sentence! Third one?');
-    expect(chunks).toEqual(['First sentence.', 'Second sentence!', 'Third one?']);
+    expect(chunks).toEqual(['First sentence. Second sentence! Third one?']);
   });
 
   it('merges short sentences up to the size limit', () => {
@@ -92,6 +92,26 @@ describe('Speech text preparation', () => {
   it('returns nothing for empty text', () => {
     expect(chunkForSpeech('')).toEqual([]);
     expect(chunkForSpeech('   ')).toEqual([]);
+  });
+
+  it('removes emoji and decorative markdown without changing the dashboard copy', () => {
+    const cleaned = cleanForSpeech(
+      "That's amazing! 🎉 Your project is ready. 🚀\n\n---\n**Next:** [open the report](https://example.com)"
+    );
+
+    expect(cleaned).toBe("That's amazing! Your project is ready. Next: open the report");
+    expect(cleaned).not.toMatch(/[🎉🚀]/u);
+    expect(cleaned).not.toContain('**');
+    expect(cleaned).not.toContain('---');
+    expect(cleaned).not.toContain('https://');
+  });
+
+  it('keeps punctuation readable without adding artificial pause markers', () => {
+    const cleaned = cleanForSpeech('One, two, three... Really?! Yes.');
+
+    expect(cleaned).toBe('One, two, three. Really? Yes.');
+    expect(cleaned).not.toContain('...');
+    expect(cleaned).not.toContain('?!');
   });
 });
 

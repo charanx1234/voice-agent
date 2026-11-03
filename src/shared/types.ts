@@ -5,8 +5,25 @@ export type RobotState =
   | 'listening'
   | 'thinking'
   | 'speaking'
+  | 'laughing'
+  | 'sleeping'
   | 'interrupted'
   | 'error';
+
+/** Visual expression layered over FRIDAY's official face artwork. */
+export type FaceExpression =
+  | 'neutral'
+  | 'happy'
+  | 'laughing'
+  | 'sad'
+  | 'angry'
+  | 'surprised'
+  | 'confused'
+  | 'curious'
+  | 'sleepy'
+  | 'sarcastic'
+  | 'excited'
+  | 'thinking';
 
 export type PersonalityMode = 'simple' | 'moderate' | 'roast';
 
@@ -209,7 +226,7 @@ export interface SpeechSynthesisResult {
   audioBase64: string;
   mimeType: string;
   voice: string;
-  engine: 'edge' | 'gemini';
+  engine: 'elevenlabs' | 'edge' | 'gemini';
 }
 
 export interface ElevenLabsUsage {
@@ -258,6 +275,7 @@ export interface FridayApiBridge {
   saveSettings: (settings: Partial<FridaySettings>) => Promise<{ success: boolean; error?: string }>;
   testGeminiConnection: (keyOverride?: string) => Promise<{ success: boolean; message: string; model?: string }>;
   getAudioDevices: () => Promise<MediaDeviceInfo[]>;
+  copyText: (text: string) => Promise<{ success: boolean; error?: string }>;
   
   // AI Conversation
   sendMessage: (payload: {

@@ -1,4 +1,4 @@
-import { ipcMain, dialog, shell, BrowserWindow } from 'electron';
+import { ipcMain, dialog, shell, BrowserWindow, clipboard } from 'electron';
 import fs from 'fs';
 import path from 'path';
 import { IPC_CHANNELS } from './security';
@@ -68,6 +68,20 @@ export function registerIpcHandlers(getMainWindow: () => BrowserWindow | null): 
 
   ipcMain.handle(IPC_CHANNELS.TEST_CONNECTION, async (_event, keyOverride) => {
     return await geminiService.testConnection(keyOverride);
+  });
+
+  // Use Electron's native clipboard in the packaged app. The text is never
+  // logged or persisted; the renderer receives only a success/error result.
+  ipcMain.handle(IPC_CHANNELS.CLIPBOARD_WRITE, async (_event, text: unknown) => {
+    try {
+      if (typeof text !== 'string') {
+        return { success: false, error: 'Only text can be copied.' };
+      }
+      clipboard.writeText(text);
+      return { success: true };
+    } catch {
+      return { success: false, error: 'Clipboard access is unavailable.' };
+    }
   });
 
   // Chat / Voice message

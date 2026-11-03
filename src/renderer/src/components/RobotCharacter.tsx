@@ -1,13 +1,34 @@
-import React, { useEffect, useState } from 'react';
-import { ConversationMood, RobotState } from '@/shared/types';
+import React, { useEffect, useMemo, useState } from 'react';
+import { ConversationMood, FaceExpression, RobotState } from '@/shared/types';
 import '../styles/robot.css';
+
+const FACE_WIDTH = 1448;
+const FACE_HEIGHT = 1086;
+const MOUTH_CENTER = { x: 727, y: 666 };
 
 interface RobotCharacterProps {
   state: RobotState;
-  amplitude: number; // 0.0 to 1.0 driven by real audio playback/mic
+  amplitude: number;
   frequencies?: number[];
   onClick?: () => void;
   mood?: ConversationMood;
+  expression?: FaceExpression;
+}
+
+function fallbackExpression(state: RobotState, mood: ConversationMood): FaceExpression {
+  if (state === 'thinking') return 'thinking';
+  if (state === 'listening') return 'curious';
+  if (state === 'interrupted') return 'surprised';
+  if (state === 'error') return 'sad';
+  if (state === 'sleeping') return 'sleepy';
+  if (state === 'laughing') return 'laughing';
+  if (mood === 'enthusiastic') return 'excited';
+  if (mood === 'playful') return 'happy';
+  return 'neutral';
+}
+
+function clamp(value: number, min: number, max: number): number {
+  return Math.max(min, Math.min(max, value));
 }
 
 export const RobotCharacter: React.FC<RobotCharacterProps> = ({
@@ -16,233 +37,186 @@ export const RobotCharacter: React.FC<RobotCharacterProps> = ({
   frequencies = [0, 0, 0, 0, 0],
   onClick,
   mood = 'calm',
+  expression,
 }) => {
   const [isBlinking, setIsBlinking] = useState(false);
+  const [gazeOffset, setGazeOffset] = useState({ x: 0, y: 0 });
+  const activeExpression = expression || fallbackExpression(state, mood);
+  const isSpeaking = state === 'speaking' || state === 'laughing';
+  const level = isSpeaking ? clamp(amplitude, 0, 1) : 0;
 
-  // Natural spontaneous blinking when idle or speaking
+  // Realistic blinking is independent from speech and intentionally irregular.
+  // The face artwork remains untouched; only a soft face-colour lid is added.
   useEffect(() => {
-    if (state === 'error' || state === 'thinking') return;
+    let blinkTimer: ReturnType<typeof setTimeout> | undefined;
+    let closeTimer: ReturnType<typeof setTimeout> | undefined;
+    let secondBlinkTimer: ReturnType<typeof setTimeout> | undefined;
 
-    let timeoutId: NodeJS.Timeout;
-
-    const scheduleBlink = () => {
-      const nextBlinkMs = 2800 + Math.random() * 3500;
-      timeoutId = setTimeout(() => {
+    const schedule = () => {
+      blinkTimer = setTimeout(() => {
         setIsBlinking(true);
-        setTimeout(() => {
+        closeTimer = setTimeout(() => {
           setIsBlinking(false);
-          scheduleBlink();
-        }, 160);
-      }, nextBlinkMs);
+          if (Math.random() < 0.14) {
+            secondBlinkTimer = setTimeout(() => {
+              setIsBlinking(true);
+              closeTimer = setTimeout(() => setIsBlinking(false), 105);
+            }, 115);
+          }
+          schedule();
+        }, 115 + Math.random() * 55);
+      }, 2400 + Math.random() * 4300);
     };
 
-    scheduleBlink();
-    return () => clearTimeout(timeoutId);
-  }, [state]);
+    schedule();
+    return () => {
+      if (blinkTimer) clearTimeout(blinkTimer);
+      if (closeTimer) clearTimeout(closeTimer);
+      if (secondBlinkTimer) clearTimeout(secondBlinkTimer);
+    };
+  }, []);
 
-  // Compute mouth equalizer bar heights based on live amplitude
-  // Base height: 4px when quiet, up to 28px when speaking loudly
-  const mouthBars = [0, 1, 2, 3, 4].map((index) => {
-    if (state === 'speaking') {
-      const freqVal = frequencies[index] || amplitude;
-      const barHeight = Math.max(4, Math.min(26, freqVal * 28 + Math.random() * 4));
-      return barHeight;
-    }
-    if (state === 'listening') {
-      return 4 + Math.sin(Date.now() / 200 + index) * 2;
-    }
-    if (state === 'thinking') {
-      return 3 + Math.sin(Date.now() / 150 + index * 0.8) * 3;
-    }
-    return 3; // idle subtle bar
-  });
+  // Tiny, infrequent gaze shifts keep the highlights alive without moving or
+  // distorting the original eye artwork. Thinking naturally looks upward.
+  useEffect(() => {
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    let resetTimer: ReturnType<typeof setTimeout> | undefined;
+    const scheduleGaze = () => {
+      timer = setTimeout(() => {
+        setGazeOffset({ x: Math.round((Math.random() - 0.5) * 8), y: Math.round((Math.random() - 0.5) * 6) });
+        resetTimer = setTimeout(() => {
+          setGazeOffset({ x: 0, y: 0 });
+          scheduleGaze();
+        }, 520 + Math.random() * 360);
+      }, 1800 + Math.random() * 2800);
+    };
+    scheduleGaze();
+    return () => {
+      if (timer) clearTimeout(timer);
+      if (resetTimer) clearTimeout(resetTimer);
+    };
+  }, []);
 
-  // Eye scaling for expressions
-  let eyeScaleY = isBlinking ? 0.1 : 1.0;
-  let eyeScaleX = 1.0;
+  const mouth = useMemo(() => {
+    // The supplied image's black oval is the neutral mouth. It stretches in
+    // place; no lips or replacement facial feature is introduced.
+    const expressionOpen =
+      activeExpression === 'happy' || activeExpression === 'sarcastic'
+        ? 0.2
+        : activeExpression === 'surprised' || activeExpression === 'excited'
+          ? 0.72
+          : activeExpression === 'laughing'
+            ? 0.68
+            : 0;
+    const speechOpen = isSpeaking ? 0.12 + level * 0.88 : 0;
+    const openness = Math.max(expressionOpen, speechOpen);
+    const lowFrequency = frequencies[0] || level;
+    const highFrequency = frequencies[4] || level;
+    const rounded = lowFrequency >= highFrequency;
 
-  if (state === 'listening') {
-    eyeScaleY = isBlinking ? 0.1 : 1.15;
-    eyeScaleX = 1.1;
-  } else if (state === 'thinking') {
-    eyeScaleY = 0.85;
-    eyeScaleX = 0.95;
-  } else if (state === 'speaking') {
-    eyeScaleY = isBlinking ? 0.1 : 1.05;
-  } else if (state === 'interrupted') {
-    eyeScaleY = 1.25;
-    eyeScaleX = 1.2;
-  } else if (state === 'error') {
-    eyeScaleY = 0.7;
-    eyeScaleX = 0.9;
-  }
+    return {
+      rx: 37 + openness * (rounded ? 20 : 28),
+      ry: 26 + openness * (rounded ? 38 : 52),
+      // A slightly wider mouth for open vowels and a rounder one for lower
+      // energy sounds makes amplitude-driven speech less repetitive.
+      rotate: rounded ? 0 : clamp((highFrequency - lowFrequency) * 12, -4, 4),
+    };
+  }, [activeExpression, frequencies, isSpeaking, level]);
+
+  const eyebrowPaths = useMemo(() => {
+    switch (activeExpression) {
+      case 'sad':
+        return { left: 'M 448 398 Q 535 347 625 382', right: 'M 819 382 Q 909 347 1000 398' };
+      case 'angry':
+        return { left: 'M 448 392 Q 535 438 625 430', right: 'M 819 430 Q 909 438 1000 392' };
+      case 'confused':
+        return { left: 'M 448 375 Q 535 340 625 382', right: 'M 819 405 Q 910 430 1000 397' };
+      case 'sarcastic':
+        return { left: 'M 448 365 Q 535 325 625 365', right: 'M 819 410 Q 910 425 1000 410' };
+      case 'curious':
+      case 'excited':
+        return { left: 'M 448 365 Q 535 320 625 360', right: 'M 819 360 Q 909 320 1000 365' };
+      case 'thinking':
+        return { left: 'M 448 380 Q 535 342 625 372', right: 'M 819 372 Q 909 342 1000 380' };
+      case 'happy':
+      case 'laughing':
+        return { left: 'M 448 380 Q 535 350 625 380', right: 'M 819 380 Q 909 350 1000 380' };
+      default:
+        return null;
+    }
+  }, [activeExpression]);
 
   return (
     <div
-      className={`robot-stage state-${state} mood-${mood}`}
+      className={`robot-stage state-${state} expression-${activeExpression}`}
       onClick={onClick}
       title="Click to interact with FRIDAY"
       style={{ cursor: 'pointer' }}
     >
-      <div className="robot-head-container">
+      <div className="friday-face-container">
+        <img
+          className="friday-face-image"
+          src="./assets/friday-face.png"
+          alt="FRIDAY"
+          draggable={false}
+        />
         <svg
-          viewBox="0 0 240 240"
-          width="200"
-          height="200"
-          xmlns="http://www.w3.org/2000/svg"
+          className="friday-face-overlay"
+          viewBox={`0 0 ${FACE_WIDTH} ${FACE_HEIGHT}`}
+          preserveAspectRatio="none"
+          aria-hidden="true"
         >
           <defs>
-            {/* Robot Head Metallic Gradient */}
-            <linearGradient id="chassisGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-              <stop offset="0%" stopColor="var(--surface)" />
-              <stop offset="50%" stopColor="var(--surface)" />
-              <stop offset="100%" stopColor="var(--bg)" />
+            <linearGradient id="faceShade" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0" stopColor="#ffffff" stopOpacity="0.98" />
+              <stop offset="1" stopColor="#eeeeee" stopOpacity="0.96" />
             </linearGradient>
-
-            {/* Screen Glass Gradient */}
-            <linearGradient id="screenGrad" x1="0%" y1="0%" x2="0%" y2="100%">
-              <stop offset="0%" stopColor="var(--bg)" />
-              <stop offset="100%" stopColor="var(--bg)" />
-            </linearGradient>
-
-            {/* Cyan Eye Glow Filter */}
-            <filter id="cyanGlow" x="-20%" y="-20%" width="140%" height="140%">
-              <feGaussianBlur stdDeviation="3.5" result="blur" />
-              <feMerge>
-                <feMergeNode in="blur" />
-                <feMergeNode in="SourceGraphic" />
-              </feMerge>
-            </filter>
           </defs>
 
-          {/* Left Ear Antenna */}
-          <g>
-            <rect x="22" y="98" width="12" height="28" rx="5" className="robot-antenna" />
-            <circle cx="28" cy="98" r="6" className="robot-antenna" />
-            <circle cx="28" cy="98" r="6" fill="none" className="antenna-ring" />
-          </g>
-
-          {/* Right Ear Antenna */}
-          <g>
-            <rect x="206" y="98" width="12" height="28" rx="5" className="robot-antenna" />
-            <circle cx="212" cy="98" r="6" className="robot-antenna" />
-            <circle cx="212" cy="98" r="6" fill="none" className="antenna-ring" />
-          </g>
-
-          {/* Top Head Antenna */}
-          <g>
-            <line
-              x1="120"
-              y1="40"
-              x2="120"
-              y2="18"
-              stroke="var(--elevated)"
-              strokeWidth="4"
-              strokeLinecap="round"
-            />
-            <circle
-              cx="120"
-              cy="16"
-              r="7"
-              fill={state === 'error' ? 'var(--danger)' : state === 'listening' ? 'var(--accent)' : 'var(--accent)'}
-              filter="url(#cyanGlow)"
-            />
-          </g>
-
-          {/* Main Chassis Head Shell */}
-          <rect
-            x="38"
-            y="42"
-            width="164"
-            height="146"
-            rx="38"
-            fill="url(#chassisGrad)"
-            className="robot-chassis"
-          />
-
-          {/* Inner Visor / Glass Screen */}
-          <rect
-            x="52"
-            y="60"
-            width="136"
-            height="110"
-            rx="24"
-            fill="url(#screenGrad)"
-            className="robot-screen"
-          />
-
-          {/* Screen subtle reflective highlight */}
-          <path
-            d="M 64 68 Q 120 74 176 68"
-            fill="none"
-            stroke="color-mix(in srgb, var(--text) 8%, transparent)"
-            strokeWidth="2.5"
-            strokeLinecap="round"
-          />
-
-          {/* Eyes Group with Dynamic Expressions */}
-          <g transform="translate(120, 105)">
-            {/* Left Eye */}
-            <g transform={`translate(-36, 0) scale(${eyeScaleX}, ${eyeScaleY})`}>
-              <ellipse
-                cx="0"
-                cy="0"
-                rx="14"
-                ry="18"
-                className="robot-eye"
-              />
-              {/* Pupil / inner specular gleam */}
-              {!isBlinking && (
-                <circle cx="-3" cy="-4" r="4" fill="var(--text)" opacity="0.9" />
-              )}
-            </g>
-
-            {/* Right Eye */}
-            <g transform={`translate(36, 0) scale(${eyeScaleX}, ${eyeScaleY})`}>
-              <ellipse
-                cx="0"
-                cy="0"
-                rx="14"
-                ry="18"
-                className="robot-eye"
-              />
-              {/* Pupil / inner specular gleam */}
-              {!isBlinking && (
-                <circle cx="-3" cy="-4" r="4" fill="var(--text)" opacity="0.9" />
-              )}
-            </g>
-          </g>
-
-          {/* Expressive Mouth LED Equalizer Bars */}
-          <g transform="translate(120, 145)">
-            {mouthBars.map((height, i) => {
-              const xPos = (i - 2) * 11 - 3;
-              const yPos = -height / 2;
-              return (
-                <rect
-                  key={i}
-                  x={xPos}
-                  y={yPos}
-                  width="6"
-                  height={height}
-                  rx="3"
-                  className="mouth-bar"
-                />
-              );
-            })}
-          </g>
-
-          {/* Cute subtle blush accents when idle/speaking */}
-          {(state === 'idle' || state === 'speaking') && (
-            <g opacity="0.25">
-              <circle cx="72" cy="128" r="6" fill="var(--accent)" filter="url(#cyanGlow)" />
-              <circle cx="168" cy="128" r="6" fill="var(--accent)" filter="url(#cyanGlow)" />
+          {isBlinking && (
+            <g className="face-blink-lids">
+              <ellipse cx="540" cy="516" rx="94" ry="97" fill="url(#faceShade)" />
+              <ellipse cx="915" cy="516" rx="94" ry="97" fill="url(#faceShade)" />
             </g>
           )}
+
+          <g className="face-expression-lids">
+            <path className="face-lid face-lid-happy" d="M 443 526 Q 540 585 637 526 L 637 625 L 443 625 Z" fill="url(#faceShade)" />
+            <path className="face-lid face-lid-happy" d="M 818 526 Q 915 585 1012 526 L 1012 625 L 818 625 Z" fill="url(#faceShade)" />
+            <path className="face-lid face-lid-sleepy" d="M 443 468 Q 540 515 637 468 L 637 565 Q 540 520 443 565 Z" fill="url(#faceShade)" />
+            <path className="face-lid face-lid-sleepy" d="M 818 468 Q 915 515 1012 468 L 1012 565 Q 915 520 818 565 Z" fill="url(#faceShade)" />
+            <path className="face-lid face-lid-angry" d="M 438 418 L 640 476 L 640 410 L 438 370 Z" fill="url(#faceShade)" />
+            <path className="face-lid face-lid-angry" d="M 813 476 L 1015 418 L 1015 370 L 813 410 Z" fill="url(#faceShade)" />
+          </g>
+
+          {eyebrowPaths && (
+            <g className="face-eyebrows" fill="none" stroke="#070707" strokeWidth="15" strokeLinecap="round">
+              <path d={eyebrowPaths.left} />
+              <path d={eyebrowPaths.right} />
+            </g>
+          )}
+
+          {(gazeOffset.x !== 0 || gazeOffset.y !== 0 || activeExpression === 'thinking' || activeExpression === 'curious') && (
+            <g className="face-gaze-highlights">
+              <ellipse cx="500" cy="465" rx="20" ry="19" fill="#050505" />
+              <ellipse cx="872" cy="466" rx="20" ry="19" fill="#050505" />
+              <g transform={`translate(${gazeOffset.x} ${gazeOffset.y + (activeExpression === 'thinking' ? -10 : activeExpression === 'curious' ? -4 : 0)})`}>
+                <ellipse cx="500" cy="465" rx="17" ry="16" fill="#ffffff" />
+                <ellipse cx="872" cy="466" rx="17" ry="16" fill="#ffffff" />
+              </g>
+            </g>
+          )}
+
+          <ellipse
+            className="face-mouth-opening"
+            cx={MOUTH_CENTER.x}
+            cy={MOUTH_CENTER.y}
+            rx={mouth.rx}
+            ry={mouth.ry}
+            transform={`rotate(${mouth.rotate} ${MOUTH_CENTER.x} ${MOUTH_CENTER.y})`}
+          />
         </svg>
       </div>
-
-      {/* Floating Floor Shadow */}
       <div className="robot-shadow" />
     </div>
   );

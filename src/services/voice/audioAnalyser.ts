@@ -4,6 +4,7 @@ export class AudioAnalyser {
   private audioCtx: AudioContext | null = null;
   private analyser: AnalyserNode | null = null;
   private dataArray: Uint8Array | null = null;
+  private timeDomainArray: Uint8Array | null = null;
   private sourceNode: MediaStreamAudioSourceNode | AudioNode | null = null;
   private animationFrameId: number | null = null;
   private onAmplitudeCallback?: (amplitude: number, frequencies: number[]) => void;
@@ -32,6 +33,7 @@ export class AudioAnalyser {
     this.analyser = ctx.createAnalyser();
     this.analyser.fftSize = 64; // Fast, lightweight frequency response
     this.dataArray = new Uint8Array(this.analyser.frequencyBinCount);
+    this.timeDomainArray = new Uint8Array(this.analyser.fftSize);
 
     this.sourceNode = ctx.createMediaStreamSource(stream);
     this.sourceNode.connect(this.analyser);
@@ -45,6 +47,7 @@ export class AudioAnalyser {
     this.analyser = ctx.createAnalyser();
     this.analyser.fftSize = 64;
     this.dataArray = new Uint8Array(this.analyser.frequencyBinCount);
+    this.timeDomainArray = new Uint8Array(this.analyser.fftSize);
 
     try {
       this.sourceNode = ctx.createMediaElementSource(audioEl);
@@ -58,12 +61,15 @@ export class AudioAnalyser {
   }
 
   /**
-   * For synthetic speech (SpeechSynthesisUtterance) where direct WebAudio node isn't exposed by browser,
-   * we generate realistic acoustic envelope pulses during speech playback to drive natural mouth movement.
+   * SpeechSynthesis does not expose its audio stream to Web Audio in Chromium.
+   * Use deterministic text timing as the fallback, with punctuation and
+   * whitespace creating real pauses instead of random mouth movement.
    */
-  public simulateSpeakingAnimation(isPlaying: () => boolean): void {
+  public simulateSpeakingAnimation(isPlaying: () => boolean, speechText = '', rate = 1): void {
     this.disconnect();
-    let tick = 0;
+    const characters = Array.from(speechText.trim() || '...');
+    const startedAt = typeof performance !== 'undefined' ? performance.now() : Date.now();
+    const safeRate = Math.max(0.7, Math.min(1.5, rate));
 
     const loop = () => {
       if (!isPlaying()) {
@@ -73,10 +79,14 @@ export class AudioAnalyser {
         return;
       }
 
-      tick += 0.25;
-      // Combine multiple sine waves for realistic conversational cadence and syllables
-      const base = Math.sin(tick) * 0.35 + Math.sin(tick * 2.3) * 0.25 + 0.4;
-      const amplitude = Math.max(0.1, Math.min(1.0, base));
+      const now = typeof performance !== 'undefined' ? performance.now() : Date.now();
+      const elapsedMs = now - startedAt;
+      const charIndex = Math.floor((elapsedMs * safeRate) / 72) % characters.length;
+      const character = characters[charIndex];
+      const isPause = /\s|[,.!?;:—–-]/.test(character);
+      const isOpenSound = /[aeiouyоуअआइईउऊएऐओऔ]/i.test(character);
+      const cadence = 0.62 + Math.sin(elapsedMs / 95 + charIndex * 1.31) * 0.2;
+      const amplitude = isPause ? 0 : Math.max(0.08, Math.min(1, (isOpenSound ? 0.9 : 0.62) * cadence));
 
       const frequencies = [
         amplitude * 0.7,
@@ -98,21 +108,26 @@ export class AudioAnalyser {
 
   private startLoop(): void {
     const loop = () => {
-      if (!this.analyser || !this.dataArray) return;
+      if (!this.analyser || !this.dataArray || !this.timeDomainArray) return;
 
       this.analyser.getByteFrequencyData(this.dataArray as any);
+      this.analyser.getByteTimeDomainData(this.timeDomainArray as any);
 
-      let sum = 0;
+      let rmsSum = 0;
       const sliceCount = 8;
       const freqSample: number[] = [];
 
       for (let i = 0; i < sliceCount; i++) {
         const val = this.dataArray[i] / 255;
         freqSample.push(val);
-        sum += val;
       }
 
-      const avgAmplitude = sum / sliceCount;
+      for (const sample of this.timeDomainArray) {
+        const normalized = (sample - 128) / 128;
+        rmsSum += normalized * normalized;
+      }
+      const rmsAmplitude = Math.sqrt(rmsSum / this.timeDomainArray.length);
+      const avgAmplitude = Math.max(0, Math.min(1, rmsAmplitude * 2.6));
 
       if (this.onAmplitudeCallback) {
         this.onAmplitudeCallback(avgAmplitude, freqSample);
@@ -135,6 +150,9 @@ export class AudioAnalyser {
       } catch {}
       this.sourceNode = null;
     }
+    this.analyser = null;
+    this.dataArray = null;
+    this.timeDomainArray = null;
     if (this.onAmplitudeCallback) {
       this.onAmplitudeCallback(0, [0, 0, 0, 0, 0]);
     }

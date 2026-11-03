@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { Minus, X, Sparkles, AlertCircle } from 'lucide-react';
+import { Minus, X, Sparkles, AlertCircle, Copy, Check, AlertTriangle } from 'lucide-react';
 import { RobotCharacter } from './components/RobotCharacter';
 import { AudioVisualizer } from './components/AudioVisualizer';
 import { ControlBar } from './components/ControlBar';
@@ -15,6 +15,7 @@ import {
   ChatMessage,
   ConversationMood,
   DashboardArtifact,
+  FaceExpression,
   FridaySettings,
   PersonalityMode,
   ReminderItem,
@@ -24,7 +25,9 @@ import {
 import { pickGreeting } from '@/services/voice/greetings';
 import { isLikelySilence } from '@/services/voice/micErrors';
 import { applyMoodToSpeech } from '@/services/ai/mood';
+import { selectFaceExpression } from '@/services/ai/faceExpressions';
 import { takeCompleteSpeechChunks } from '@/services/voice/speechText';
+import { copyTextToClipboard } from './utils/clipboard';
 
 export const App: React.FC = () => {
   const [settings, setSettings] = useState<FridaySettings>({
@@ -78,6 +81,8 @@ export const App: React.FC = () => {
   const [pendingConfirmation, setPendingConfirmation] =
     useState<ToolConfirmationPayload | null>(null);
   const [currentMood, setCurrentMood] = useState<ConversationMood>('calm');
+  const [faceExpression, setFaceExpression] = useState<FaceExpression>('neutral');
+  const [streamCopyStatus, setStreamCopyStatus] = useState<'idle' | 'copied' | 'error'>('idle');
 
   const {
     robotState,
@@ -107,12 +112,43 @@ export const App: React.FC = () => {
   const streamedSpeechQueuedRef = useRef(false);
   const streamSpeechOptionsRef = useRef<any>({});
   const standbyPendingRef = useRef(false);
+  const streamCopyTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const goStandbyRef = useRef<() => void>(() => undefined);
   const handsFreeRef = useRef<{ mode: 'off' | 'standby' | 'active'; wake: () => void; goStandby: () => void }>({
     mode: 'off',
     wake: () => undefined,
     goStandby: () => undefined,
   });
+
+  // State transitions also drive the face when no response-specific emotion
+  // has been selected. Speaking keeps the selected conversational expression
+  // until playback ends, then returns smoothly to neutral.
+  useEffect(() => {
+    if (robotState === 'idle') setFaceExpression('neutral');
+    else if (robotState === 'listening') setFaceExpression('curious');
+    else if (robotState === 'interrupted') setFaceExpression('surprised');
+    else if (robotState === 'error') setFaceExpression('sad');
+  }, [robotState]);
+
+  useEffect(() => () => {
+    if (streamCopyTimerRef.current) clearTimeout(streamCopyTimerRef.current);
+  }, []);
+
+  const copyStreamingResponse = useCallback(async () => {
+    const text = streamedResponseRef.current;
+    if (!text.trim()) return;
+
+    try {
+      await copyTextToClipboard(text);
+      setStreamCopyStatus('copied');
+      if (streamCopyTimerRef.current) clearTimeout(streamCopyTimerRef.current);
+      streamCopyTimerRef.current = setTimeout(() => setStreamCopyStatus('idle'), 1500);
+    } catch {
+      setStreamCopyStatus('error');
+      if (streamCopyTimerRef.current) clearTimeout(streamCopyTimerRef.current);
+      streamCopyTimerRef.current = setTimeout(() => setStreamCopyStatus('idle'), 1800);
+    }
+  }, []);
 
   useEffect(() => {
     if (!window.fridayAPI?.onResponseStream) return undefined;
@@ -295,7 +331,16 @@ export const App: React.FC = () => {
       setMessages((prev) => [...prev, userMsg]);
       setLiveTranscript('');
       setStreamingResponse('');
+      setStreamCopyStatus('idle');
       setRobotState('thinking');
+      setFaceExpression(
+        selectFaceExpression({
+          state: 'thinking',
+          mood: currentMood,
+          personalityMode: settings.personalityMode,
+          text,
+        })
+      );
       const requestId = ++requestIdRef.current;
       const streamId = `response_${Date.now()}_${requestId}`;
       activeStreamIdRef.current = streamId;
@@ -379,6 +424,14 @@ export const App: React.FC = () => {
 
         const mood = response.mood || 'calm';
         setCurrentMood(mood);
+        setFaceExpression(
+          selectFaceExpression({
+            state: 'speaking',
+            mood,
+            personalityMode: effectiveSettings.personalityMode,
+            text: response.text,
+          })
+        );
         const moodSpeech = applyMoodToSpeech(
           effectiveSettings.speechSpeed,
           effectiveSettings.pitch,
@@ -425,6 +478,7 @@ export const App: React.FC = () => {
         }
       } catch (err: any) {
         setRobotState('error');
+        setFaceExpression('sad');
         const errorMsg: ChatMessage = {
           id: `msg_${Date.now()}_err`,
           role: 'assistant',
@@ -759,10 +813,11 @@ export const App: React.FC = () => {
           >
             {/* Animated Robot Character */}
             <RobotCharacter
-              state={robotState}
+              state={handsFree.mode === 'standby' ? 'sleeping' : robotState}
               amplitude={amplitude}
               frequencies={frequencies}
               mood={currentMood}
+              expression={handsFree.mode === 'standby' ? 'sleepy' : faceExpression}
               onClick={() => {
                 requestIdRef.current += 1;
                 window.fridayAPI?.cancelResponse(activeStreamIdRef.current || undefined);
@@ -803,9 +858,34 @@ export const App: React.FC = () => {
                   fontSize: '0.8rem',
                   lineHeight: 1.45,
                   textAlign: 'left',
+                  display: 'flex',
+                  alignItems: 'flex-start',
+                  gap: '8px',
                 }}
               >
-                {streamingResponse}
+                <span style={{ flex: 1, whiteSpace: 'pre-wrap' }}>{streamingResponse}</span>
+                <button
+                  type="button"
+                  onClick={() => void copyStreamingResponse()}
+                  title={streamCopyStatus === 'error' ? 'Clipboard access failed' : 'Copy response so far'}
+                  aria-label={streamCopyStatus === 'error' ? 'Copy failed' : streamCopyStatus === 'copied' ? 'Copied' : 'Copy response so far'}
+                  style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '3px',
+                    flexShrink: 0,
+                    padding: '2px 4px',
+                    border: 'none',
+                    borderRadius: '4px',
+                    background: 'transparent',
+                    color: streamCopyStatus === 'error' ? 'var(--danger)' : streamCopyStatus === 'copied' ? 'var(--success)' : 'var(--muted-dim)',
+                    cursor: 'pointer',
+                    fontSize: '0.68rem',
+                  }}
+                >
+                  {streamCopyStatus === 'error' ? <AlertTriangle size={11} /> : streamCopyStatus === 'copied' ? <Check size={11} /> : <Copy size={11} />}
+                  <span>{streamCopyStatus === 'error' ? 'Copy failed' : streamCopyStatus === 'copied' ? 'Copied' : 'Copy'}</span>
+                </button>
               </div>
             )}
           </div>
@@ -814,6 +894,7 @@ export const App: React.FC = () => {
           {transcriptOpen && (
             <TranscriptView
               messages={messages}
+              streamingResponse={streamingResponse}
               onClearHistory={handleClearHistory}
               onOpenFile={handleOpenFile}
             />

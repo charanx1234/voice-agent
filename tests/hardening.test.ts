@@ -1,7 +1,18 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import path from 'path';
-import { buildModelCandidates, isModelUnavailableError, normalizeConversationHistory, buildToolResponseTurn } from '../src/services/ai/gemini';
+import {
+  assembleStreamedResponse,
+  buildModelCandidates,
+  buildToolResponsePart,
+  buildToolResponseTurn,
+  getFunctionCalls,
+  getModelToolCallContent,
+  isModelUnavailableError,
+  normalizeConversationHistory,
+} from '../src/services/ai/gemini';
 import { isInsideDirectory } from '../src/services/agent/projectSearchTool';
+import { GeminiService } from '../src/services/ai/gemini';
+import { toolRegistry } from '../src/services/agent/toolRegistry';
 
 describe('Gemini model fallback', () => {
   it('tries the configured model first', () => {
@@ -87,6 +98,97 @@ describe('Tool result turns', () => {
     expect(turn.parts).toHaveLength(1);
     // The legacy SDK used role 'function', which the API now rejects with a 400.
     expect(turn.role).not.toBe('function');
+  });
+
+  it('keeps streamed function-call parts and thought signatures intact', () => {
+    const firstCallPart = {
+      functionCall: { id: 'call-1', name: 'enter_standby', args: {} },
+      thoughtSignature: 'signature-1',
+      partMetadata: { providerField: 'keep-me' },
+    };
+    const secondCallPart = {
+      functionCall: { id: 'call-2', name: 'save_note', args: { title: 'x', content: 'y' } },
+      thoughtSignature: 'signature-2',
+    };
+
+    const response = assembleStreamedResponse([
+      { candidates: [{ content: { role: 'model', parts: [{ text: 'Working…' }] } }] },
+      { candidates: [{ content: { role: 'model', parts: [firstCallPart] } }] },
+      { candidates: [{ content: { role: 'model', parts: [secondCallPart] } }] },
+    ]);
+
+    const modelContent = getModelToolCallContent(response);
+    expect(modelContent).toBe(response.candidates[0].content);
+    expect(modelContent.parts[1]).toBe(firstCallPart);
+    expect(modelContent.parts[1].thoughtSignature).toBe('signature-1');
+    expect(modelContent.parts[1].partMetadata).toEqual({ providerField: 'keep-me' });
+    expect(getFunctionCalls(response)).toEqual([firstCallPart.functionCall, secondCallPart.functionCall]);
+
+    const toolResponses = getFunctionCalls(response).map((call) => buildToolResponsePart(call, { success: true }));
+    expect(toolResponses.map((part) => part.functionResponse.name)).toEqual(['enter_standby', 'save_note']);
+    expect(toolResponses.map((part) => part.functionResponse.id)).toEqual(['call-1', 'call-2']);
+  });
+
+  it('executes enter_standby and consecutive tools in API order', async () => {
+    const standbyPart = {
+      functionCall: { id: 'standby-1', name: 'enter_standby', args: {} },
+      thoughtSignature: 'standby-signature',
+    };
+    const notePart = {
+      functionCall: { id: 'note-1', name: 'save_note', args: { title: 'x', content: 'y' } },
+      thoughtSignature: 'note-signature',
+    };
+    const listPart = {
+      functionCall: { id: 'list-1', name: 'list_notes', args: {} },
+      thoughtSignature: 'list-signature',
+    };
+    const stream = (...chunks: any[]) =>
+      (async function* () {
+        for (const chunk of chunks) yield chunk;
+      })();
+    const fakeClient = {
+      models: {
+        generateContentStream: vi
+          .fn()
+          .mockResolvedValueOnce(
+            stream({ candidates: [{ content: { role: 'model', parts: [standbyPart, notePart] } }] })
+          )
+          .mockResolvedValueOnce(stream({ candidates: [{ content: { role: 'model', parts: [listPart] } }] }))
+          .mockResolvedValueOnce(stream({ candidates: [{ content: { role: 'model', parts: [{ text: 'All set.' }] } }] })),
+      },
+    };
+    const executeTool = vi.spyOn(toolRegistry, 'executeTool').mockImplementation(async (name) => ({ success: true, tool: name }));
+    const service = new GeminiService();
+    (service as any).getClient = () => fakeClient;
+
+    try {
+      const result = await (service as any).runConversation(
+        { message: 'go offline and save this', conversationHistory: [] },
+        'gemini-test-model',
+        'en-IN',
+        { toolsExecuted: false }
+      );
+
+      expect(result.text).toBe('All set.');
+      expect(executeTool.mock.calls.map(([name]) => name)).toEqual(['enter_standby', 'save_note', 'list_notes']);
+
+      const secondRequest = fakeClient.models.generateContentStream.mock.calls[1][0];
+      const firstModelTurn = secondRequest.contents.find((content: any) => content.role === 'model');
+      expect(firstModelTurn.parts).toEqual([standbyPart, notePart]);
+      expect(firstModelTurn.parts[0].thoughtSignature).toBe('standby-signature');
+      expect(firstModelTurn.parts[1].thoughtSignature).toBe('note-signature');
+      expect(secondRequest.contents[secondRequest.contents.indexOf(firstModelTurn) + 1].parts).toEqual([
+        { functionResponse: { id: 'standby-1', name: 'enter_standby', response: { success: true, tool: 'enter_standby' } } },
+        { functionResponse: { id: 'note-1', name: 'save_note', response: { success: true, tool: 'save_note' } } },
+      ]);
+
+      const thirdRequest = fakeClient.models.generateContentStream.mock.calls[2][0];
+      const secondModelTurn = thirdRequest.contents.filter((content: any) => content.role === 'model')[1];
+      expect(secondModelTurn.parts).toEqual([listPart]);
+      expect(secondModelTurn.parts[0].thoughtSignature).toBe('list-signature');
+    } finally {
+      executeTool.mockRestore();
+    }
   });
 });
 

@@ -1,4 +1,4 @@
-/* Expressive 2D Robot Head Animations */
+/* FRIDAY's official supplied face with lightweight layered animation. */
 
 .robot-stage {
   display: flex;
@@ -6,237 +6,210 @@
   align-items: center;
   justify-content: center;
   position: relative;
-  padding: 10px 0 6px 0;
+  width: min(88vw, 430px);
+  padding: 10px 0 6px;
+  isolation: isolate;
 }
 
-/* Floating Bob Animation */
-.robot-head-container {
+.friday-face-container {
   position: relative;
-  width: 220px;
-  height: 220px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  transition: transform 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+  width: 100%;
+  aspect-ratio: 1448 / 1086;
+  overflow: hidden;
+  user-select: none;
+  transition: transform 360ms cubic-bezier(0.16, 1, 0.3, 1), filter 360ms ease;
 }
 
-.state-idle .robot-head-container {
-  animation: robot-float 4.5s ease-in-out infinite;
+.friday-face-image,
+.friday-face-overlay {
+  position: absolute;
+  inset: 0;
+  display: block;
+  width: 100%;
+  height: 100%;
 }
 
-.state-listening .robot-head-container {
-  animation: robot-attentive 2s ease-in-out infinite;
-  transform: translateY(-4px) scale(1.02);
+.friday-face-image {
+  object-fit: fill;
+  pointer-events: none;
 }
 
-.state-thinking .robot-head-container {
-  animation: robot-tilt 3s ease-in-out infinite;
+.friday-face-overlay {
+  pointer-events: none;
+  overflow: visible;
 }
 
-.state-speaking .robot-head-container {
-  animation: robot-speech-bob 1.8s ease-in-out infinite;
+.state-idle .friday-face-container {
+  animation: face-float 4.8s ease-in-out infinite;
 }
 
-.state-interrupted .robot-head-container {
-  animation: robot-interrupted-shake 0.4s ease-out;
+.state-listening .friday-face-container {
+  animation: face-listening 2.2s ease-in-out infinite;
+  transform: translateY(-3px) scale(1.012);
 }
 
-.state-error .robot-head-container {
-  animation: robot-error-droop 3s ease-in-out infinite;
+.state-thinking .friday-face-container {
+  animation: face-thinking 3.2s ease-in-out infinite;
 }
 
-.mood-enthusiastic .robot-head-container {
-  animation-duration: 1.5s;
+.state-speaking .friday-face-container,
+.state-laughing .friday-face-container {
+  animation: face-speaking 1.9s ease-in-out infinite;
 }
 
-.mood-patient .robot-head-container,
-.mood-supportive .robot-head-container {
-  animation-duration: 5.5s;
+.state-interrupted .friday-face-container {
+  animation: face-interrupted 420ms ease-out;
 }
 
-.mood-playful .robot-head-container {
-  animation: robot-playful 1.8s ease-in-out infinite;
+.state-error .friday-face-container {
+  animation: face-sad 3.5s ease-in-out infinite;
+  filter: saturate(0.78);
 }
 
-@keyframes robot-playful {
-  0%, 100% { transform: translateY(-2px) rotate(-1deg); }
-  50% { transform: translateY(-7px) rotate(1deg) scale(1.02); }
+.state-sleeping .friday-face-container,
+.expression-sleepy .friday-face-container {
+  animation: face-sleepy 6s ease-in-out infinite;
 }
 
-@keyframes robot-float {
-  0%, 100% {
-    transform: translateY(0px) rotate(0deg);
-  }
-  50% {
-    transform: translateY(-4px) rotate(0.2deg);
-  }
+@keyframes face-float {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-4px); }
 }
 
-@keyframes robot-attentive {
-  0%, 100% {
-    transform: translateY(-4px) scale(1.02);
-  }
-  50% {
-    transform: translateY(-7px) scale(1.03);
-  }
+@keyframes face-listening {
+  0%, 100% { transform: translateY(-3px) scale(1.012); }
+  50% { transform: translateY(-7px) scale(1.018); }
 }
 
-@keyframes robot-tilt {
-  0%, 100% {
-    transform: translateY(-2px) rotate(-1.5deg);
-  }
-  50% {
-    transform: translateY(-4px) rotate(1.5deg);
-  }
+@keyframes face-thinking {
+  0%, 100% { transform: translateY(-1px) rotate(-0.7deg); }
+  50% { transform: translateY(-3px) rotate(0.7deg); }
 }
 
-@keyframes robot-speech-bob {
-  0%, 100% {
-    transform: translateY(-2px);
-  }
-  50% {
-    transform: translateY(-6px);
-  }
+@keyframes face-speaking {
+  0%, 100% { transform: translateY(-1px); }
+  50% { transform: translateY(-5px); }
 }
 
-@keyframes robot-interrupted-shake {
-  0% { transform: scale(0.96) translateY(2px); }
-  25% { transform: scale(1.04) translateY(-4px) rotate(2deg); }
-  50% { transform: scale(0.98) translateY(1px) rotate(-1.5deg); }
-  75% { transform: scale(1.01) translateY(-2px); }
-  100% { transform: scale(1) translateY(0); }
+@keyframes face-interrupted {
+  0% { transform: scale(0.98); }
+  35% { transform: scale(1.025) rotate(1deg); }
+  70% { transform: scale(0.99) rotate(-0.5deg); }
+  100% { transform: scale(1); }
 }
 
-@keyframes robot-error-droop {
-  0%, 100% {
-    transform: translateY(2px) rotate(-0.5deg);
-  }
-  50% {
-    transform: translateY(4px) rotate(0.5deg);
-  }
+@keyframes face-sad {
+  0%, 100% { transform: translateY(2px); }
+  50% { transform: translateY(5px); }
 }
 
-/* Floor Shadow */
+@keyframes face-sleepy {
+  0%, 100% { transform: translateY(2px); }
+  50% { transform: translateY(5px); }
+}
+
+/* Eyelids and brows are overlays; the original eyes and highlights stay in the artwork. */
+.face-expression-lids path,
+.face-eyebrows {
+  opacity: 0;
+  transition: opacity 180ms ease, transform 220ms ease;
+}
+
+.expression-happy .face-lid-happy,
+.expression-laughing .face-lid-happy {
+  opacity: 0.94;
+}
+
+.expression-sleepy .face-lid-sleepy,
+.expression-sarcastic .face-lid-sleepy {
+  opacity: 0.94;
+}
+
+.expression-angry .face-lid-angry {
+  opacity: 0.9;
+}
+
+.expression-happy .face-eyebrows,
+.expression-laughing .face-eyebrows,
+.expression-sad .face-eyebrows,
+.expression-angry .face-eyebrows,
+.expression-confused .face-eyebrows,
+.expression-sarcastic .face-eyebrows,
+.expression-curious .face-eyebrows,
+.expression-excited .face-eyebrows,
+.expression-thinking .face-eyebrows {
+  opacity: 0.78;
+}
+
+.expression-angry .face-eyebrows {
+  opacity: 0.95;
+}
+
+.expression-thinking .face-eyebrows {
+  animation: thinking-brows 1.8s ease-in-out infinite alternate;
+}
+
+@keyframes thinking-brows {
+  from { transform: translateY(2px); }
+  to { transform: translateY(-4px); }
+}
+
+.face-blink-lids ellipse {
+  opacity: 1;
+  transition: opacity 70ms ease;
+}
+
+.face-gaze-highlights {
+  opacity: 0.96;
+  transition: opacity 160ms ease;
+}
+
+/* The supplied black oval is the only mouth shape. Its geometry responds to real RMS audio. */
+.face-mouth-opening {
+  fill: #050505;
+  transition: rx 72ms ease-out, ry 72ms ease-out, transform 110ms ease-out;
+  transform-box: fill-box;
+  transform-origin: center;
+}
+
+.expression-sad .face-mouth-opening {
+  transform: rotate(-4deg);
+}
+
+.expression-confused .face-mouth-opening,
+.expression-sarcastic .face-mouth-opening {
+  transform: rotate(3deg);
+}
+
 .robot-shadow {
-  width: 140px;
+  width: 52%;
   height: 14px;
-  background: radial-gradient(ellipse at center, color-mix(in srgb, var(--accent) 22%, transparent) 0%, color-mix(in srgb, var(--shadow-color) 40%, transparent) 60%, transparent 80%);
+  margin-top: -4px;
   border-radius: 50%;
-  margin-top: -6px;
-  transition: all 0.4s ease;
+  background: radial-gradient(
+    ellipse at center,
+    color-mix(in srgb, var(--accent) 23%, transparent) 0%,
+    color-mix(in srgb, var(--shadow-color) 42%, transparent) 60%,
+    transparent 80%
+  );
+  transition: width 360ms ease, opacity 360ms ease;
 }
 
 .state-listening .robot-shadow {
-  width: 155px;
-  background: radial-gradient(ellipse at center, color-mix(in srgb, var(--accent) 35%, transparent) 0%, color-mix(in srgb, var(--shadow-color) 50%, transparent) 60%, transparent 80%);
+  width: 58%;
 }
 
-.state-error .robot-shadow {
-  background: radial-gradient(ellipse at center, color-mix(in srgb, var(--danger) 25%, transparent) 0%, color-mix(in srgb, var(--shadow-color) 40%, transparent) 60%, transparent 80%);
+.state-thinking .robot-shadow,
+.expression-sleepy .robot-shadow {
+  opacity: 0.68;
 }
 
-/* Robot SVG Styles */
-.robot-chassis {
-  fill: var(--surface-2);
-  stroke: color-mix(in srgb, var(--text) 22%, transparent);
-  stroke-width: 3;
-  filter: drop-shadow(0 12px 24px color-mix(in srgb, var(--shadow-color) 55%, transparent));
-  transition: fill 0.3s ease, stroke 0.3s ease;
-}
-
-.state-listening .robot-chassis {
-  stroke: var(--accent);
-  filter: drop-shadow(0 0 16px color-mix(in srgb, var(--accent) 28%, transparent));
-}
-
-.state-error .robot-chassis {
-  stroke: var(--danger);
-  filter: drop-shadow(0 0 14px color-mix(in srgb, var(--danger) 25%, transparent));
-}
-
-.robot-screen {
-  fill: var(--bg);
-  stroke: var(--border);
-  stroke-width: 2.5;
-}
-
-/* Antennas & Pulse rings */
-.robot-antenna {
-  fill: var(--surface-2);
-  stroke: color-mix(in srgb, var(--text) 28%, transparent);
-  stroke-width: 2;
-  transition: stroke 0.3s ease;
-}
-
-.state-listening .robot-antenna {
-  stroke: var(--accent);
-}
-
-.antenna-ring {
-  opacity: 0;
-  transform-origin: center;
-}
-
-.state-listening .antenna-ring {
-  animation: antenna-pulse 1.6s ease-out infinite;
-}
-
-@keyframes antenna-pulse {
-  0% {
-    r: 6;
-    opacity: 0.8;
-    stroke: var(--accent);
+@media (prefers-reduced-motion: reduce) {
+  .friday-face-container,
+  .face-expression-lids path,
+  .face-eyebrows,
+  .face-mouth-opening {
+    animation: none !important;
+    transition-duration: 180ms;
   }
-  100% {
-    r: 22;
-    opacity: 0;
-    stroke: var(--accent);
-  }
-}
-
-/* Glowing Eyes */
-.robot-eye {
-  fill: var(--accent);
-  filter: drop-shadow(0 0 8px var(--accent)) drop-shadow(0 0 16px color-mix(in srgb, var(--accent) 60%, transparent));
-  transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
-  transform-origin: center;
-}
-
-.state-error .robot-eye {
-  fill: var(--danger);
-  filter: drop-shadow(0 0 8px var(--danger)) drop-shadow(0 0 14px color-mix(in srgb, var(--danger) 50%, transparent));
-}
-
-.state-thinking .robot-eye {
-  animation: eye-scan 1.8s ease-in-out infinite alternate;
-}
-
-.mood-enthusiastic .robot-eye {
-  transform: scaleY(1.12);
-}
-
-.mood-patient .robot-eye,
-.mood-supportive .robot-eye {
-  transform: scaleY(0.94);
-}
-
-.mood-playful .robot-eye {
-  transform: scaleX(1.08) rotate(-2deg);
-}
-
-@keyframes eye-scan {
-  0% { transform: translateX(-5px); }
-  100% { transform: translateX(5px); }
-}
-
-/* Mouth LED bars */
-.mouth-bar {
-  fill: var(--accent);
-  filter: drop-shadow(0 0 5px color-mix(in srgb, var(--accent) 65%, transparent));
-  transition: height 0.08s ease, y 0.08s ease, fill 0.3s ease;
-}
-
-.state-error .mouth-bar {
-  fill: var(--danger);
-  filter: drop-shadow(0 0 4px color-mix(in srgb, var(--danger) 50%, transparent));
 }

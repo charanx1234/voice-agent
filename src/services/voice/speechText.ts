@@ -1,20 +1,58 @@
 // Text preparation and voice selection for speech output.
 
-/** Removes markdown and symbols that sound wrong when read aloud. */
+/**
+ * Removes presentation syntax from the speech copy while leaving the message
+ * shown in the transcript untouched. Plain punctuation is intentionally kept:
+ * the providers use it for natural prosody, so we do not add artificial pause
+ * markers or turn commas and full stops into long silences.
+ */
 export function cleanForSpeech(text: string): string {
-  return (text || '')
+  let spoken = (text || '')
+    // A fenced block is useful context, but reading its source punctuation is not.
     .replace(/```[\s\S]*?```/g, ' code block ')
     .replace(/`([^`]+)`/g, '$1')
     .replace(/!\[[^\]]*\]\([^)]*\)/g, '')
     .replace(/\[([^\]]+)\]\([^)]*\)/g, '$1')
     .replace(/https?:\/\/\S+/g, 'link')
+    .replace(/~~([^~]+)~~/g, '$1')
     .replace(/\*\*([^*]+)\*\*/g, '$1')
+    .replace(/__([^_]+)__/g, '$1')
     .replace(/\*([^*]+)\*/g, '$1')
+    .replace(/_([^_]+)_/g, '$1')
     .replace(/^#{1,6}\s+/gm, '')
-    .replace(/^[•\-*]\s+/gm, '')
-    .replace(/[*_#>|]/g, ' ')
+    .replace(/^\s*>\s?/gm, '')
+    // Turn list and paragraph layout into connected speech rather than saying
+    // "dash" or leaving abrupt line-level gaps.
+    .replace(/^\s*(?:[-*•]|\d+[.)])\s+/gm, '')
+    .replace(/^\s*(?:[-*_]){3,}\s*$/gm, '')
+    .replace(/[|*_#>]/g, ' ')
+    .replace(/[\r\n]+/g, ' ');
+
+  // Unicode emoji are pictographs, including joined emoji sequences and skin
+  // tone modifiers. Decorative symbol ranges cover common bullets/arrows while
+  // leaving useful mathematical and currency characters available to speech.
+  spoken = spoken
+    .replace(/[0-9#*]\uFE0F?\u20E3/gu, ' ')
+    .replace(/[\p{Extended_Pictographic}\p{Emoji_Presentation}\p{Emoji_Modifier_Base}\p{Regional_Indicator}\uFE0F\u200D]/gu, ' ')
+    .replace(/[‘’]/g, "'")
+    .replace(/[“”]/g, '"')
+    .replace(/[–—]/g, ', ')
+    .replace(/…/g, '.')
+    .replace(/[\u2000-\u206F\u25A0-\u25FF\u2600-\u27BF\u2B00-\u2BFF]/gu, (symbol) =>
+      /[.,!?;:'"()[\]{}%&+\-/]/.test(symbol) ? symbol : ' '
+    )
+    // Ellipses and repeated excitement marks cause exaggerated provider pauses.
+    // Keep one meaningful punctuation mark for the displayed meaning in speech.
+    .replace(/\.{3,}/g, '.')
+    .replace(/!{2,}/g, '!')
+    .replace(/\?{2,}/g, '?')
+    .replace(/([!?])[!?]+/g, '$1')
+    .replace(/\s+([,.!?;:])/g, '$1')
+    .replace(/([,.!?;:])\s+/g, '$1 ')
     .replace(/\s+/g, ' ')
     .trim();
+
+  return spoken;
 }
 
 /**
@@ -62,9 +100,10 @@ export function chunkForSpeech(text: string, maxChars = 220): string[] {
       continue;
     }
 
-    // Keep sentences separate so the first one starts playing quickly; only glue
-    // very short fragments ("Hi.", "Ok.") together to avoid choppy delivery.
-    if (current && (current.length >= 15 || (current + ' ' + sentence).length > maxChars)) {
+    // Keep adjacent sentences in one provider request whenever they fit. This
+    // lets the provider create a short full-stop pause instead of inserting a
+    // fresh audio-buffer gap between every sentence.
+    if (current && (current + ' ' + sentence).length > maxChars) {
       pushCurrent();
     }
     current = `${current} ${sentence}`.trim();

@@ -22,6 +22,7 @@ const apiBridge: FridayApiBridge = {
   getAudioDevices: async () => {
     return navigator.mediaDevices.enumerateDevices();
   },
+  copyText: (text: string) => ipcRenderer.invoke(IPC_CHANNELS.CLIPBOARD_WRITE, text),
 
   sendMessage: (payload) => ipcRenderer.invoke(IPC_CHANNELS.SEND_MESSAGE, payload),
   cancelResponse: (requestId?: string) => ipcRenderer.send(IPC_CHANNELS.CANCEL_RESPONSE, requestId),

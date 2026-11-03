@@ -3,13 +3,13 @@ import { PERSONA_VERSION, buildPersonaInstruction } from '../src/services/ai/per
 import { buildSystemInstruction } from '../src/services/ai/personality';
 
 describe('FRIDAY persona', () => {
-  it('defines an assistant identity, explicitly not a companion', () => {
+  it('defines a warm friend-like assistant identity with honest boundaries', () => {
     const prompt = buildPersonaInstruction({ preferredLanguage: 'en-IN' });
 
     expect(prompt).toContain('personal AI assistant');
-    expect(prompt).toContain('not a companion');
+    expect(prompt).toContain('trusted everyday friend');
     expect(prompt).toContain('virtual girlfriend');
-    expect(prompt).toContain('command-only voice interface');
+    expect(prompt).toContain('command-only interface');
   });
 
   it('requires opinions, disagreement and clear recommendations', () => {
@@ -93,6 +93,9 @@ describe('FRIDAY persona', () => {
     expect(simple).toContain('PERSONALITY MODE: SIMPLE');
     expect(moderate).toContain('PERSONALITY MODE: MODERATE');
     expect(roast).toContain('PERSONALITY MODE: ROAST');
+    expect(simple).toContain('No teasing or sarcasm');
+    expect(moderate).toContain('thoughtful teammate');
+    expect(roast).toContain('witty friend');
     for (const tool of ['save_note', 'create_reminder', 'search_web', 'set_personality_mode']) {
       expect(simple).toContain(tool);
       expect(moderate).toContain(tool);

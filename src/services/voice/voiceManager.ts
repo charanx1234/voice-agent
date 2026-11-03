@@ -37,7 +37,7 @@ interface SynthesisResponse {
   audioBase64: string;
   mimeType: string;
   voice: string;
-  engine: 'edge' | 'gemini';
+  engine: 'elevenlabs' | 'edge' | 'gemini';
 }
 
 interface QueuedSpeech {
@@ -289,7 +289,7 @@ export class VoiceManager {
 
       utterance.onstart = () => {
         this.currentUtterance = utterance;
-        this.analyser.simulateSpeakingAnimation(() => this.isSpeaking);
+        this.analyser.simulateSpeakingAnimation(() => this.isSpeaking, text, utterance.rate);
       };
 
       const finish = () => {

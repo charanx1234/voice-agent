@@ -101,6 +101,8 @@ export const ControlBar: React.FC<ControlBarProps> = ({
   };
 
   const status = getStatusBadge();
+  const personalityLabel =
+    personalityMode === 'simple' ? 'Simple · gentle' : personalityMode === 'roast' ? 'Roast · playful' : 'Moderate · balanced';
 
   return (
     <div style={{ width: '100%', padding: '0 16px 14px 16px', display: 'flex', flexDirection: 'column', gap: '10px' }}>
@@ -139,9 +141,21 @@ export const ControlBar: React.FC<ControlBarProps> = ({
               {status.label}
             </span>
           </div>
+          <span
+            style={{
+              fontSize: '0.66rem',
+              color: 'var(--accent)',
+              border: '1px solid color-mix(in srgb, var(--accent) 28%, transparent)',
+              borderRadius: '10px',
+              padding: '3px 7px',
+            }}
+            title="FRIDAY's current personality mode"
+          >
+            {personalityLabel}
+          </span>
           {handsFreeMode !== 'off' && (
             <span style={{ fontSize: '0.66rem', color: 'var(--muted-dim)' }} title="Microphone access is active">
-              MIC ACTIVE · {personalityMode.toUpperCase()} · {currentMood}
+              MIC ACTIVE · {currentMood}
             </span>
           )}
         </div>

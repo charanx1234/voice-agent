@@ -384,6 +384,12 @@ export function useVoiceAssistant() {
             voice: options.voice,
             accent: options.accent,
             engine: options.engine,
+            elevenLabsVoiceId: options.elevenLabsVoiceId,
+            elevenLabsModel: options.elevenLabsModel,
+            elevenLabsStability: options.elevenLabsStability,
+            elevenLabsSimilarityBoost: options.elevenLabsSimilarityBoost,
+            elevenLabsStyle: options.elevenLabsStyle,
+            elevenLabsSpeakerBoost: options.elevenLabsSpeakerBoost,
             onError: () => setRobotState('error'),
           });
         }

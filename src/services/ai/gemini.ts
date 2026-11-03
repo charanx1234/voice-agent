@@ -1,4 +1,4 @@
-import { GoogleGenerativeAI } from '@google/generative-ai';
+import { GoogleGenAI } from '@google/genai';
 import { settingsStore } from '../storage/settingsStore';
 import { buildSystemInstruction } from './personality';
 import { buildConversationBrief } from './conversationContext';
@@ -88,6 +88,72 @@ export function buildToolResponseTurn(functionResponses: any[]): { role: 'user';
   return { role: 'user', parts: functionResponses };
 }
 
+/**
+ * Reads function-call parts without projecting them onto a smaller object.
+ * The part also carries Gemini 3's thoughtSignature and may carry metadata
+ * added by a newer API revision, so the original part must remain intact.
+ */
+export function getFunctionCallParts(response: any): any[] {
+  const parts = response?.candidates?.[0]?.content?.parts;
+  return Array.isArray(parts) ? parts.filter((part) => part?.functionCall) : [];
+}
+
+/** Returns the calls from the already assembled model response. */
+export function getFunctionCalls(response: any): any[] {
+  return getFunctionCallParts(response).map((part) => part.functionCall);
+}
+
+/**
+ * Returns the exact model content that must be echoed before function
+ * responses. Reconstructing this from `functionCalls` loses thoughtSignature.
+ */
+export function getModelToolCallContent(response: any): { role?: string; parts: any[] } {
+  const content = response?.candidates?.[0]?.content;
+  if (!content || !Array.isArray(content.parts)) {
+    throw new Error('Gemini returned function calls without a model content turn.');
+  }
+  return content;
+}
+
+/** Builds one function response in the same order as its original call. */
+export function buildToolResponsePart(call: any, result: any): { functionResponse: any } {
+  const functionResponse: any = {
+    name: call.name,
+    response: result,
+  };
+  if (call.id !== undefined) functionResponse.id = call.id;
+  return { functionResponse };
+}
+
+/**
+ * Combines streamed response chunks while retaining every original Part.
+ * Gemini's function-call metadata belongs to the Part, not the FunctionCall
+ * projection, so concatenating the parts is deliberately lossless.
+ */
+export function assembleStreamedResponse(chunks: any[]): any {
+  const parts: any[] = [];
+  let role = 'model';
+  let lastCandidate: any = {};
+
+  for (const chunk of chunks) {
+    const candidate = chunk?.candidates?.[0];
+    if (!candidate) continue;
+    lastCandidate = candidate;
+    if (candidate.content?.role) role = candidate.content.role;
+    if (Array.isArray(candidate.content?.parts)) parts.push(...candidate.content.parts);
+  }
+
+  const content = { role, parts };
+  return {
+    candidates: [{ ...lastCandidate, content }],
+    text: parts
+      .filter((part) => typeof part?.text === 'string' && !part.thought)
+      .map((part) => part.text)
+      .join(''),
+    functionCalls: getFunctionCalls({ candidates: [{ content }] }),
+  };
+}
+
 export interface SendMessageParams {
   message: string;
   audioBase64?: string;
@@ -113,10 +179,10 @@ export interface SendMessageResult {
 }
 
 export class GeminiService {
-  private cachedClient: { apiKey: string; client: GoogleGenerativeAI } | null = null;
+  private cachedClient: { apiKey: string; client: GoogleGenAI } | null = null;
   private readonly activeRequests = new Map<string, AbortController>();
 
-  private getClient(apiKeyOverride?: string): GoogleGenerativeAI {
+  private getClient(apiKeyOverride?: string): GoogleGenAI {
     const key = apiKeyOverride || settingsStore.getRawApiKey();
     if (!key) {
       throw new Error(
@@ -124,7 +190,7 @@ export class GeminiService {
       );
     }
     if (this.cachedClient?.apiKey === key) return this.cachedClient.client;
-    const client = new GoogleGenerativeAI(key);
+    const client = new GoogleGenAI({ apiKey: key });
     this.cachedClient = { apiKey: key, client };
     return client;
   }
@@ -149,12 +215,11 @@ export class GeminiService {
     for (const modelCandidate of candidateModels) {
       try {
         const client = this.getClient(apiKeyOverride);
-        const model = client.getGenerativeModel({ model: modelCandidate });
-        const result = await model.generateContent({
+        const result = await client.models.generateContent({
+          model: modelCandidate,
           contents: [{ role: 'user', parts: [{ text: 'Respond with just "OK".' }] }],
         });
-        const response = await result.response;
-        const text = response.text();
+        const text = result.text || '';
 
         // Save verified working model in settings
         settingsStore.saveSettings({ modelName: modelCandidate });
@@ -186,9 +251,8 @@ export class GeminiService {
   ): Promise<string> {
     const settings = settingsStore.getSettings();
     const client = this.getClient();
-    const model = client.getGenerativeModel({ model: settings.modelName });
-
-    const result = await model.generateContent({
+    const result = await client.models.generateContent({
+      model: settings.modelName,
       contents: [
         {
           role: 'user',
@@ -207,8 +271,7 @@ export class GeminiService {
       ],
     });
 
-    const response = await result.response;
-    return (response.text() || '').trim();
+    return (result.text || '').trim();
   }
 
   public async sendMessage(
@@ -361,26 +424,20 @@ export class GeminiService {
     const currentSettings = settingsStore.getSettings();
     const toolDeclarations = toolRegistry.getGeminiToolDeclarations();
 
-    const createModel = (personalityMode: typeof currentSettings.personalityMode) =>
-      client.getGenerativeModel({
-        model: modelName,
-        systemInstruction: {
-          role: 'system',
-          parts: [
-            {
-              text: buildSystemInstruction(
-                preferredLang,
-                memoryBlock,
-                conversationBrief,
-                personalityMode,
-                moodAnalysis.mood,
-                moodInstruction
-              ),
-            },
-          ],
-        },
+    const createModel = (personalityMode: typeof currentSettings.personalityMode) => ({
+      model: modelName,
+      config: {
+        systemInstruction: buildSystemInstruction(
+          preferredLang,
+          memoryBlock,
+          conversationBrief,
+          personalityMode,
+          moodAnalysis.mood,
+          moodInstruction
+        ),
         tools: toolDeclarations as any,
-      });
+      },
+    });
 
     let model = createModel(currentSettings.personalityMode);
 
@@ -424,7 +481,7 @@ export class GeminiService {
     // Function-calling loop (maximum 4 tool turns)
     let turnCount = 0;
     while (turnCount < 4) {
-      const calls = response.functionCalls ? response.functionCalls() : undefined;
+      const calls = getFunctionCalls(response);
       if (!calls || calls.length === 0) break;
 
       turnCount++;
@@ -432,6 +489,7 @@ export class GeminiService {
       const functionResponses: any[] = [];
 
       for (const call of calls) {
+        if (!call?.name) throw new Error('Gemini returned a function call without a name.');
         console.log(`[GeminiService] Tool call requested: ${call.name}`, call.args);
         const toolRecord: ToolCallRecord = {
           toolName: call.name,
@@ -445,25 +503,17 @@ export class GeminiService {
           toolRecord.result = toolResult;
           toolRecord.status = toolResult.rejectedByUser ? 'rejected' : 'completed';
 
-          functionResponses.push({
-            functionResponse: { name: call.name, response: toolResult },
-          });
+          functionResponses.push(buildToolResponsePart(call, toolResult));
         } catch (toolErr: any) {
           toolRecord.status = 'failed';
           toolRecord.result = { error: toolErr.message };
-          functionResponses.push({
-            functionResponse: { name: call.name, response: { error: toolErr.message } },
-          });
+          functionResponses.push(buildToolResponsePart(call, { error: toolErr.message }));
         }
       }
 
-      // Echo the model's function-call turn back, then answer it as the user turn.
-      const modelContent = response.candidates?.[0]?.content;
-      contents.push(
-        modelContent && Array.isArray(modelContent.parts)
-          ? modelContent
-          : { role: 'model', parts: calls.map((call: any) => ({ functionCall: call })) }
-      );
+      // Echo the exact model function-call turn back. This preserves each
+      // thoughtSignature and any other metadata on the original Part.
+      contents.push(getModelToolCallContent(response));
       contents.push(buildToolResponseTurn(functionResponses));
 
       // Apply presentation-only settings immediately to the next model turn;
@@ -475,7 +525,7 @@ export class GeminiService {
       response = await this.generateStream(model, contents, signal, onStream);
     }
 
-    const text = response.text() || 'I have completed your request.';
+    const text = getResponseText(response) || 'I have completed your request.';
     const detectedLanguage = detectLanguageFromText(text, preferredLang);
 
     return {
@@ -488,20 +538,26 @@ export class GeminiService {
   }
 
   private async generateStream(
-    model: any,
+    model: { model: string; config: Record<string, any> },
     contents: any[],
     signal?: AbortSignal,
     onStream?: (event: Omit<ResponseStreamEvent, 'requestId'>) => void
   ): Promise<any> {
-    const result = await model.generateContentStream({ contents }, { signal });
-    let streamedText = '';
+    const stream = await this.getClient().models.generateContentStream({
+      model: model.model,
+      contents,
+      config: { ...model.config, abortSignal: signal },
+    });
+    const chunks: any[] = [];
 
-    for await (const chunk of result.stream) {
+    for await (const chunk of stream) {
       if (signal?.aborted) throw new Error('Response cancelled.');
+      chunks.push(chunk);
       try {
-        const delta = String(chunk.text?.() || '');
+        // Read text parts directly so the SDK does not warn when a chunk is
+        // intentionally function-call-only.
+        const delta = getChunkText(chunk);
         if (delta) {
-          streamedText += delta;
           onStream?.({ type: 'delta', text: delta });
         }
       } catch {
@@ -509,19 +565,23 @@ export class GeminiService {
       }
     }
 
-    const response = await result.response;
-    // Some SDK versions expose text only on the final response. Emit it if the
-    // stream did not expose it, without duplicating already delivered content.
-    if (!streamedText) {
-      try {
-        const finalText = String(response.text?.() || '');
-        if (finalText) onStream?.({ type: 'delta', text: finalText });
-      } catch {
-        // Tool-only responses have no text.
-      }
-    }
-    return response;
+    return assembleStreamedResponse(chunks);
   }
+}
+
+function getResponseText(response: any): string {
+  if (typeof response?.text === 'string') return response.text;
+  if (typeof response?.text === 'function') return String(response.text() || '');
+  return '';
+}
+
+function getChunkText(chunk: any): string {
+  const parts = chunk?.candidates?.[0]?.content?.parts;
+  if (!Array.isArray(parts)) return '';
+  return parts
+    .filter((part) => typeof part?.text === 'string' && !part.thought)
+    .map((part) => part.text)
+    .join('');
 }
 
 function isAbortError(error: any): boolean {

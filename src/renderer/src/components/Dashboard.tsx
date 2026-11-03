@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { X, Copy, Check, BellRing, Code2, FileText, List, Table2, Braces } from 'lucide-react';
 import { DashboardArtifact, ReminderItem } from '@/shared/types';
+import { copyTextToClipboard } from '../utils/clipboard';
 
 interface DashboardProps {
   artifacts: DashboardArtifact[];
@@ -135,16 +136,20 @@ export const Dashboard: React.FC<DashboardProps> = ({
   onCompleteReminder,
 }) => {
   const [copied, setCopied] = useState(false);
+  const [copyError, setCopyError] = useState(false);
   const active = artifacts.find((artifact) => artifact.id === activeId) || artifacts[0] || null;
 
   const handleCopy = async () => {
     if (!active) return;
     try {
-      await navigator.clipboard.writeText(active.content);
+      await copyTextToClipboard(active.content);
+      setCopyError(false);
       setCopied(true);
       setTimeout(() => setCopied(false), 1500);
     } catch {
-      // clipboard unavailable
+      setCopied(false);
+      setCopyError(true);
+      setTimeout(() => setCopyError(false), 1800);
     }
   };
 
@@ -182,7 +187,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
           {active && (
             <button
               onClick={handleCopy}
-              title="Copy content"
+              title={copyError ? 'Clipboard access failed' : 'Copy content'}
               style={{
                 display: 'flex',
                 alignItems: 'center',
@@ -196,8 +201,8 @@ export const Dashboard: React.FC<DashboardProps> = ({
                 cursor: 'pointer',
               }}
             >
-              {copied ? <Check size={12} /> : <Copy size={12} />}
-              <span>{copied ? 'Copied' : 'Copy'}</span>
+              {copyError ? <Copy size={12} /> : copied ? <Check size={12} /> : <Copy size={12} />}
+              <span>{copyError ? 'Copy failed' : copied ? 'Copied' : 'Copy'}</span>
             </button>
           )}
 
