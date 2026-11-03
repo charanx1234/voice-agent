@@ -102,4 +102,23 @@ describe('FRIDAY persona', () => {
       expect(roast).toContain(tool);
     }
   });
+
+  it('makes the three delivery contracts materially distinct', () => {
+    const simple = buildPersonaInstruction({ personalityMode: 'simple' });
+    const moderate = buildPersonaInstruction({ personalityMode: 'moderate' });
+    const roast = buildPersonaInstruction({ personalityMode: 'roast' });
+
+    expect(simple).toContain('comfort and wellbeing before efficiency');
+    expect(simple).toContain('Never roast, tease, mock or use sarcasm');
+    expect(moderate).toContain('Call out mistakes directly');
+    expect(moderate).toContain('No curse words');
+    expect(roast).toContain('use profanity naturally');
+    expect(roast).toContain('sarcastic, blunt, arrogant');
+    for (const prompt of [simple, moderate, roast]) {
+      expect(prompt).toContain('exact same intent, facts, reasoning, tool selection');
+      expect(prompt).toContain('genuinely upset, hurting, vulnerable or in crisis');
+    }
+    expect(simple).not.toBe(moderate);
+    expect(moderate).not.toBe(roast);
+  });
 });

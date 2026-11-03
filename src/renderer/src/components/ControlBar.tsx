@@ -102,7 +102,7 @@ export const ControlBar: React.FC<ControlBarProps> = ({
 
   const status = getStatusBadge();
   const personalityLabel =
-    personalityMode === 'simple' ? 'Simple · gentle' : personalityMode === 'roast' ? 'Roast · playful' : 'Moderate · balanced';
+    personalityMode === 'simple' ? 'Simple · caring' : personalityMode === 'roast' ? 'Roast · sarcastic' : 'Moderate · firm';
 
   return (
     <div style={{ width: '100%', padding: '0 16px 14px 16px', display: 'flex', flexDirection: 'column', gap: '10px' }}>

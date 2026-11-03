@@ -283,10 +283,9 @@ export class GeminiService {
     const candidates = buildModelCandidates(settings.modelName);
     const userText = (params.message || '').trim();
     const moodAnalysis = analyzeMood(userText, params.prosody);
-    const moodInstruction = buildMoodInstruction(moodAnalysis, settings.personalityMode);
 
     const localResponse = !params.audioBase64
-      ? getLocalResponse(userText, preferredLang)
+      ? getLocalResponse(userText, preferredLang, settings.personalityMode)
       : null;
     if (localResponse) {
       void memoryService.appendExchange(userText, localResponse.text, {
@@ -339,7 +338,6 @@ export class GeminiService {
           memoryBlock,
           conversationBrief,
           moodAnalysis,
-          moodInstruction,
           controller.signal,
           streamHook
         );
@@ -416,7 +414,6 @@ export class GeminiService {
     memoryBlock = '',
     conversationBrief = '',
     moodAnalysis: MoodAnalysis = analyzeMood('', undefined),
-    moodInstruction = '',
     signal?: AbortSignal,
     onStream?: (event: Omit<ResponseStreamEvent, 'requestId'>) => void
   ): Promise<SendMessageResult> {
@@ -433,7 +430,7 @@ export class GeminiService {
           conversationBrief,
           personalityMode,
           moodAnalysis.mood,
-          moodInstruction
+          buildMoodInstruction(moodAnalysis, personalityMode)
         ),
         tools: toolDeclarations as any,
       },

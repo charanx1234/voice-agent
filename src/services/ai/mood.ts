@@ -23,6 +23,11 @@ const DISTRESS_PATTERNS = [
   /\b(abuse|unsafe|in danger|help me now|emergency)\b/i,
 ];
 
+const WELLBEING_OVERRIDE_PATTERNS = [
+  /\b(i(?:'m| am|m)\s+)?(genuinely\s+)?(upset|hurt|overwhelmed|not okay|not ok|falling apart|crying|in pain|having a hard time)\b/i,
+  /\b(please don't joke|do not joke|i need support|i need help|this is serious|i feel terrible|i feel hopeless)\b/i,
+];
+
 const FRUSTRATION_PATTERNS = /\b(angry|furious|frustrated|annoyed|stuck|useless|broken|damn|wtf|why is this not working)\b/i;
 const CONFUSION_PATTERNS = /\b(confused|don't understand|do not understand|what does this mean|explain again|lost|how do i)\b/i;
 const EXCITEMENT_PATTERNS = /[!]{1,}|\b(excited|amazing|awesome|great news|love it|finally|yes)\b/i;
@@ -41,7 +46,8 @@ function clamp(value: number, low: number, high: number): number {
 export function analyzeMood(text = '', prosody?: VoiceProsodySummary): MoodAnalysis {
   const value = text.trim();
   const distress = DISTRESS_PATTERNS.some((pattern) => pattern.test(value));
-  if (distress) {
+  const wellbeingOverride = distress || WELLBEING_OVERRIDE_PATTERNS.some((pattern) => pattern.test(value));
+  if (wellbeingOverride) {
     return {
       mood: 'supportive',
       confidence: 'high',
@@ -106,11 +112,18 @@ export function buildMoodInstruction(analysis: MoodAnalysis, mode: PersonalityMo
   const safety = analysis.safetyOverride
     ? 'A wellbeing safety override is active. Be warm, serious and supportive. Do not roast, joke, or use unnecessary profanity.'
     : 'Treat this as a tentative conversational cue, not a diagnosis. If the user corrects your read, adapt immediately.';
+  const modeRule =
+    mode === 'simple'
+      ? 'Simple delivery: comfort first, gentle and soft, no teasing.'
+      : mode === 'roast'
+        ? 'Roast delivery: sharper sarcasm and blunt banter are expected when safe.'
+        : 'Moderate delivery: warm but firm, with respectful correction and no profanity.';
 
   return `DYNAMIC MOOD AND DELIVERY
-- Current presentation mood cue: ${analysis.mood} (confidence: ${analysis.confidence}).
-- Personality boundary: ${mode}.
-- ${safety}
+ - Current presentation mood cue: ${analysis.mood} (confidence: ${analysis.confidence}).
+ - Personality boundary: ${mode}.
+ - ${modeRule}
+ - ${safety}
 - Adjust wording, pacing and warmth to the moment while keeping the same facts, tools, actions and decisions.
 - Never announce or label the user's emotion as certain unless they explicitly state it.`;
 }
@@ -136,11 +149,14 @@ export function moodVoiceProfile(mood: ConversationMood): MoodVoiceProfile {
 export function applyMoodToSpeech(
   rate: number,
   pitch: number,
-  mood: ConversationMood
+  mood: ConversationMood,
+  personalityMode: PersonalityMode = 'moderate'
 ): { rate: number; pitch: number } {
   const profile = moodVoiceProfile(mood);
+  const modeRate = personalityMode === 'simple' ? 0.94 : personalityMode === 'roast' ? 1.06 : 1;
+  const modePitch = personalityMode === 'simple' ? -0.15 : personalityMode === 'roast' ? 0.25 : 0;
   return {
-    rate: clamp(rate * profile.rateMultiplier, 0.7, 1.5),
-    pitch: clamp(pitch + profile.pitchOffset, -3, 3),
+    rate: clamp(rate * profile.rateMultiplier * modeRate, 0.7, 1.5),
+    pitch: clamp(pitch + profile.pitchOffset + modePitch, -3, 3),
   };
 }

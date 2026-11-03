@@ -357,9 +357,9 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                 outline: 'none',
               }}
             >
-              <option value="simple" style={{ background: 'var(--surface)' }}>Simple — warm and gentle</option>
+              <option value="simple" style={{ background: 'var(--surface)' }}>Simple — caring and gentle</option>
               <option value="moderate" style={{ background: 'var(--surface)' }}>Moderate — warm and firm</option>
-              <option value="roast" style={{ background: 'var(--surface)' }}>Roast — sarcastic and playful</option>
+              <option value="roast" style={{ background: 'var(--surface)' }}>Roast — blunt and sarcastic</option>
             </select>
             <span style={{ fontSize: '0.7rem', color: 'var(--muted-dim)' }}>
               Personality changes wording and delivery only. Tools and decisions stay the same.

@@ -347,7 +347,12 @@ export const App: React.FC = () => {
       streamBufferRef.current = '';
       streamedResponseRef.current = '';
       streamedSpeechQueuedRef.current = false;
-      const initialMoodSpeech = applyMoodToSpeech(settings.speechSpeed, settings.pitch, currentMood);
+       const initialMoodSpeech = applyMoodToSpeech(
+         settings.speechSpeed,
+         settings.pitch,
+         currentMood,
+         settings.personalityMode
+       );
       streamSpeechOptionsRef.current = {
         languageCode: settings.preferredLanguage,
         rate: initialMoodSpeech.rate,
@@ -435,7 +440,8 @@ export const App: React.FC = () => {
         const moodSpeech = applyMoodToSpeech(
           effectiveSettings.speechSpeed,
           effectiveSettings.pitch,
-          mood
+          mood,
+          effectiveSettings.personalityMode
         );
 
         const speechOptions = {
@@ -617,16 +623,31 @@ export const App: React.FC = () => {
       if (command) {
         void sendRef.current(command);
       } else {
-        const text = 'Yes?';
+         const text =
+           settings.personalityMode === 'simple'
+             ? 'Yes, I’m here with you.'
+             : settings.personalityMode === 'roast'
+               ? 'Yes? Spit it out.'
+               : 'Yes?';
         setMessages((prev) => [
           ...prev,
           { id: `msg_${Date.now()}_wake`, role: 'assistant', text, timestamp: Date.now() },
         ]);
         void speakRef.current(text, {
           languageCode: settings.preferredLanguage,
-          rate: applyMoodToSpeech(settings.speechSpeed, settings.pitch, currentMood).rate,
+           rate: applyMoodToSpeech(
+             settings.speechSpeed,
+             settings.pitch,
+             currentMood,
+             settings.personalityMode
+           ).rate,
           volume: settings.speechVolume,
-          pitch: applyMoodToSpeech(settings.speechSpeed, settings.pitch, currentMood).pitch,
+           pitch: applyMoodToSpeech(
+             settings.speechSpeed,
+             settings.pitch,
+             currentMood,
+             settings.personalityMode
+           ).pitch,
           voiceId: settings.voiceId,
           voice: settings.ttsVoice,
           accent: settings.voiceAccent,

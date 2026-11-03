@@ -5,6 +5,11 @@ import { takeCompleteSpeechChunks } from '../src/services/voice/speechText';
 describe('fast response path', () => {
   it('answers deterministic presence questions without a model call', () => {
     expect(getLocalResponse('are you there?', 'en-IN')?.text).toBe('I’m here and listening.');
+    expect(getLocalResponse('are you there?', 'en-IN', 'simple')?.text).toContain('with you');
+    expect(getLocalResponse('are you there?', 'en-IN', 'roast')?.text).toContain('Try not to panic');
+    expect(getLocalResponse('hello', 'en-IN', 'simple')?.text).not.toBe(
+      getLocalResponse('hello', 'en-IN', 'roast')?.text
+    );
     expect(getLocalResponse('explain promises', 'en-IN')).toBeNull();
   });
 
