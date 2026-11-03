@@ -15,6 +15,16 @@ export function getLocalResponse(
   const value = text.trim().toLowerCase();
   if (!value) return null;
 
+  if (/^(who|what)\s+(the\s+hell\s+)?are\s+you\??$/.test(value) || /^who\s+is\s+friday\??$/.test(value)) {
+    const identity =
+      personalityMode === 'simple'
+        ? 'I’m FRIDAY, your caring desktop assistant and friend. I’m here to help and keep things simple.'
+        : personalityMode === 'roast'
+          ? 'I’m FRIDAY, your desktop assistant. The competent one in this conversation—usually.'
+          : 'I’m FRIDAY, your desktop assistant and practical friend. I help with tasks, information and everyday work.';
+    return { text: identity, detectedLanguage: detectLanguageFromText(text, preferredLanguage) };
+  }
+
   if (/^(hi|hey|hello|good morning|good afternoon|good evening)\b/.test(value)) {
     const greeting =
       personalityMode === 'simple'

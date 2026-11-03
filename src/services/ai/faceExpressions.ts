@@ -38,6 +38,15 @@ export function selectFaceExpression({
   if (state === 'thinking') return 'thinking';
   if (state === 'listening') return 'curious';
 
+  // Personality affects only the cosmetic delivery layer. Simple is visibly
+  // warm while speaking; Roast is visibly confident and unimpressed. A
+  // supportive mood still wins so the face never jokes through distress.
+  if (state === 'speaking') {
+    if (mood === 'supportive' || mood === 'patient') return personalityMode === 'simple' ? 'happy' : 'sad';
+    if (personalityMode === 'simple') return 'happy';
+    if (personalityMode === 'roast') return 'sarcastic';
+  }
+
   if (personalityMode === 'roast' && (mood === 'playful' || /\b(sure|right|obvious|really)\b/.test(value))) {
     return 'sarcastic';
   }

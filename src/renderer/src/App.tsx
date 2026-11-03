@@ -423,6 +423,19 @@ export const App: React.FC = () => {
         // Failures are shown as errors, never spoken as if they were answers.
         if (failed) {
           setRobotState('error');
+          const failedDesktopAction = response.toolCalls?.some((call) => call.toolName === 'launch_allowed_app');
+          if (failedDesktopAction && !isMuted && response.text) {
+            await speakResponse(response.text, {
+              languageCode: effectiveSettings.preferredLanguage,
+              rate: effectiveSettings.speechSpeed,
+              volume: effectiveSettings.speechVolume,
+              pitch: effectiveSettings.pitch,
+              voiceId: effectiveSettings.voiceId,
+              voice: effectiveSettings.ttsVoice,
+              accent: effectiveSettings.voiceAccent,
+              engine: effectiveSettings.ttsEngine,
+            });
+          }
           setTimeout(() => setRobotState('idle'), 1200);
           return;
         }

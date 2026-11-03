@@ -108,25 +108,10 @@
   50% { transform: translateY(5px); }
 }
 
-/* Eyelids and brows are overlays; the original eyes and highlights stay in the artwork. */
-.face-expression-lids path,
+/* Brows are the only persistent eye-area overlay; the supplied round eyes stay untouched. */
 .face-eyebrows {
   opacity: 0;
   transition: opacity 180ms ease, transform 220ms ease;
-}
-
-.expression-happy .face-lid-happy,
-.expression-laughing .face-lid-happy {
-  opacity: 0.94;
-}
-
-.expression-sleepy .face-lid-sleepy,
-.expression-sarcastic .face-lid-sleepy {
-  opacity: 0.94;
-}
-
-.expression-angry .face-lid-angry {
-  opacity: 0.9;
 }
 
 .expression-happy .face-eyebrows,
@@ -154,14 +139,21 @@
   to { transform: translateY(-4px); }
 }
 
-.face-blink-lids ellipse {
-  opacity: 1;
-  transition: opacity 70ms ease;
+.face-blink-mask {
+  /* A single smooth vertical closure, not a band or eyelash. */
+  fill: #f7f7f7;
+  opacity: 0.98;
 }
 
-.face-gaze-highlights {
-  opacity: 0.96;
-  transition: opacity 160ms ease;
+.face-blink-eye {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: blink-close 120ms ease-out;
+}
+
+@keyframes blink-close {
+  from { transform: scaleY(0.08); }
+  to { transform: scaleY(1); }
 }
 
 /* The supplied black oval is the only mouth shape. Its geometry responds to real RMS audio. */
@@ -206,7 +198,6 @@
 
 @media (prefers-reduced-motion: reduce) {
   .friday-face-container,
-  .face-expression-lids path,
   .face-eyebrows,
   .face-mouth-opening {
     animation: none !important;

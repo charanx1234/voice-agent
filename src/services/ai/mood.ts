@@ -28,7 +28,7 @@ const WELLBEING_OVERRIDE_PATTERNS = [
   /\b(please don't joke|do not joke|i need support|i need help|this is serious|i feel terrible|i feel hopeless)\b/i,
 ];
 
-const FRUSTRATION_PATTERNS = /\b(angry|furious|frustrated|annoyed|stuck|useless|broken|damn|wtf|why is this not working)\b/i;
+const FRUSTRATION_PATTERNS = /\b(angry|furious|frustrated|annoyed|stuck|useless|broken|why is this not working)\b/i;
 const CONFUSION_PATTERNS = /\b(confused|don't understand|do not understand|what does this mean|explain again|lost|how do i)\b/i;
 const EXCITEMENT_PATTERNS = /[!]{1,}|\b(excited|amazing|awesome|great news|love it|finally|yes)\b/i;
 const PLAYFUL_PATTERNS = /\b(joke|funny|roast|haha|lol|tease|kidding|playful)\b/i;

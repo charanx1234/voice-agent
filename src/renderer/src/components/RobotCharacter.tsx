@@ -40,7 +40,6 @@ export const RobotCharacter: React.FC<RobotCharacterProps> = ({
   expression,
 }) => {
   const [isBlinking, setIsBlinking] = useState(false);
-  const [gazeOffset, setGazeOffset] = useState({ x: 0, y: 0 });
   const activeExpression = expression || fallbackExpression(state, mood);
   const isSpeaking = state === 'speaking' || state === 'laughing';
   const level = isSpeaking ? clamp(amplitude, 0, 1) : 0;
@@ -73,27 +72,6 @@ export const RobotCharacter: React.FC<RobotCharacterProps> = ({
       if (blinkTimer) clearTimeout(blinkTimer);
       if (closeTimer) clearTimeout(closeTimer);
       if (secondBlinkTimer) clearTimeout(secondBlinkTimer);
-    };
-  }, []);
-
-  // Tiny, infrequent gaze shifts keep the highlights alive without moving or
-  // distorting the original eye artwork. Thinking naturally looks upward.
-  useEffect(() => {
-    let timer: ReturnType<typeof setTimeout> | undefined;
-    let resetTimer: ReturnType<typeof setTimeout> | undefined;
-    const scheduleGaze = () => {
-      timer = setTimeout(() => {
-        setGazeOffset({ x: Math.round((Math.random() - 0.5) * 8), y: Math.round((Math.random() - 0.5) * 6) });
-        resetTimer = setTimeout(() => {
-          setGazeOffset({ x: 0, y: 0 });
-          scheduleGaze();
-        }, 520 + Math.random() * 360);
-      }, 1800 + Math.random() * 2800);
-    };
-    scheduleGaze();
-    return () => {
-      if (timer) clearTimeout(timer);
-      if (resetTimer) clearTimeout(resetTimer);
     };
   }, []);
 
@@ -166,44 +144,17 @@ export const RobotCharacter: React.FC<RobotCharacterProps> = ({
           preserveAspectRatio="none"
           aria-hidden="true"
         >
-          <defs>
-            <linearGradient id="faceShade" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0" stopColor="#ffffff" stopOpacity="0.98" />
-              <stop offset="1" stopColor="#eeeeee" stopOpacity="0.96" />
-            </linearGradient>
-          </defs>
-
           {isBlinking && (
-            <g className="face-blink-lids">
-              <ellipse cx="540" cy="516" rx="94" ry="97" fill="url(#faceShade)" />
-              <ellipse cx="915" cy="516" rx="94" ry="97" fill="url(#faceShade)" />
+            <g className="face-blink-mask" aria-hidden="true">
+              <ellipse className="face-blink-eye" cx="540" cy="516" rx="94" ry="97" />
+              <ellipse className="face-blink-eye" cx="915" cy="516" rx="94" ry="97" />
             </g>
           )}
-
-          <g className="face-expression-lids">
-            <path className="face-lid face-lid-happy" d="M 443 526 Q 540 585 637 526 L 637 625 L 443 625 Z" fill="url(#faceShade)" />
-            <path className="face-lid face-lid-happy" d="M 818 526 Q 915 585 1012 526 L 1012 625 L 818 625 Z" fill="url(#faceShade)" />
-            <path className="face-lid face-lid-sleepy" d="M 443 468 Q 540 515 637 468 L 637 565 Q 540 520 443 565 Z" fill="url(#faceShade)" />
-            <path className="face-lid face-lid-sleepy" d="M 818 468 Q 915 515 1012 468 L 1012 565 Q 915 520 818 565 Z" fill="url(#faceShade)" />
-            <path className="face-lid face-lid-angry" d="M 438 418 L 640 476 L 640 410 L 438 370 Z" fill="url(#faceShade)" />
-            <path className="face-lid face-lid-angry" d="M 813 476 L 1015 418 L 1015 370 L 813 410 Z" fill="url(#faceShade)" />
-          </g>
 
           {eyebrowPaths && (
             <g className="face-eyebrows" fill="none" stroke="#070707" strokeWidth="15" strokeLinecap="round">
               <path d={eyebrowPaths.left} />
               <path d={eyebrowPaths.right} />
-            </g>
-          )}
-
-          {(gazeOffset.x !== 0 || gazeOffset.y !== 0 || activeExpression === 'thinking' || activeExpression === 'curious') && (
-            <g className="face-gaze-highlights">
-              <ellipse cx="500" cy="465" rx="20" ry="19" fill="#050505" />
-              <ellipse cx="872" cy="466" rx="20" ry="19" fill="#050505" />
-              <g transform={`translate(${gazeOffset.x} ${gazeOffset.y + (activeExpression === 'thinking' ? -10 : activeExpression === 'curious' ? -4 : 0)})`}>
-                <ellipse cx="500" cy="465" rx="17" ry="16" fill="#ffffff" />
-                <ellipse cx="872" cy="466" rx="17" ry="16" fill="#ffffff" />
-              </g>
             </g>
           )}
 

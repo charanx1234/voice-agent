@@ -67,6 +67,32 @@ export function normalizeAppName(name: string): string {
 }
 
 /**
+ * Extracts only unambiguous one-action launch commands. Anything more complex
+ * stays on the normal assistant path so we do not accidentally open an app
+ * while the user is discussing one.
+ */
+export function extractDirectLaunchApp(text: string): string | null {
+  const match = (text || '').trim().match(
+    /^(?:hey\s+)?(?:friday[\s,]+)?(?:please\s+)?(?:open|launch|start|run)\s+(.+?)\s*[,.!?]*$/i
+  );
+  if (!match) return null;
+
+  const query = match[1]
+    .replace(/^the\s+/i, '')
+    .replace(/\s+(?:application|app)$/i, '')
+    .trim();
+  if (!query || /\b(and|then|after|when|because)\b/i.test(query)) return null;
+  return query;
+}
+
+export function displayNameForAppQuery(query: string): string {
+  const builtin = ALLOWED_APPLICATIONS.find(
+    (app) => app.id === query.toLowerCase() || normalizeAppName(app.name) === normalizeAppName(query)
+  );
+  return builtin?.name || query.trim();
+}
+
+/**
  * Scores how well a spoken query matches an application display name.
  * Lower is better; null means no match.
  *   0 — exact match after normalisation ("notepad" vs "Notepad")
@@ -255,8 +281,15 @@ function launchCommand(
         stdio: 'ignore',
         shell: false, // strict: never route through a shell interpreter
       });
+      let settled = false;
+      const finish = (result: { success: boolean; error?: string }) => {
+        if (settled) return;
+        settled = true;
+        resolve(result);
+      };
+      child.once('spawn', () => finish({ success: true }));
+      child.once('error', (err: any) => finish({ success: false, error: err?.message || 'launch failed' }));
       child.unref();
-      resolve({ success: true });
     } catch (err: any) {
       resolve({ success: false, error: err?.message || 'launch failed' });
     }

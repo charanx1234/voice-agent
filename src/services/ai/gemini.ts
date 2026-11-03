@@ -3,6 +3,7 @@ import { settingsStore } from '../storage/settingsStore';
 import { buildSystemInstruction } from './personality';
 import { buildConversationBrief } from './conversationContext';
 import { toolRegistry } from '../agent/toolRegistry';
+import { displayNameForAppQuery, extractDirectLaunchApp } from '../agent/appShortcutsTool';
 import { memoryService } from '../memory/memoryService';
 import {
   ChatMessage,
@@ -283,6 +284,36 @@ export class GeminiService {
     const candidates = buildModelCandidates(settings.modelName);
     const userText = (params.message || '').trim();
     const moodAnalysis = analyzeMood(userText, params.prosody);
+    const directLaunch = !params.audioBase64 ? extractDirectLaunchApp(userText) : null;
+
+    // A one-app desktop command does not need Gemini, memory retrieval or a
+    // tool-call round trip. Start it immediately and report the real spawn
+    // result so the renderer can speak a short, accurate acknowledgement.
+    if (directLaunch) {
+      const appName = displayNameForAppQuery(directLaunch);
+      const needsConfirmation = settings.requireToolConfirmations.launchApps;
+      if (!needsConfirmation) hooks.onStream?.({ type: 'delta', text: `Opening ${appName}.` });
+      const launchResult = await toolRegistry.executeTool('launch_allowed_app', { appId: directLaunch });
+      if (launchResult?.success) {
+        if (needsConfirmation) hooks.onStream?.({ type: 'delta', text: `Opening ${appName}.` });
+        hooks.onStream?.({ type: 'delta', text: ` ${appName} is ready.` });
+        return {
+          text: `${appName} is ready.`,
+          detectedLanguage: preferredLang,
+          toolCalls: [{ toolName: 'launch_allowed_app', args: { appId: directLaunch }, result: launchResult, status: 'completed' }],
+          mood: moodAnalysis.mood,
+          safetyOverride: moodAnalysis.safetyOverride,
+        };
+      }
+      return {
+        text: launchResult?.error || `I couldn't open ${appName}.`,
+        detectedLanguage: preferredLang,
+        toolCalls: [{ toolName: 'launch_allowed_app', args: { appId: directLaunch }, result: launchResult, status: 'failed' }],
+        error: launchResult?.error || `Could not open ${appName}.`,
+        mood: moodAnalysis.mood,
+        safetyOverride: moodAnalysis.safetyOverride,
+      };
+    }
 
     const localResponse = !params.audioBase64
       ? getLocalResponse(userText, preferredLang, settings.personalityMode)

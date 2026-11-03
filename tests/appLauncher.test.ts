@@ -3,6 +3,7 @@ import {
   normalizeAppName,
   matchAppScore,
   bestAppMatch,
+  extractDirectLaunchApp,
 } from '../src/services/agent/appShortcutsTool';
 
 describe('App launcher - name matching', () => {
@@ -50,5 +51,12 @@ describe('App launcher - name matching', () => {
   it('returns null for empty queries or candidate lists', () => {
     expect(bestAppMatch('', ['Notepad'])).toBeNull();
     expect(bestAppMatch('notepad', [])).toBeNull();
+  });
+
+  it('extracts only simple one-app commands for the fast path', () => {
+    expect(extractDirectLaunchApp('Friday, open Notepad')).toBe('Notepad');
+    expect(extractDirectLaunchApp('launch Calculator app')).toBe('Calculator');
+    expect(extractDirectLaunchApp('open Notepad and then Calculator')).toBeNull();
+    expect(extractDirectLaunchApp('tell me about Notepad')).toBeNull();
   });
 });
