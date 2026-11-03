@@ -1,4 +1,4 @@
-import { GoogleGenerativeAI } from '@google/generative-ai';
+import { GoogleGenAI } from '@google/genai';
 import { MEMORY_KINDS, MemoryKind } from './memoryStore';
 
 export interface ExtractedMemory {
@@ -220,26 +220,21 @@ export class MemoryExtractor {
     assistantText: string,
     apiKey: string
   ): Promise<ExtractedMemory[]> {
-    const client = new GoogleGenerativeAI(apiKey);
-    const model = client.getGenerativeModel({
-      model: this.getModelName(),
-      generationConfig: {
-        responseMimeType: 'application/json',
-        temperature: 0.2,
-      } as any,
-    });
-
     const result = await Promise.race([
-      model.generateContent({
+      new GoogleGenAI({ apiKey }).models.generateContent({
+        model: this.getModelName(),
         contents: [{ role: 'user', parts: [{ text: buildExtractionPrompt(userText, assistantText) }] }],
+        config: {
+          responseMimeType: 'application/json',
+          temperature: 0.2,
+        },
       }),
       new Promise<never>((_resolve, reject) =>
         setTimeout(() => reject(new Error('extraction timed out')), this.timeoutMs)
       ),
     ]);
 
-    const response = await (result as any).response;
-    const raw = response?.text?.() || '';
+    const raw = (result as any)?.text || '';
     return parseExtractionResponse(raw);
   }
 }
