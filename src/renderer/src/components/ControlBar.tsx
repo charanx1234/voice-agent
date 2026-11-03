@@ -10,6 +10,7 @@ import {
   Wrench,
   Brain,
   Sparkles,
+  LayoutDashboard,
 } from 'lucide-react';
 import { RobotState } from '@/shared/types';
 import { formatRecordingDuration } from '@/services/voice/micErrors';
@@ -34,6 +35,9 @@ interface ControlBarProps {
   onOpenSettings: () => void;
   onOpenShortcuts: () => void;
   onOpenMemory: () => void;
+  dashboardOpen?: boolean;
+  dashboardCount?: number;
+  onToggleDashboard?: () => void;
 }
 
 export const ControlBar: React.FC<ControlBarProps> = ({
@@ -56,6 +60,9 @@ export const ControlBar: React.FC<ControlBarProps> = ({
   onOpenSettings,
   onOpenShortcuts,
   onOpenMemory,
+  dashboardOpen = false,
+  dashboardCount = 0,
+  onToggleDashboard,
 }) => {
   const [inputText, setInputText] = useState('');
 
@@ -162,6 +169,34 @@ export const ControlBar: React.FC<ControlBarProps> = ({
 
         {/* Action icons (Shortcuts, Transcript, Mute, Settings) */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+          {/* Parallel dashboard toggle: chat and voice stay active in the left pane. */}
+          {onToggleDashboard && (
+            <button
+              onClick={onToggleDashboard}
+              title={dashboardOpen ? 'Close dashboard' : 'Open dashboard'}
+              aria-label={dashboardOpen ? 'Close dashboard' : 'Open dashboard'}
+              style={{
+                background: dashboardOpen
+                  ? 'color-mix(in srgb, var(--accent) 15%, transparent)'
+                  : 'color-mix(in srgb, var(--text) 5%, transparent)',
+                border: dashboardOpen
+                  ? '1px solid color-mix(in srgb, var(--accent) 40%, transparent)'
+                  : '1px solid color-mix(in srgb, var(--text) 10%, transparent)',
+                borderRadius: '10px',
+                padding: '6px 8px',
+                color: dashboardOpen ? 'var(--accent)' : 'var(--muted)',
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '4px',
+                fontSize: '0.75rem',
+              }}
+            >
+              <LayoutDashboard size={14} />
+              {dashboardCount > 0 && <span>{dashboardCount}</span>}
+            </button>
+          )}
+
           {/* Shortcuts Tool Button */}
           <button
             onClick={onOpenShortcuts}

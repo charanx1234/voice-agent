@@ -716,6 +716,12 @@ export const App: React.FC = () => {
     window.fridayAPI?.setDashboardOpen(false);
   };
 
+  const handleToggleDashboard = () => {
+    const nextOpen = !dashboardOpen;
+    setDashboardOpen(nextOpen);
+    window.fridayAPI?.setDashboardOpen(nextOpen);
+  };
+
   const handleCompleteReminder = async (id: string) => {
     if (!window.fridayAPI) return;
     await window.fridayAPI.completeReminder(id);
@@ -959,6 +965,9 @@ export const App: React.FC = () => {
             onOpenSettings={() => setSettingsOpen(true)}
             onOpenShortcuts={() => setShortcutsOpen(true)}
             onOpenMemory={() => setMemoryOpen(true)}
+            dashboardOpen={dashboardOpen}
+            dashboardCount={artifacts.length}
+            onToggleDashboard={handleToggleDashboard}
           />
         </div>
 
