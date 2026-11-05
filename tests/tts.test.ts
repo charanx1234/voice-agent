@@ -6,6 +6,10 @@ import {
   voiceForLanguage,
   volumeToPercent,
   wrapPcmAsWav,
+  detectApiKeyProvider,
+  redactApiKey,
+  resolveMurfVoiceId,
+  neuralVoiceService,
 } from '../src/services/voice/neuralVoice';
 
 describe('Female voice selection', () => {
@@ -136,5 +140,48 @@ describe('System voice fallback', () => {
 
   it('returns null when no voices exist', () => {
     expect(pickSystemVoice([], 'en-US')).toBeNull();
+  });
+});
+
+describe('Murf AI and ElevenLabs provider distinction', () => {
+  it('correctly detects a 67-character key as Murf and never ElevenLabs', () => {
+    const murfKey67 = 'sk_' + 'a'.repeat(64); // total length 67
+    expect(murfKey67.length).toBe(67);
+    expect(detectApiKeyProvider(murfKey67)).toBe('murf');
+
+    const murfPrefixed = 'murf_xyz1234567890';
+    expect(detectApiKeyProvider(murfPrefixed)).toBe('murf');
+  });
+
+  it('correctly detects 32-character and 51-character keys as ElevenLabs', () => {
+    const elevenLegacy = 'a'.repeat(32);
+    expect(detectApiKeyProvider(elevenLegacy)).toBe('elevenlabs');
+
+    const elevenNew = 'sk_' + 'b'.repeat(48); // total length 51
+    expect(elevenNew.length).toBe(51);
+    expect(detectApiKeyProvider(elevenNew)).toBe('elevenlabs');
+  });
+
+  it('redacts sensitive API keys from log messages', () => {
+    const rawKey = 'sk_secretKey12345678901234567890123456789012';
+    const message = `Connection failed for ${rawKey} with status 401`;
+    const redacted = redactApiKey(message, [rawKey]);
+    expect(redacted).not.toContain(rawKey);
+    expect(redacted).toContain('[redacted]');
+  });
+
+  it('maps voice identifiers to appropriate Murf voices', () => {
+    expect(resolveMurfVoiceId(undefined, 'en-IN')).toBe('en-IN-priya');
+    expect(resolveMurfVoiceId(undefined, 'en-GB')).toBe('en-UK-hazel');
+    expect(resolveMurfVoiceId(undefined, 'en-US')).toBe('en-US-natalie');
+    expect(resolveMurfVoiceId('en-US-amanda')).toBe('en-US-amanda');
+  });
+
+  it('provides a provider connection status object', () => {
+    const status = neuralVoiceService.getConnectionStatus();
+    expect(status).toHaveProperty('provider');
+    expect(status).toHaveProperty('configured');
+    expect(status).toHaveProperty('displayName');
+    expect(status).toHaveProperty('details');
   });
 });

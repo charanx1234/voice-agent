@@ -6,11 +6,14 @@ import { researchToolDefinition, executeResearchTool } from './researchTool';
 import { memoryToolDefinitions, executeMemoryTool } from '../memory/memoryTool';
 import { reminderToolDefinitions, executeReminderTool } from '../reminders/remindersTool';
 import { dashboardToolDefinition, executeDashboardTool } from '../dashboard/dashboardTool';
+import { websiteAccessibilityToolDefinitions, executeWebsiteAccessibilityTool } from './websiteAccessibilityTool';
+import { screenControlToolDefinitions, executeScreenControlTool } from './screenControlTools';
 import { settingsStore } from '../storage/settingsStore';
 import { accentIdFromName, defaultVoiceForAccent } from '../voice/voiceCatalog';
 import { ToolConfirmationPayload } from '../../shared/types';
 import { EventEmitter } from 'events';
 import { PersonalityMode } from '../../shared/types';
+import { classifyFridayError } from '../error/errorHandler';
 
 export type ConfirmationRequester = (payload: ToolConfirmationPayload) => Promise<boolean>;
 
@@ -133,6 +136,8 @@ export class ToolRegistry {
       personalityModeToolDefinition,
       enterStandbyToolDefinition,
       appShortcutsToolDefinition,
+      ...websiteAccessibilityToolDefinitions,
+      ...screenControlToolDefinitions,
     ];
 
     // Format for @google/genai and @google/generative-ai
@@ -249,13 +254,32 @@ export class ToolRegistry {
       if (toolName === 'launch_allowed_app') {
         return await executeAppShortcutsTool(toolName, args);
       }
+      if (toolName.startsWith('website_')) {
+        return await executeWebsiteAccessibilityTool(toolName, args);
+      }
+      if (
+        [
+          'read_screen',
+          'get_active_window',
+          'click_desktop_element',
+          'type_desktop_text',
+          'scroll_desktop',
+          'switch_desktop_window',
+          'close_desktop_window',
+        ].includes(toolName)
+      ) {
+        return await executeScreenControlTool(toolName, args);
+      }
 
-      return { error: `Unrecognized tool name: ${toolName}` };
+      const classified = classifyFridayError(new Error(`Unrecognized capability: ${toolName}`), { toolName });
+      return { success: false, error: classified.userMessage, errorKind: classified.kind };
     } catch (err: any) {
-      console.error(`[ToolRegistry] Error executing ${toolName}:`, err);
+      const classified = classifyFridayError(err, { toolName });
       return {
         success: false,
-        error: `Tool execution failed: ${err.message || 'Unknown error'}`,
+        error: classified.userMessage,
+        errorKind: classified.kind,
+        technicalDetails: err?.message,
       };
     }
   }

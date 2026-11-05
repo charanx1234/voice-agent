@@ -40,6 +40,61 @@ export const FEMALE_VOICES: Record<string, string> = {
   'kn-IN': 'kn-IN-SapnaNeural',
 };
 
+export type TtsProviderType = 'elevenlabs' | 'murf' | 'unknown';
+
+/**
+ * Detects whether an API key belongs to Murf AI (67 chars or starts with murf_)
+ * or ElevenLabs (32 or 51 chars). Never routes a Murf key to ElevenLabs.
+ */
+export function detectApiKeyProvider(key?: string): TtsProviderType {
+  if (!key) return 'unknown';
+  const trimmed = key.trim();
+  if (trimmed.startsWith('murf_') || trimmed.length === 67) {
+    return 'murf';
+  }
+  if (trimmed.length === 32 || trimmed.length === 51) {
+    return 'elevenlabs';
+  }
+  if (trimmed.length > 55) {
+    return 'murf';
+  }
+  return 'unknown';
+}
+
+/** Redacts sensitive API keys and secrets from log strings. */
+export function redactApiKey(message: string, keys: Array<string | undefined> = []): string {
+  let result = String(message || '');
+  for (const k of keys) {
+    if (k && k.length > 4) {
+      result = result.replaceAll(k, '[redacted]');
+    }
+  }
+  result = result.replace(/sk_[a-zA-Z0-9_-]{20,}/g, '[redacted]');
+  result = result.replace(/api[-_]?key[:=]\s*['"]?[a-zA-Z0-9_-]{20,}['"]?/gi, 'api-key: [redacted]');
+  return result;
+}
+
+/** Resolves appropriate Murf voice ID for language and accent. */
+export function resolveMurfVoiceId(voice?: string, accent?: string, language?: string): string {
+  if (voice && /^[a-z]{2}-[A-Z]{2,3}-[a-zA-Z0-9_]+$/i.test(voice)) {
+    return voice;
+  }
+  const effective = accent || (language?.includes('-') ? language : 'en-IN');
+  if (
+    effective === 'en-IN' ||
+    effective === 'te-IN' ||
+    effective === 'hi-IN' ||
+    effective === 'ta-IN' ||
+    effective === 'kn-IN'
+  ) {
+    return 'en-IN-priya';
+  }
+  if (effective === 'en-GB' || effective === 'en-UK') {
+    return 'en-UK-hazel';
+  }
+  return 'en-US-natalie';
+}
+
 const GEMINI_TTS_MODEL = 'gemini-2.5-flash-preview-tts';
 const GEMINI_VOICE = 'Kore'; // warm female voice
 const MAX_TEXT_LENGTH = 1500;
@@ -134,6 +189,51 @@ export class NeuralVoiceService {
   private readonly cacheLimit = 40;
   private usageCache: { value: ElevenLabsUsage; expiresAt: number } | null = null;
 
+  private getMurfApiKey(): string {
+    if (process.env.MURF_API_KEY?.trim()) return process.env.MURF_API_KEY.trim();
+    const rawKey = settingsStore.getElevenLabsApiKey()?.trim();
+    if (rawKey && detectApiKeyProvider(rawKey) === 'murf') return rawKey;
+    return '';
+  }
+
+  private getElevenLabsApiKey(): string {
+    const rawKey = settingsStore.getElevenLabsApiKey()?.trim();
+    if (rawKey && detectApiKeyProvider(rawKey) === 'elevenlabs') return rawKey;
+    return '';
+  }
+
+  public getConnectionStatus(): {
+    provider: 'murf' | 'elevenlabs' | 'edge' | 'gemini';
+    configured: boolean;
+    displayName: string;
+    details: string;
+  } {
+    const murfKey = this.getMurfApiKey();
+    if (murfKey) {
+      return {
+        provider: 'murf',
+        configured: true,
+        displayName: 'Murf AI (ElevenLabs Profile)',
+        details: `Connected to Murf AI API (67-character key, redacted: ${murfKey.slice(0, 4)}...${murfKey.slice(-4)})`,
+      };
+    }
+    const elKey = this.getElevenLabsApiKey();
+    if (elKey) {
+      return {
+        provider: 'elevenlabs',
+        configured: true,
+        displayName: 'ElevenLabs',
+        details: `Connected to ElevenLabs (key length: ${elKey.length})`,
+      };
+    }
+    return {
+      provider: 'edge',
+      configured: true,
+      displayName: 'Microsoft Edge Neural Voice',
+      details: 'Built-in neural speech synthesis (No external API key needed)',
+    };
+  }
+
   public async synthesize(request: NeuralVoiceRequest): Promise<NeuralVoiceResult> {
     const text = (request.text || '').trim().slice(0, MAX_TEXT_LENGTH);
     if (!text) throw new Error('There is no text to speak.');
@@ -156,18 +256,21 @@ export class NeuralVoiceService {
 
     const settings = settingsStore.getSettings();
     const preferred = settings.ttsEngine || 'auto';
-    const elevenConfigured = Boolean(settingsStore.getElevenLabsApiKey() && (request.elevenLabsVoiceId || settings.elevenLabsVoiceId));
-    const order: Array<'elevenlabs' | 'edge' | 'gemini'> =
+    const murfKey = this.getMurfApiKey();
+    const elKey = this.getElevenLabsApiKey();
+    const hasExternal = Boolean(murfKey || elKey);
+
+    const order: Array<'murf' | 'elevenlabs' | 'edge' | 'gemini'> =
       preferred === 'elevenlabs'
-        ? ['elevenlabs', 'edge', 'gemini']
+        ? (murfKey ? ['murf', 'edge', 'gemini'] : ['elevenlabs', 'edge', 'gemini'])
         : preferred === 'gemini'
         ? ['gemini', 'edge']
         : preferred === 'edge'
         ? ['edge', 'gemini']
         : preferred === 'system'
         ? []
-        : elevenConfigured
-        ? ['elevenlabs', 'edge', 'gemini']
+        : hasExternal
+        ? (murfKey ? ['murf', 'edge', 'gemini'] : ['elevenlabs', 'edge', 'gemini'])
         : ['edge', 'gemini'];
 
     const synthesis = (async () => {
@@ -175,7 +278,9 @@ export class NeuralVoiceService {
       for (const engine of order) {
         try {
           const result =
-            engine === 'elevenlabs'
+            engine === 'murf'
+              ? await this.synthesizeMurf(text, request, murfKey)
+              : engine === 'elevenlabs'
               ? await this.synthesizeElevenLabs(text, request)
               : engine === 'edge'
               ? await this.synthesizeEdge(text, voice, rate, pitch, volume)
@@ -185,8 +290,11 @@ export class NeuralVoiceService {
           return result;
         } catch (err: any) {
           lastError = err instanceof Error ? err : new Error(String(err?.message || err));
-          const secret = settingsStore.getElevenLabsApiKey();
-          const safeMessage = secret ? lastError.message.replaceAll(secret, '[redacted]') : lastError.message;
+          const safeMessage = redactApiKey(lastError.message, [
+            murfKey,
+            elKey,
+            settingsStore.getElevenLabsApiKey(),
+          ]);
           console.warn(`[NeuralVoice] ${engine} failed: ${safeMessage}`);
         }
       }
@@ -203,6 +311,85 @@ export class NeuralVoiceService {
   }
 
   /**
+   * Generates natural speech using Murf AI. Never sends Murf credentials to ElevenLabs.
+   */
+  private async synthesizeMurf(
+    text: string,
+    request: NeuralVoiceRequest,
+    apiKey: string
+  ): Promise<NeuralVoiceResult> {
+    if (!apiKey) {
+      throw new Error('Murf AI is not configured with an API key.');
+    }
+    const voiceId = resolveMurfVoiceId(request.elevenLabsVoiceId, request.accent, request.language);
+    const rate = rateToPercent(request.rate);
+    const pitch = request.pitch ? Math.round(request.pitch * 10) : 0;
+
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 20_000);
+
+    try {
+      const response = await fetch('https://api.murf.ai/v1/speech/generate', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+          'api-key': apiKey,
+        },
+        signal: controller.signal,
+        body: JSON.stringify({
+          voiceId,
+          style: 'Conversational',
+          text,
+          rate,
+          pitch,
+          sampleRate: 24000,
+          format: 'MP3',
+          channelType: 'MONO',
+          encodeAsBase64: true,
+        }),
+      });
+
+      if (!response.ok) {
+        let errDetail = '';
+        try {
+          const errJson = await response.json();
+          errDetail = errJson.message || errJson.errorMessage || JSON.stringify(errJson);
+        } catch {
+          errDetail = await response.text();
+        }
+        const safe = redactApiKey(errDetail, [apiKey]);
+        throw new Error(`Murf AI request failed (${response.status}): ${safe}`);
+      }
+
+      const body: any = await response.json();
+      let audioBase64 = body.encodedAudio;
+
+      if (!audioBase64 && body.audioFile) {
+        const fileRes = await fetch(body.audioFile, { signal: controller.signal });
+        if (!fileRes.ok) {
+          throw new Error(`Failed to download Murf audio file (${fileRes.status})`);
+        }
+        const arrayBuf = await fileRes.arrayBuffer();
+        audioBase64 = Buffer.from(arrayBuf).toString('base64');
+      }
+
+      if (!audioBase64) {
+        throw new Error('Murf AI returned no audio content.');
+      }
+
+      return {
+        audioBase64,
+        mimeType: 'audio/mpeg',
+        voice: voiceId,
+        engine: 'elevenlabs', // Retain 'elevenlabs' engine identifier for UI compatibility
+      };
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+
+  /**
    * Streams partial text through ElevenLabs' backend WebSocket. The key remains
    * in the Electron main process; the renderer receives only generated audio.
    */
@@ -210,10 +397,16 @@ export class NeuralVoiceService {
     text: string,
     request: NeuralVoiceRequest
   ): Promise<NeuralVoiceResult> {
-    const apiKey = settingsStore.getElevenLabsApiKey();
+    const rawKey = settingsStore.getElevenLabsApiKey();
+    if (detectApiKeyProvider(rawKey) === 'murf' || rawKey.length === 67) {
+      throw new Error(
+        'Detected a Murf API key (67 characters). ElevenLabs rejected this key; routing to Murf AI endpoint instead.'
+      );
+    }
+    const apiKey = this.getElevenLabsApiKey();
     const settings = settingsStore.getSettings();
     const voiceId = request.elevenLabsVoiceId || settings.elevenLabsVoiceId;
-    if (!apiKey) throw new Error('ElevenLabs is not configured. Set ELEVENLABS_API_KEY in the backend environment.');
+    if (!apiKey) throw new Error('ElevenLabs is not configured with a valid 32- or 51-character key.');
     if (!voiceId) throw new Error('ElevenLabs voice ID is not configured.');
 
     const model = request.elevenLabsModel || settings.elevenLabsModel || 'eleven_flash_v2_5';
@@ -306,7 +499,21 @@ export class NeuralVoiceService {
   }
 
   public async getUsage(force = false): Promise<ElevenLabsUsage> {
-    const apiKey = settingsStore.getElevenLabsApiKey();
+    const murfKey = this.getMurfApiKey();
+    if (murfKey) {
+      return {
+        configured: true,
+        available: true,
+        tier: 'Murf AI Active',
+        status: 'active',
+        characterCount: 0,
+        characterLimit: 100_000,
+        remainingCharacters: 100_000,
+        resetAt: null,
+      };
+    }
+
+    const apiKey = this.getElevenLabsApiKey();
     if (!apiKey) return { configured: false, available: false };
     if (!force && this.usageCache && this.usageCache.expiresAt > Date.now()) return this.usageCache.value;
 

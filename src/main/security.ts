@@ -46,6 +46,46 @@ export const IPC_CHANNELS = {
   MINIMIZE_WINDOW: 'friday:minimize-window',
   CLOSE_WINDOW: 'friday:close-window',
   CLIPBOARD_WRITE: 'friday:clipboard-write',
+  ACCESSIBILITY_GET_STATE: 'friday:accessibility-get-state',
+  ACCESSIBILITY_SET_ENABLED: 'friday:accessibility-set-enabled',
+  ACCESSIBILITY_OPEN_URL: 'friday:accessibility-open-url',
+  ACCESSIBILITY_EXECUTE_COMMAND: 'friday:accessibility-execute-command',
+  ACCESSIBILITY_SET_READING_SPEED: 'friday:accessibility-set-reading-speed',
+  ACCESSIBILITY_STOP_READING: 'friday:accessibility-stop-reading',
+  ACCESSIBILITY_STATE_CHANGED: 'friday:accessibility-state-changed',
+  PET_SHOW_MAIN: 'friday:pet-show-main',
+  PET_TOGGLE_MAIN: 'friday:pet-toggle-main',
+  PET_CONTEXT_MENU: 'friday:pet-context-menu',
+  PET_GET_STATE: 'friday:pet-get-state',
+  PET_STATE_CHANGED: 'friday:pet-state-changed',
+  PET_QUIT: 'friday:pet-quit',
+  PET_SET_ENABLED: 'friday:pet-set-enabled',
+  PET_GET_ENABLED: 'friday:pet-get-enabled',
+
+  // Modular AI Providers
+  PROVIDER_GET_STATUS: 'friday:provider-get-status',
+  PROVIDER_SET_ACTIVE: 'friday:provider-set-active',
+  PROVIDER_SAVE_CONFIG: 'friday:provider-save-config',
+  PROVIDER_TEST_CONNECTION: 'friday:provider-test-connection',
+
+  // Screen Understanding & Desktop Control
+  SCREEN_CAPTURE: 'friday:screen-capture',
+  SCREEN_GET_ACTIVE_WINDOW: 'friday:screen-get-active-window',
+  SCREEN_EXECUTE_ACTION: 'friday:screen-execute-action',
+  SCREEN_ANALYSIS_ACTIVE: 'friday:screen-analysis-active',
+
+  // Conversation Synchronization between Windows
+  CHAT_BROADCAST_MESSAGE: 'friday:chat-broadcast-message',
+
+  // Centralized Voice Session & Audio Pipeline
+  VOICE_STATE_CHANGED: 'friday:voice-state-changed',
+  VOICE_LEVEL_UPDATE: 'friday:voice-level-update',
+  VOICE_MOUTH_UPDATE: 'friday:voice-mouth-update',
+  VOICE_TRIGGER_MIC: 'friday:voice-trigger-mic',
+  VOICE_INTERRUPT: 'friday:voice-interrupt',
+  VOICE_SPEAKER_ENROLL: 'friday:voice-speaker-enroll',
+  VOICE_SPEAKER_CLEAR: 'friday:voice-speaker-clear',
+  VOICE_TEST_MIC: 'friday:voice-test-mic',
 } as const;
 
 export function sanitizePath(inputPath: string): string {

@@ -339,6 +339,6 @@ export async function executeAppShortcutsTool(
 
   return {
     success: false,
-    error: `I could not find an application called "${query}" on this computer. Is it installed?`,
+    error: `I couldn't find that application on your computer.`,
   };
 }

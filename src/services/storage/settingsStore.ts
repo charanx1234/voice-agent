@@ -43,12 +43,18 @@ const DEFAULT_SETTINGS: FridaySettings = {
     webResearch: false,
     launchApps: false,
   },
-  modelName: process.env.GEMINI_MODEL || 'gemini-3.5-flash-lite',
+  modelName: process.env.GEMINI_MODEL || 'gemini-3.1-pro-preview',
   soundMuted: false,
   memoryEnabled: true,
   personalityMode: 'moderate',
   handsFreeEnabled: true,
   handsFreeSilenceTimeoutMs: 25_000,
+  desktopPetEnabled: true,
+  noiseSuppression: 'standard',
+  echoCancellation: true,
+  autoGainControl: true,
+  vadSensitivity: 'medium',
+  speakerVerificationEnabled: false,
 };
 
 export class SettingsStore {
@@ -76,10 +82,19 @@ export class SettingsStore {
       if (fs.existsSync(this.filePath)) {
         const raw = fs.readFileSync(this.filePath, 'utf-8');
         const parsed = JSON.parse(raw);
-        // Automatically migrate deprecated model names
+        // Automatically migrate deprecated or non-existent model names
         let model = parsed.modelName || DEFAULT_SETTINGS.modelName;
-        if (model === 'gemini-2.5-flash-lite' || model === 'gemini-1.5-flash' || model === 'gemini-1.5-pro') {
-          model = 'gemini-3.5-flash-lite';
+        if (
+          !model ||
+          model === 'gemini-2.5-pro' ||
+          model === 'gemini-2.0-flash' ||
+          model === 'gemini-1.5-flash'
+        ) {
+          model = 'gemini-3.1-pro-preview';
+        }
+
+        if (parsed.providerConfigs?.gemini?.model === 'gemini-2.5-pro') {
+          parsed.providerConfigs.gemini.model = 'gemini-3.1-pro-preview';
         }
 
         // v1 stored a fixed dark theme; keep those installs dark instead of flipping them.
@@ -202,6 +217,11 @@ export class SettingsStore {
   /** ElevenLabs secrets are backend environment-only and never persisted or returned. */
   public getElevenLabsApiKey(): string {
     return process.env.ELEVENLABS_API_KEY || '';
+  }
+
+  /** Murf AI secrets are backend environment-only and never persisted or returned. */
+  public getMurfApiKey(): string {
+    return process.env.MURF_API_KEY || '';
   }
 
   public saveSettings(updates: Partial<FridaySettings>): void {

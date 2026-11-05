@@ -29,6 +29,7 @@ export interface SpeakOptions {
   elevenLabsStyle?: number;
   elevenLabsSpeakerBoost?: boolean;
   onStart?: () => void;
+  onChunkStart?: (chunkText: string) => void;
   onEnd?: () => void;
   onError?: (err: any) => void;
 }
@@ -43,6 +44,7 @@ interface SynthesisResponse {
 interface QueuedSpeech {
   text: string;
   options: SpeakOptions;
+  audioPromise?: Promise<SynthesisResponse>;
 }
 
 /**
@@ -153,11 +155,45 @@ export class VoiceManager {
     }
   }
 
-  /** Queues complete sentences so the first streamed sentence can play immediately. */
+  private requestSynthesis(text: string, options: SpeakOptions): Promise<SynthesisResponse> {
+    return window.fridayAPI.synthesizeSpeech({
+      text,
+      language: options.languageCode || 'te-IN',
+      rate: options.rate,
+      pitch: options.pitch,
+      volume: options.volume,
+      voice: options.voice,
+      accent: options.accent,
+      elevenLabsVoiceId: options.elevenLabsVoiceId,
+      elevenLabsModel: options.elevenLabsModel,
+      elevenLabsStability: options.elevenLabsStability,
+      elevenLabsSimilarityBoost: options.elevenLabsSimilarityBoost,
+      elevenLabsStyle: options.elevenLabsStyle,
+      elevenLabsSpeakerBoost: options.elevenLabsSpeakerBoost,
+    });
+  }
+
+  /** Queues complete sentences with immediate background prefetching so sentences play with zero dead pauses. */
   public enqueueSpeech(text: string, options: SpeakOptions = {}): void {
     const spoken = cleanForSpeech(text);
     if (!spoken) return;
-    this.speechQueue.push({ text: spoken, options });
+
+    const chunks = chunkForSpeech(spoken);
+    if (chunks.length === 0) return;
+
+    const wantsNeural =
+      (options.engine || 'auto') !== 'system' &&
+      Boolean(window.fridayAPI?.synthesizeSpeech);
+
+    for (const chunk of chunks) {
+      const item: QueuedSpeech = { text: chunk, options };
+      if (wantsNeural) {
+        // Pre-fetch audio immediately in parallel so the next chunk is ready before the current chunk ends
+        item.audioPromise = this.requestSynthesis(chunk, options);
+      }
+      this.speechQueue.push(item);
+    }
+
     if (this.queueRunning) return;
 
     this.queueRunning = true;
@@ -172,19 +208,30 @@ export class VoiceManager {
         const item = this.speechQueue.shift();
         if (!item) break;
 
+        // Ensure all subsequent queued chunks are actively prefetching in the background
+        for (const queued of this.speechQueue) {
+          if (!queued.audioPromise && (queued.options.engine || 'auto') !== 'system' && Boolean(window.fridayAPI?.synthesizeSpeech)) {
+            queued.audioPromise = this.requestSynthesis(queued.text, queued.options);
+          }
+        }
+
         try {
-          const wantsNeural =
-            (item.options.engine || 'auto') !== 'system' &&
-            Boolean(window.fridayAPI?.synthesizeSpeech);
-          if (wantsNeural) {
+          if (item.audioPromise) {
             try {
-              await this.speakNeural(item.text, item.options.languageCode || 'te-IN', item.options, generation);
-              continue;
+              const result = await item.audioPromise;
+              if (generation !== this.generation) return;
+              if (result?.audioBase64) {
+                item.options.onChunkStart?.(item.text);
+                await this.playBase64(result.audioBase64, result.mimeType, generation);
+                continue;
+              }
             } catch (err: any) {
               if (generation !== this.generation) return;
-              console.warn('[VoiceManager] Streamed neural speech failed:', err?.message);
+              console.warn('[VoiceManager] Pipelined neural synthesis failed, falling back to system:', err?.message);
             }
           }
+
+          item.options.onChunkStart?.(item.text);
           await this.speakSystem(item.text, item.options.languageCode || 'te-IN', item.options);
         } catch (err: any) {
           item.options.onError?.(err);

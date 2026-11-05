@@ -117,7 +117,7 @@ export class MemoryService {
     this.conversationStore = new ConversationStore(db);
     this.extractor = new MemoryExtractor({
       getApiKey: () => settingsStore.getRawApiKey(),
-      getModelName: () => settingsStore.getSettings().modelName || 'gemini-3.5-flash-lite',
+      getModelName: () => settingsStore.getSettings().modelName || 'gemini-3.1-pro-preview',
       logger: this.log,
     });
 

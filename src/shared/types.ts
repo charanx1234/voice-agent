@@ -10,18 +10,55 @@ export type RobotState =
   | 'interrupted'
   | 'error';
 
+/** Formal voice session lifecycle state machine. */
+export type VoiceSessionState =
+  | 'STANDBY'
+  | 'WAKE_DETECTED'
+  | 'LISTENING'
+  | 'PROCESSING'
+  | 'SPEAKING'
+  | 'INTERRUPTED'
+  | 'PERMISSION_REQUIRED'
+  | 'MICROPHONE_ERROR'
+  | 'NETWORK_ERROR'
+  | 'PROVIDER_ERROR'
+  | 'TASK_UNSUPPORTED';
+
+export interface EnrolledSpeakerProfile {
+  enrolledAt: number;
+  pitchMean: number;
+  pitchStd: number;
+  spectralVector: number[];
+  spectralCentroid: number;
+  sampleDurationMs: number;
+}
+
+export interface SpeakerVerificationResult {
+  verified: boolean;
+  score: number;
+  pitchDistance: number;
+  spectralSimilarity: number;
+  reason?: string;
+}
+
 /** Visual expression layered over FRIDAY's official face artwork. */
 export type FaceExpression =
   | 'neutral'
   | 'happy'
-  | 'laughing'
   | 'sad'
+  | 'crying'
   | 'angry'
+  | 'satisfied'
+  | 'sarcastic'
+  | 'laugh'
+  | 'laughing'
+  | 'smile'
+  | 'not-happy'
+  | 'not_happy'
   | 'surprised'
   | 'confused'
   | 'curious'
   | 'sleepy'
-  | 'sarcastic'
   | 'excited'
   | 'thinking';
 
@@ -103,7 +140,7 @@ export interface FridaySettings {
     webResearch: boolean;
     launchApps: boolean;
   };
-  modelName: string; // 'gemini-3.5-flash-lite', 'gemini-2.5-flash'
+  modelName: string; // 'gemini-3.1-pro-preview', 'gemini-3.5-flash'
   soundMuted: boolean;
   /** Long-term memory: extract facts from conversations and use them in replies. */
   memoryEnabled: boolean;
@@ -113,6 +150,121 @@ export interface FridaySettings {
   handsFreeEnabled: boolean;
   /** Silence duration before active hands-free mode returns to standby. */
   handsFreeSilenceTimeoutMs: number;
+  /** Floating desktop pet overlay enabled. */
+  desktopPetEnabled?: boolean;
+  /** Stored position for floating desktop pet. */
+  petPosition?: PetPosition;
+  /** Active primary AI Provider ID. */
+  aiProvider?: AiProviderId;
+  /** Fallback AI Provider ID if primary is unavailable. */
+  fallbackAiProvider?: AiProviderId;
+  /** Configurations for multiple AI providers. */
+  providerConfigs?: Partial<Record<AiProviderId, Partial<AiProviderConfig>>>;
+  /** Windows Screen Understanding and Desktop Control enabled. */
+  screenUnderstandingEnabled?: boolean;
+  /** Voice isolation: noise suppression level ('off' | 'standard' | 'strong'). */
+  noiseSuppression?: 'off' | 'standard' | 'strong';
+  /** Acoustic echo cancellation enabled. */
+  echoCancellation?: boolean;
+  /** Automatic gain control. */
+  autoGainControl?: boolean;
+  /** Voice activity detection sensitivity ('low' | 'medium' | 'high'). */
+  vadSensitivity?: 'low' | 'medium' | 'high';
+  /** Speaker verification: only accept commands from enrolled user voice. */
+  speakerVerificationEnabled?: boolean;
+  /** Enrolled user speaker voice profile / acoustic signature. */
+  enrolledVoiceProfile?: EnrolledSpeakerProfile;
+  /** Selected microphone device ID. */
+  microphoneDeviceId?: string;
+}
+
+export type AiProviderId =
+  | 'gemini'
+  | 'openai'
+  | 'anthropic'
+  | 'openrouter'
+  | 'deepseek'
+  | 'groq'
+  | 'mistral'
+  | 'custom';
+
+export interface AiProviderConfig {
+  id: AiProviderId;
+  name: string;
+  apiKey: string;
+  hasKey: boolean;
+  model: string;
+  availableModels: string[];
+  baseUrl?: string;
+  enabled: boolean;
+  status: 'connected' | 'disconnected' | 'error' | 'testing';
+  lastError?: string;
+}
+
+export interface AiProviderStatus {
+  activeProvider: AiProviderId;
+  fallbackProvider?: AiProviderId;
+  providers: Record<AiProviderId, AiProviderConfig>;
+}
+
+export interface ScreenCaptureResult {
+  success: boolean;
+  imageBase64?: string;
+  imageMimeType?: string;
+  width: number;
+  height: number;
+  monitorIndex?: number;
+  activeWindow?: ActiveWindowInfo;
+  elements?: DesktopUiElement[];
+  error?: string;
+}
+
+export interface ActiveWindowInfo {
+  processName: string;
+  title: string;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  handle?: string;
+}
+
+export interface DesktopUiElement {
+  id: string;
+  name: string;
+  controlType: string;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  isEnabled: boolean;
+  isKeyboardFocusable?: boolean;
+  value?: string;
+}
+
+export interface DesktopActionResult {
+  success: boolean;
+  action: string;
+  target?: string;
+  details?: string;
+  error?: string;
+}
+
+export interface PetPosition {
+  x: number;
+  y: number;
+}
+
+export interface PetCompanionState {
+  robotState: RobotState;
+  voiceSessionState?: VoiceSessionState;
+  amplitude: number;
+  expression: FaceExpression;
+  mood: ConversationMood;
+  soundMuted: boolean;
+  handsFreeEnabled: boolean;
+  isSpeaking: boolean;
+  isVerifiedSpeaker?: boolean;
 }
 
 export interface NoteItem {
@@ -362,9 +514,150 @@ export interface FridayApiBridge {
   transcribeUtterance: (audioBase64: string, audioMimeType?: string) => Promise<{ success: boolean; reply?: string; error?: string }>;
   onStandbyRequested: (callback: () => void) => () => void;
 
+  // Website Accessibility Assistant
+  accessibilityGetState: () => Promise<WebsiteAccessibilityState>;
+  accessibilitySetEnabled: (enabled: boolean) => Promise<WebsiteAccessibilityState>;
+  accessibilityOpenUrl: (url: string) => Promise<{ success: boolean; error?: string }>;
+  accessibilityExecuteCommand: (command: string, args?: Record<string, any>) => Promise<AccessibilityCommandResult>;
+  accessibilitySetReadingSpeed: (speed: number) => Promise<number>;
+  accessibilityStopReading: () => Promise<boolean>;
+  onAccessibilityStateChanged: (callback: (state: WebsiteAccessibilityState) => void) => () => void;
+
+  // Floating Desktop Pet
+  petShowMain: () => void;
+  petToggleMain: () => void;
+  petOpenContextMenu: () => void;
+  petGetState: () => Promise<PetCompanionState>;
+  onPetStateChanged: (callback: (state: PetCompanionState) => void) => () => void;
+  petQuit: () => void;
+  setDesktopPetEnabled: (enabled: boolean) => Promise<boolean>;
+  updatePetState: (state: Partial<PetCompanionState>) => void;
+
+  // Modular AI Providers
+  getAiProviders: () => Promise<AiProviderStatus>;
+  setAiProvider: (provider: AiProviderId, fallback?: AiProviderId) => Promise<boolean>;
+  saveProviderConfig: (id: AiProviderId, config: Partial<AiProviderConfig>) => Promise<boolean>;
+  testProviderConnection: (id: AiProviderId) => Promise<{ success: boolean; message: string; model?: string }>;
+
+  // Screen Understanding & Desktop Control
+  captureScreen: (options?: { monitorIndex?: number; includeUiElements?: boolean }) => Promise<ScreenCaptureResult>;
+  getActiveWindow: () => Promise<ActiveWindowInfo | null>;
+  executeDesktopAction: (action: string, args?: Record<string, any>) => Promise<DesktopActionResult>;
+  onScreenAnalysisState: (callback: (active: boolean) => void) => () => void;
+
+  // Window-to-Window Conversation Synchronization
+  broadcastChatMessage: (message: ChatMessage) => void;
+  onChatMessageBroadcast: (callback: (message: ChatMessage) => void) => () => void;
+
+  // Centralized Voice Session & Audio Pipeline
+  voiceTriggerMic: () => void;
+  voiceInterrupt: () => void;
+  onVoiceTriggerMic?: (callback: () => void) => () => void;
+  onVoiceInterrupt?: (callback: () => void) => () => void;
+  updateVoiceLevel?: (level: number) => void;
+  updateVoiceMouth?: (data: { mouthOpenness: number; amplitude: number; frequencies: number[] }) => void;
+  updateVoiceState?: (payload: { sessionState: VoiceSessionState; expression?: FaceExpression; mood?: ConversationMood; isSpeaking?: boolean; isVerifiedSpeaker?: boolean }) => void;
+  onVoiceStateChanged: (
+    callback: (state: {
+      sessionState: VoiceSessionState;
+      robotState: RobotState;
+      expression: FaceExpression;
+      mood: ConversationMood;
+    }) => void
+  ) => () => void;
+  onVoiceLevelUpdate: (callback: (level: number) => void) => () => void;
+  onVoiceMouthUpdate: (
+    callback: (data: { mouthOpenness: number; amplitude: number; frequencies: number[] }) => void
+  ) => () => void;
+  enrollSpeakerVoice: (
+    audioBase64: string,
+    mimeType?: string
+  ) => Promise<{ success: boolean; profile?: EnrolledSpeakerProfile; error?: string }>;
+  clearSpeakerProfile: () => Promise<boolean>;
+  testAudioPipeline: (
+    durationMs?: number
+  ) => Promise<{
+    success: boolean;
+    snrDb: number;
+    peakLevel: number;
+    noiseFloor: number;
+    voiceDetected: boolean;
+    playbackBase64?: string;
+    mimeType?: string;
+    error?: string;
+  }>;
+
   // Window Controls
   minimizeWindow: () => void;
   closeWindow: () => void;
+}
+
+export type WebsiteElementType =
+  | 'heading'
+  | 'paragraph'
+  | 'button'
+  | 'link'
+  | 'form_field'
+  | 'menu'
+  | 'landmark';
+
+export interface WebsiteElement {
+  id: string;
+  type: WebsiteElementType;
+  tagName: string;
+  text: string;
+  role?: string;
+  level?: number;
+  href?: string;
+  inputType?: string;
+  inputValue?: string;
+  placeholder?: string;
+  isRequired?: boolean;
+  isDisabled?: boolean;
+  isSensitive?: boolean;
+  validationMessage?: string;
+  selector: string;
+  label?: string;
+  index: number;
+}
+
+export interface WebsitePageStructure {
+  url: string;
+  title: string;
+  headings: WebsiteElement[];
+  paragraphs: WebsiteElement[];
+  buttons: WebsiteElement[];
+  links: WebsiteElement[];
+  formFields: WebsiteElement[];
+  interactiveCount: number;
+  summary?: string;
+}
+
+export interface WebsiteAccessibilityState {
+  enabled: boolean;
+  connected: boolean;
+  browserName: string;
+  currentUrl: string;
+  currentTitle: string;
+  readingStatus: 'idle' | 'reading' | 'paused';
+  readingSpeed: number;
+  currentElement: WebsiteElement | null;
+  currentIndex: number;
+  totalElements: number;
+  lastCommand: string;
+  statusMessage: string;
+  language: string;
+}
+
+export interface AccessibilityCommandResult {
+  success: boolean;
+  action: string;
+  speechText?: string;
+  element?: WebsiteElement | null;
+  needsDisambiguation?: boolean;
+  options?: string[];
+  error?: string;
+  summary?: string;
 }
 
 declare global {

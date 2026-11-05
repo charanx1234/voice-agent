@@ -9,6 +9,8 @@ import {
   ToolConfirmationPayload,
   ResponseStreamEvent,
   ElevenLabsUsage,
+  PetCompanionState,
+  ChatMessage,
 } from '../shared/types';
 import { IPC_CHANNELS } from '../main/security';
 
@@ -133,6 +135,106 @@ const apiBridge: FridayApiBridge = {
     ipcRenderer.on(IPC_CHANNELS.STANDBY_REQUESTED, handler);
     return () => ipcRenderer.removeListener(IPC_CHANNELS.STANDBY_REQUESTED, handler);
   },
+
+  // Website Accessibility Assistant
+  accessibilityGetState: () => ipcRenderer.invoke(IPC_CHANNELS.ACCESSIBILITY_GET_STATE),
+  accessibilitySetEnabled: (enabled: boolean) =>
+    ipcRenderer.invoke(IPC_CHANNELS.ACCESSIBILITY_SET_ENABLED, enabled),
+  accessibilityOpenUrl: (url: string) =>
+    ipcRenderer.invoke(IPC_CHANNELS.ACCESSIBILITY_OPEN_URL, url),
+  accessibilityExecuteCommand: (command: string, args?: Record<string, any>) =>
+    ipcRenderer.invoke(IPC_CHANNELS.ACCESSIBILITY_EXECUTE_COMMAND, { command, ...args }),
+  accessibilitySetReadingSpeed: (speed: number) =>
+    ipcRenderer.invoke(IPC_CHANNELS.ACCESSIBILITY_SET_READING_SPEED, speed),
+  accessibilityStopReading: () =>
+    ipcRenderer.invoke(IPC_CHANNELS.ACCESSIBILITY_STOP_READING),
+  onAccessibilityStateChanged: (callback: (state: any) => void) => {
+    const handler = (_event: any, state: any) => callback(state);
+    ipcRenderer.on(IPC_CHANNELS.ACCESSIBILITY_STATE_CHANGED, handler);
+    return () => ipcRenderer.removeListener(IPC_CHANNELS.ACCESSIBILITY_STATE_CHANGED, handler);
+  },
+
+  // Floating Desktop Pet
+  petShowMain: () => ipcRenderer.send(IPC_CHANNELS.PET_SHOW_MAIN),
+  petToggleMain: () => ipcRenderer.send(IPC_CHANNELS.PET_TOGGLE_MAIN),
+  petOpenContextMenu: () => ipcRenderer.send(IPC_CHANNELS.PET_CONTEXT_MENU),
+  petGetState: (): Promise<PetCompanionState> => ipcRenderer.invoke(IPC_CHANNELS.PET_GET_STATE),
+  onPetStateChanged: (callback: (state: PetCompanionState) => void) => {
+    const handler = (_event: any, state: PetCompanionState) => callback(state);
+    ipcRenderer.on(IPC_CHANNELS.PET_STATE_CHANGED, handler);
+    return () => ipcRenderer.removeListener(IPC_CHANNELS.PET_STATE_CHANGED, handler);
+  },
+  petQuit: () => ipcRenderer.send(IPC_CHANNELS.PET_QUIT),
+  setDesktopPetEnabled: (enabled: boolean) =>
+    ipcRenderer.invoke(IPC_CHANNELS.PET_SET_ENABLED, enabled),
+  updatePetState: (state: Partial<PetCompanionState>) =>
+    ipcRenderer.send(IPC_CHANNELS.PET_STATE_CHANGED, state),
+
+  // Modular AI Providers
+  getAiProviders: () => ipcRenderer.invoke(IPC_CHANNELS.PROVIDER_GET_STATUS),
+  setAiProvider: (provider, fallback) =>
+    ipcRenderer.invoke(IPC_CHANNELS.PROVIDER_SET_ACTIVE, { provider, fallback }),
+  saveProviderConfig: (id, config) =>
+    ipcRenderer.invoke(IPC_CHANNELS.PROVIDER_SAVE_CONFIG, { id, config }),
+  testProviderConnection: (id) =>
+    ipcRenderer.invoke(IPC_CHANNELS.PROVIDER_TEST_CONNECTION, id),
+
+  // Screen Understanding & Desktop Control
+  captureScreen: (options) => ipcRenderer.invoke(IPC_CHANNELS.SCREEN_CAPTURE, options),
+  getActiveWindow: () => ipcRenderer.invoke(IPC_CHANNELS.SCREEN_GET_ACTIVE_WINDOW),
+  executeDesktopAction: (action, args) =>
+    ipcRenderer.invoke(IPC_CHANNELS.SCREEN_EXECUTE_ACTION, { action, args }),
+  onScreenAnalysisState: (callback: (active: boolean) => void) => {
+    const handler = (_event: any, active: boolean) => callback(active);
+    ipcRenderer.on(IPC_CHANNELS.SCREEN_ANALYSIS_ACTIVE, handler);
+    return () => ipcRenderer.removeListener(IPC_CHANNELS.SCREEN_ANALYSIS_ACTIVE, handler);
+  },
+
+  // Window-to-Window Conversation Synchronization
+  broadcastChatMessage: (message: ChatMessage) =>
+    ipcRenderer.send(IPC_CHANNELS.CHAT_BROADCAST_MESSAGE, message),
+  onChatMessageBroadcast: (callback: (message: ChatMessage) => void) => {
+    const handler = (_event: any, message: ChatMessage) => callback(message);
+    ipcRenderer.on(IPC_CHANNELS.CHAT_BROADCAST_MESSAGE, handler);
+    return () => ipcRenderer.removeListener(IPC_CHANNELS.CHAT_BROADCAST_MESSAGE, handler);
+  },
+
+  // Centralized Voice Session & Audio Pipeline
+  voiceTriggerMic: () => ipcRenderer.send(IPC_CHANNELS.VOICE_TRIGGER_MIC),
+  voiceInterrupt: () => ipcRenderer.send(IPC_CHANNELS.VOICE_INTERRUPT),
+  onVoiceTriggerMic: (callback: () => void) => {
+    const handler = () => callback();
+    ipcRenderer.on(IPC_CHANNELS.VOICE_TRIGGER_MIC, handler);
+    return () => ipcRenderer.removeListener(IPC_CHANNELS.VOICE_TRIGGER_MIC, handler);
+  },
+  onVoiceInterrupt: (callback: () => void) => {
+    const handler = () => callback();
+    ipcRenderer.on(IPC_CHANNELS.VOICE_INTERRUPT, handler);
+    return () => ipcRenderer.removeListener(IPC_CHANNELS.VOICE_INTERRUPT, handler);
+  },
+  updateVoiceLevel: (level: number) => ipcRenderer.send(IPC_CHANNELS.VOICE_LEVEL_UPDATE, level),
+  updateVoiceMouth: (data: any) => ipcRenderer.send(IPC_CHANNELS.VOICE_MOUTH_UPDATE, data),
+  updateVoiceState: (payload: any) => ipcRenderer.send(IPC_CHANNELS.VOICE_STATE_CHANGED, payload),
+  onVoiceStateChanged: (callback: (state: any) => void) => {
+    const handler = (_event: any, state: any) => callback(state);
+    ipcRenderer.on(IPC_CHANNELS.VOICE_STATE_CHANGED, handler);
+    return () => ipcRenderer.removeListener(IPC_CHANNELS.VOICE_STATE_CHANGED, handler);
+  },
+  onVoiceLevelUpdate: (callback: (level: number) => void) => {
+    const handler = (_event: any, level: number) => callback(level);
+    ipcRenderer.on(IPC_CHANNELS.VOICE_LEVEL_UPDATE, handler);
+    return () => ipcRenderer.removeListener(IPC_CHANNELS.VOICE_LEVEL_UPDATE, handler);
+  },
+  onVoiceMouthUpdate: (callback: (data: any) => void) => {
+    const handler = (_event: any, data: any) => callback(data);
+    ipcRenderer.on(IPC_CHANNELS.VOICE_MOUTH_UPDATE, handler);
+    return () => ipcRenderer.removeListener(IPC_CHANNELS.VOICE_MOUTH_UPDATE, handler);
+  },
+  enrollSpeakerVoice: (profile: any) =>
+    ipcRenderer.invoke(IPC_CHANNELS.VOICE_SPEAKER_ENROLL, profile),
+  clearSpeakerProfile: () => ipcRenderer.invoke(IPC_CHANNELS.VOICE_SPEAKER_CLEAR),
+  testAudioPipeline: (durationMs?: number) =>
+    ipcRenderer.invoke(IPC_CHANNELS.VOICE_TEST_MIC, durationMs),
 
   minimizeWindow: () => ipcRenderer.send(IPC_CHANNELS.MINIMIZE_WINDOW),
   closeWindow: () => ipcRenderer.send(IPC_CHANNELS.CLOSE_WINDOW),

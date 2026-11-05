@@ -4,7 +4,19 @@ import '../styles/robot.css';
 
 const FACE_WIDTH = 1448;
 const FACE_HEIGHT = 1086;
-const MOUTH_CENTER = { x: 727, y: 666 };
+const MOUTH_CENTER = { x: 728, y: 640 };
+
+const EXPRESSIONS = [
+  'happy',
+  'sad',
+  'crying',
+  'angry',
+  'satisfied',
+  'sarcastic',
+  'laugh',
+  'smile',
+  'not-happy',
+] as const;
 
 interface RobotCharacterProps {
   state: RobotState;
@@ -15,16 +27,19 @@ interface RobotCharacterProps {
   expression?: FaceExpression;
 }
 
-function fallbackExpression(state: RobotState, mood: ConversationMood): FaceExpression {
-  if (state === 'thinking') return 'thinking';
-  if (state === 'listening') return 'curious';
-  if (state === 'interrupted') return 'surprised';
+function resolveExpression(expr?: FaceExpression, state?: RobotState): string {
+  if (expr === 'laughing') return 'laugh';
+  if (expr === 'not_happy') return 'not-happy';
+  if (expr === 'excited') return 'happy';
+  if (expr === 'curious' || expr === 'thinking') return 'smile';
+  if (expr === 'surprised') return 'happy';
+  if (expr === 'confused') return 'not-happy';
+  if (expr === 'sleepy') return 'satisfied';
+  if (expr === 'neutral') return 'smile';
+  if (expr && (EXPRESSIONS as readonly string[]).includes(expr)) return expr;
   if (state === 'error') return 'sad';
-  if (state === 'sleeping') return 'sleepy';
-  if (state === 'laughing') return 'laughing';
-  if (mood === 'enthusiastic') return 'excited';
-  if (mood === 'playful') return 'happy';
-  return 'neutral';
+  if (state === 'laughing') return 'laugh';
+  return 'smile';
 }
 
 function clamp(value: number, min: number, max: number): number {
@@ -40,12 +55,11 @@ export const RobotCharacter: React.FC<RobotCharacterProps> = ({
   expression,
 }) => {
   const [isBlinking, setIsBlinking] = useState(false);
-  const activeExpression = expression || fallbackExpression(state, mood);
+  const activeExpression = resolveExpression(expression, state);
   const isSpeaking = state === 'speaking' || state === 'laughing';
   const level = isSpeaking ? clamp(amplitude, 0, 1) : 0;
 
-  // Realistic blinking is independent from speech and intentionally irregular.
-  // The face artwork remains untouched; only a soft face-colour lid is added.
+  // Natural spontaneous blinking: smooth closure independent of speech
   useEffect(() => {
     let blinkTimer: ReturnType<typeof setTimeout> | undefined;
     let closeTimer: ReturnType<typeof setTimeout> | undefined;
@@ -56,15 +70,15 @@ export const RobotCharacter: React.FC<RobotCharacterProps> = ({
         setIsBlinking(true);
         closeTimer = setTimeout(() => {
           setIsBlinking(false);
-          if (Math.random() < 0.14) {
+          if (Math.random() < 0.15) {
             secondBlinkTimer = setTimeout(() => {
               setIsBlinking(true);
-              closeTimer = setTimeout(() => setIsBlinking(false), 105);
-            }, 115);
+              closeTimer = setTimeout(() => setIsBlinking(false), 95);
+            }, 110);
           }
           schedule();
-        }, 115 + Math.random() * 55);
-      }, 2400 + Math.random() * 4300);
+        }, 110 + Math.random() * 45);
+      }, 2600 + Math.random() * 3800);
     };
 
     schedule();
@@ -75,54 +89,23 @@ export const RobotCharacter: React.FC<RobotCharacterProps> = ({
     };
   }, []);
 
+  // Audio-reactive original small black oval mouth animation
   const mouth = useMemo(() => {
-    // The supplied image's black oval is the neutral mouth. It stretches in
-    // place; no lips or replacement facial feature is introduced.
-    const expressionOpen =
-      activeExpression === 'happy' || activeExpression === 'sarcastic'
-        ? 0.2
-        : activeExpression === 'surprised' || activeExpression === 'excited'
-          ? 0.72
-          : activeExpression === 'laughing'
-            ? 0.68
-            : 0;
-    const speechOpen = isSpeaking ? 0.12 + level * 0.88 : 0;
-    const openness = Math.max(expressionOpen, speechOpen);
-    const lowFrequency = frequencies[0] || level;
-    const highFrequency = frequencies[4] || level;
-    const rounded = lowFrequency >= highFrequency;
+    const speechOpen = isSpeaking
+      ? level * 0.82 + (frequencies[0] || level) * 0.22
+      : 0;
+
+    const openness = clamp(speechOpen, 0, 1);
+    const lowFreq = frequencies[0] || level;
+    const highFreq = frequencies[4] || level;
+    const rounded = lowFreq >= highFreq;
 
     return {
-      rx: 37 + openness * (rounded ? 20 : 28),
-      ry: 26 + openness * (rounded ? 38 : 52),
-      // A slightly wider mouth for open vowels and a rounder one for lower
-      // energy sounds makes amplitude-driven speech less repetitive.
-      rotate: rounded ? 0 : clamp((highFrequency - lowFrequency) * 12, -4, 4),
+      rx: 32 + openness * (rounded ? 18 : 25),
+      ry: 18 + openness * (rounded ? 34 : 46),
+      rotate: rounded ? 0 : clamp((highFreq - lowFreq) * 10, -3, 3),
     };
-  }, [activeExpression, frequencies, isSpeaking, level]);
-
-  const eyebrowPaths = useMemo(() => {
-    switch (activeExpression) {
-      case 'sad':
-        return { left: 'M 448 398 Q 535 347 625 382', right: 'M 819 382 Q 909 347 1000 398' };
-      case 'angry':
-        return { left: 'M 448 392 Q 535 438 625 430', right: 'M 819 430 Q 909 438 1000 392' };
-      case 'confused':
-        return { left: 'M 448 375 Q 535 340 625 382', right: 'M 819 405 Q 910 430 1000 397' };
-      case 'sarcastic':
-        return { left: 'M 448 365 Q 535 325 625 365', right: 'M 819 410 Q 910 425 1000 410' };
-      case 'curious':
-      case 'excited':
-        return { left: 'M 448 365 Q 535 320 625 360', right: 'M 819 360 Q 909 320 1000 365' };
-      case 'thinking':
-        return { left: 'M 448 380 Q 535 342 625 372', right: 'M 819 372 Q 909 342 1000 380' };
-      case 'happy':
-      case 'laughing':
-        return { left: 'M 448 380 Q 535 350 625 380', right: 'M 819 380 Q 909 350 1000 380' };
-      default:
-        return null;
-    }
-  }, [activeExpression]);
+  }, [frequencies, isSpeaking, level]);
 
   return (
     <div
@@ -132,32 +115,47 @@ export const RobotCharacter: React.FC<RobotCharacterProps> = ({
       style={{ cursor: 'pointer' }}
     >
       <div className="friday-face-container">
-        <img
-          className="friday-face-image"
-          src="./assets/friday-face.png"
-          alt="FRIDAY"
-          draggable={false}
-        />
+        {/* Render all 9 approved expression faces with smooth crossfade */}
+        {EXPRESSIONS.map((expr) => (
+          <img
+            key={expr}
+            className={`friday-face-layer ${expr === activeExpression ? 'active' : ''}`}
+            src={`./assets/expressions/face_${expr}.png`}
+            alt={`FRIDAY ${expr}`}
+            draggable={false}
+          />
+        ))}
+
+        {/* SVG Interactive Overlay for Blinking, Animated Tears, and TTS Mouth */}
         <svg
           className="friday-face-overlay"
           viewBox={`0 0 ${FACE_WIDTH} ${FACE_HEIGHT}`}
           preserveAspectRatio="none"
           aria-hidden="true"
         >
+          {/* Subtle animated tears for Crying expression */}
+          {activeExpression === 'crying' && (
+            <g className="face-tears" fill="#58a6ff" opacity="0.88">
+              <path
+                className="tear-drop tear-left"
+                d="M 540 600 C 532 618, 528 640, 540 662 C 552 640, 548 618, 540 600 Z"
+              />
+              <path
+                className="tear-drop tear-right"
+                d="M 915 600 C 907 618, 903 640, 915 662 C 927 640, 923 618, 915 600 Z"
+              />
+            </g>
+          )}
+
+          {/* Natural spontaneous blinking mask (soft white eyelid) */}
           {isBlinking && (
             <g className="face-blink-mask" aria-hidden="true">
-              <ellipse className="face-blink-eye" cx="540" cy="516" rx="94" ry="97" />
-              <ellipse className="face-blink-eye" cx="915" cy="516" rx="94" ry="97" />
+              <ellipse className="face-blink-eye" cx="540" cy="516" rx="98" ry="102" />
+              <ellipse className="face-blink-eye" cx="915" cy="516" rx="98" ry="102" />
             </g>
           )}
 
-          {eyebrowPaths && (
-            <g className="face-eyebrows" fill="none" stroke="#070707" strokeWidth="15" strokeLinecap="round">
-              <path d={eyebrowPaths.left} />
-              <path d={eyebrowPaths.right} />
-            </g>
-          )}
-
+          {/* Original Small Black Oval Mouth animated during TTS playback */}
           <ellipse
             className="face-mouth-opening"
             cx={MOUTH_CENTER.x}
@@ -168,6 +166,8 @@ export const RobotCharacter: React.FC<RobotCharacterProps> = ({
           />
         </svg>
       </div>
+
+      {/* Floating Floor Shadow */}
       <div className="robot-shadow" />
     </div>
   );

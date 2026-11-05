@@ -9,6 +9,7 @@ import { ToolConfirmModal } from './components/ToolConfirmModal';
 import { ToolShortcutsPanel } from './components/ToolShortcutsPanel';
 import { MemoryPanel } from './components/MemoryPanel';
 import { Dashboard } from './components/Dashboard';
+import { WebsiteAccessibilityPanel } from './components/WebsiteAccessibilityPanel';
 import { useVoiceAssistant } from './hooks/useVoiceAssistant';
 import { useHandsFree } from './hooks/useHandsFree';
 import {
@@ -21,6 +22,7 @@ import {
   ReminderItem,
   ToolConfirmationPayload,
   VoiceProsodySummary,
+  WebsiteAccessibilityState,
 } from '@/shared/types';
 import { pickGreeting } from '@/services/voice/greetings';
 import { isLikelySilence } from '@/services/voice/micErrors';
@@ -57,7 +59,7 @@ export const App: React.FC = () => {
       webResearch: false,
       launchApps: true,
     },
-    modelName: 'gemini-3.5-flash-lite',
+    modelName: 'gemini-3.1-pro-preview',
     soundMuted: false,
     memoryEnabled: true,
     personalityMode: 'moderate',
@@ -83,6 +85,22 @@ export const App: React.FC = () => {
   const [currentMood, setCurrentMood] = useState<ConversationMood>('calm');
   const [faceExpression, setFaceExpression] = useState<FaceExpression>('neutral');
   const [streamCopyStatus, setStreamCopyStatus] = useState<'idle' | 'copied' | 'error'>('idle');
+  const [accessibilityOpen, setAccessibilityOpen] = useState(false);
+  const [accessibilityState, setAccessibilityState] = useState<WebsiteAccessibilityState>({
+    enabled: false,
+    connected: false,
+    browserName: 'Accessible Browser',
+    currentUrl: 'about:blank',
+    currentTitle: 'No page loaded',
+    readingStatus: 'idle',
+    readingSpeed: 1.0,
+    currentElement: null,
+    currentIndex: -1,
+    totalElements: 0,
+    lastCommand: '',
+    statusMessage: 'Website Accessibility is ready.',
+    language: 'en',
+  });
 
   const {
     robotState,
@@ -99,6 +117,22 @@ export const App: React.FC = () => {
     enqueueSpeech,
     interrupt,
   } = useVoiceAssistant();
+
+  useEffect(() => {
+    if (!window.fridayAPI?.onAccessibilityStateChanged) return undefined;
+    return window.fridayAPI.onAccessibilityStateChanged((st) => setAccessibilityState(st));
+  }, []);
+
+  // Sync conversation messages across windows (Desktop Pet & Dashboard)
+  useEffect(() => {
+    if (!window.fridayAPI?.onChatMessageBroadcast) return undefined;
+    return window.fridayAPI.onChatMessageBroadcast((msg) => {
+      setMessages((prev) => {
+        if (prev.some((m) => m.id === msg.id)) return prev;
+        return [...prev, msg];
+      });
+    });
+  }, []);
 
   // Hands-free (wake word) state, read from timers/callbacks via refs.
   const robotStateRef = useRef(robotState);
@@ -130,6 +164,64 @@ export const App: React.FC = () => {
     else if (robotState === 'error') setFaceExpression('sad');
   }, [robotState]);
 
+  // Sync state with floating desktop pet
+  useEffect(() => {
+    if (!window.fridayAPI?.updatePetState) return;
+    const sessionState =
+      robotState === 'speaking'
+        ? 'SPEAKING'
+        : robotState === 'thinking'
+          ? 'PROCESSING'
+          : robotState === 'listening'
+            ? 'LISTENING'
+            : robotState === 'interrupted'
+              ? 'INTERRUPTED'
+              : robotState === 'error'
+                ? 'TASK_UNSUPPORTED'
+                : 'STANDBY';
+
+    window.fridayAPI.updatePetState({
+      robotState,
+      voiceSessionState: sessionState,
+      amplitude,
+      expression: faceExpression,
+      mood: currentMood,
+      soundMuted: isMuted,
+      handsFreeEnabled: settings.handsFreeEnabled,
+      isSpeaking: robotState === 'speaking' || robotState === 'laughing',
+    });
+
+    if (window.fridayAPI?.updateVoiceState) {
+      window.fridayAPI.updateVoiceState({
+        sessionState,
+        expression: faceExpression,
+        mood: currentMood,
+        isSpeaking: robotState === 'speaking' || robotState === 'laughing',
+      });
+    }
+  }, [robotState, amplitude, faceExpression, currentMood, isMuted, settings.handsFreeEnabled]);
+
+  // Listen for pet mic trigger click or interrupt
+  useEffect(() => {
+    if (!window.fridayAPI?.onVoiceTriggerMic) return undefined;
+    return window.fridayAPI.onVoiceTriggerMic(() => {
+      if (robotStateRef.current === 'speaking') {
+        interrupt();
+      } else if (robotStateRef.current === 'listening') {
+        handsFreeRef.current.goStandby();
+      } else {
+        handsFreeRef.current.wake();
+      }
+    });
+  }, [interrupt]);
+
+  useEffect(() => {
+    if (!window.fridayAPI?.onVoiceInterrupt) return undefined;
+    return window.fridayAPI.onVoiceInterrupt(() => {
+      interrupt();
+    });
+  }, [interrupt]);
+
   useEffect(() => () => {
     if (streamCopyTimerRef.current) clearTimeout(streamCopyTimerRef.current);
   }, []);
@@ -159,6 +251,15 @@ export const App: React.FC = () => {
         setStreamingResponse(streamedResponseRef.current);
         streamBufferRef.current += event.text;
 
+        // Continuously update facial expression to match incoming emotional cues in stream
+        const activeExpr = selectFaceExpression({
+          state: 'speaking',
+          mood: currentMood,
+          personalityMode: settings.personalityMode,
+          text: streamedResponseRef.current,
+        });
+        setFaceExpression(activeExpr);
+
         const extracted = takeCompleteSpeechChunks(streamBufferRef.current);
         streamBufferRef.current = extracted.remainder;
         for (const chunk of extracted.complete) {
@@ -167,7 +268,20 @@ export const App: React.FC = () => {
         }
       }
     });
-  }, [enqueueSpeech]);
+  }, [enqueueSpeech, currentMood, settings.personalityMode]);
+
+  // Keep face expression in sync with robotState, mood, and personality mode when not speaking
+  useEffect(() => {
+    if (robotState === 'speaking') return;
+    const lastMsg = messages[messages.length - 1]?.text || '';
+    const restingExpr = selectFaceExpression({
+      state: robotState,
+      mood: currentMood,
+      personalityMode: settings.personalityMode,
+      text: lastMsg,
+    });
+    setFaceExpression(restingExpr);
+  }, [robotState, currentMood, settings.personalityMode, messages]);
 
   /** Applies the resolved theme: 'auto' mirrors the Windows light/dark setting. */
   const applyTheme = useCallback((mode: FridaySettings['themeMode'] = 'auto') => {
@@ -240,6 +354,9 @@ export const App: React.FC = () => {
         setMemoryCount(stats.total);
 
         const pendingReminders = await api.listReminders(false);
+        if (api.accessibilityGetState) {
+          api.accessibilityGetState().then(setAccessibilityState).catch(() => undefined);
+        }
         setReminders(pendingReminders);
       };
 
@@ -329,6 +446,7 @@ export const App: React.FC = () => {
       };
 
       setMessages((prev) => [...prev, userMsg]);
+      window.fridayAPI?.broadcastChatMessage?.(userMsg);
       setLiveTranscript('');
       setStreamingResponse('');
       setStreamCopyStatus('idle');
@@ -353,6 +471,47 @@ export const App: React.FC = () => {
          currentMood,
          settings.personalityMode
        );
+      // Check if website accessibility handles the voice command
+      const isAccessibilityIntent =
+        accessibilityState.enabled ||
+        /\b(accessibility|website|web page|active tab|read (this )?page|summarize (this )?website|next heading|previous heading|next paragraph|scroll (down|up)|click (the )?\w+|find (the )?search|fill (in )?\w+|stop reading|chaduvu|saramsam|heading|nokku|padho|batao)\b/i.test(text);
+
+      if (isAccessibilityIntent && window.fridayAPI?.accessibilityExecuteCommand) {
+        try {
+          const a11yResult = await window.fridayAPI.accessibilityExecuteCommand(text, {
+            language: settings.preferredLanguage,
+          });
+
+          if (a11yResult && a11yResult.speechText) {
+            const assistantMsg: ChatMessage = {
+              id: `msg_${Date.now()}_a`,
+              role: 'assistant',
+              text: a11yResult.speechText,
+              timestamp: Date.now(),
+              language: settings.preferredLanguage,
+            };
+            setMessages((prev) => [...prev, assistantMsg]);
+            setRobotState('speaking');
+            setFaceExpression(
+              selectFaceExpression({
+                state: 'speaking',
+                mood: currentMood,
+                personalityMode: settings.personalityMode,
+                text: a11yResult.speechText,
+              })
+            );
+            if (!settings.soundMuted) {
+              speakResponse(a11yResult.speechText, streamSpeechOptionsRef.current);
+            } else {
+              setRobotState('idle');
+            }
+            return;
+          }
+        } catch (err) {
+          console.warn('[WebsiteAccessibility] Command execution error:', err);
+        }
+      }
+
       streamSpeechOptionsRef.current = {
         languageCode: settings.preferredLanguage,
         rate: initialMoodSpeech.rate,
@@ -368,6 +527,15 @@ export const App: React.FC = () => {
         elevenLabsSimilarityBoost: settings.elevenLabsSimilarityBoost,
         elevenLabsStyle: settings.elevenLabsStyle,
         elevenLabsSpeakerBoost: settings.elevenLabsSpeakerBoost,
+        onChunkStart: (chunkText: string) => {
+          const chunkExpr = selectFaceExpression({
+            state: 'speaking',
+            mood: currentMood,
+            personalityMode: settings.personalityMode,
+            text: chunkText,
+          });
+          setFaceExpression(chunkExpr);
+        },
       };
 
       try {
@@ -400,6 +568,7 @@ export const App: React.FC = () => {
         };
 
         setMessages((prev) => [...prev, assistantMsg]);
+        window.fridayAPI?.broadcastChatMessage?.(assistantMsg);
         setStreamingResponse('');
         activeStreamIdRef.current = null;
 
@@ -472,6 +641,15 @@ export const App: React.FC = () => {
           elevenLabsSimilarityBoost: effectiveSettings.elevenLabsSimilarityBoost,
           elevenLabsStyle: effectiveSettings.elevenLabsStyle,
           elevenLabsSpeakerBoost: effectiveSettings.elevenLabsSpeakerBoost,
+          onChunkStart: (chunkText: string) => {
+            const chunkExpr = selectFaceExpression({
+              state: 'speaking',
+              mood,
+              personalityMode: effectiveSettings.personalityMode,
+              text: chunkText,
+            });
+            setFaceExpression(chunkExpr);
+          },
         };
         streamSpeechOptionsRef.current = speechOptions;
 
@@ -607,6 +785,18 @@ export const App: React.FC = () => {
     enabled: handsFreeEnabled,
     language: settings.preferredLanguage,
     silenceTimeoutMs: settings.handsFreeSilenceTimeoutMs,
+    noiseSuppression: settings.noiseSuppression || 'standard',
+    echoCancellation: settings.echoCancellation !== false,
+    autoGainControl: settings.autoGainControl !== false,
+    vadSensitivity: settings.vadSensitivity || 'medium',
+    speakerVerificationEnabled: settings.speakerVerificationEnabled,
+    enrolledVoiceProfile: settings.enrolledVoiceProfile,
+    deviceId: settings.microphoneDeviceId,
+    onLevel: (lvl) => {
+      if (window.fridayAPI?.updateVoiceLevel) {
+        window.fridayAPI.updateVoiceLevel(lvl);
+      }
+    },
     isSpeaking: () => robotStateRef.current === 'speaking',
     isBusy: () => robotStateRef.current === 'thinking',
     onBargeIn: () => {
@@ -618,13 +808,34 @@ export const App: React.FC = () => {
       streamBufferRef.current = '';
       setStreamingResponse('');
       interrupt();
+      if (window.fridayAPI?.voiceInterrupt) {
+        window.fridayAPI.voiceInterrupt();
+      }
     },
     onSpeechActivity: (speaking) => {
       if (speaking) setRobotState('listening');
     },
     onTranscript: (text) => setLiveTranscript(text),
-    onUtterance: ({ audioBase64, mimeType, peakLevel, recognizedText, prosody }) => {
+    onUtterance: ({ audioBase64, mimeType, peakLevel, recognizedText, prosody, isVerifiedSpeaker }) => {
       if (isLikelySilence(peakLevel)) return;
+      if (settings.speakerVerificationEnabled && isVerifiedSpeaker === false) {
+        const text = "I heard speech, but it doesn't match your enrolled voice. Desktop actions were blocked for security.";
+        const msg: ChatMessage = {
+          id: `msg_${Date.now()}_unverified`,
+          role: 'assistant',
+          text,
+          timestamp: Date.now(),
+        };
+        setMessages((prev) => [...prev, msg]);
+        window.fridayAPI?.broadcastChatMessage?.(msg);
+        setFaceExpression('not-happy');
+        void speakRef.current(text, {
+          languageCode: settings.preferredLanguage,
+          voice: settings.ttsVoice,
+          accent: settings.voiceAccent,
+        });
+        return;
+      }
       void sendRef.current(
         recognizedText,
         recognizedText ? undefined : audioBase64,
@@ -968,6 +1179,9 @@ export const App: React.FC = () => {
             dashboardOpen={dashboardOpen}
             dashboardCount={artifacts.length}
             onToggleDashboard={handleToggleDashboard}
+            accessibilityOpen={accessibilityOpen}
+            accessibilityActive={accessibilityState.enabled}
+            onToggleAccessibility={() => setAccessibilityOpen(!accessibilityOpen)}
           />
         </div>
 
@@ -1032,6 +1246,26 @@ export const App: React.FC = () => {
         memoryEnabled={settings.memoryEnabled !== false}
         onToggleMemory={(enabled) => handleSaveSettings({ memoryEnabled: enabled })}
         onChanged={setMemoryCount}
+      />
+
+      {/* Website Accessibility Assistant Panel */}
+      <WebsiteAccessibilityPanel
+        isOpen={accessibilityOpen}
+        onClose={() => setAccessibilityOpen(false)}
+        accessibilityState={accessibilityState}
+        onToggleEnabled={async () => {
+          if (window.fridayAPI) {
+            const next = await window.fridayAPI.accessibilitySetEnabled(!accessibilityState.enabled);
+            setAccessibilityState(next);
+          }
+        }}
+        onOpenUrl={(url) => window.fridayAPI?.accessibilityOpenUrl(url)}
+        onExecuteCommand={(cmd) => handleSendMessage(cmd)}
+        onSetReadingSpeed={(spd) => window.fridayAPI?.accessibilitySetReadingSpeed(spd)}
+        onStopReading={() => {
+          window.fridayAPI?.accessibilityStopReading();
+          interrupt();
+        }}
       />
     </div>
   );

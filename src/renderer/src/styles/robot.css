@@ -1,4 +1,4 @@
-/* FRIDAY's official supplied face with lightweight layered animation. */
+/* FRIDAY's Exact Approved Face Artwork and 9 Expressions */
 
 .robot-stage {
   display: flex;
@@ -6,9 +6,10 @@
   align-items: center;
   justify-content: center;
   position: relative;
-  width: min(88vw, 430px);
+  width: min(88vw, 420px);
   padding: 10px 0 6px;
   isolation: isolate;
+  user-select: none;
 }
 
 .friday-face-container {
@@ -17,28 +18,95 @@
   aspect-ratio: 1448 / 1086;
   overflow: hidden;
   user-select: none;
-  transition: transform 360ms cubic-bezier(0.16, 1, 0.3, 1), filter 360ms ease;
+  background-color: #000000;
+  transition: transform 340ms cubic-bezier(0.16, 1, 0.3, 1), filter 340ms ease;
 }
 
-.friday-face-image,
+.friday-face-layer {
+  position: absolute;
+  inset: 0;
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: fill;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 280ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.friday-face-layer.active {
+  opacity: 1;
+}
+
 .friday-face-overlay {
   position: absolute;
   inset: 0;
   display: block;
   width: 100%;
   height: 100%;
-}
-
-.friday-face-image {
-  object-fit: fill;
-  pointer-events: none;
-}
-
-.friday-face-overlay {
   pointer-events: none;
   overflow: visible;
 }
 
+/* Natural Spontaneous Blinking */
+.face-blink-mask {
+  fill: #f7f7f7;
+  opacity: 0.98;
+}
+
+.face-blink-eye {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: blink-close 110ms ease-out;
+}
+
+@keyframes blink-close {
+  from { transform: scaleY(0.08); }
+  to { transform: scaleY(1); }
+}
+
+/* Original Small Black Oval Mouth opening dynamically during speech */
+.face-mouth-opening {
+  fill: #050505;
+  transition: rx 72ms ease-out, ry 72ms ease-out, transform 90ms ease-out;
+  transform-box: fill-box;
+  transform-origin: center;
+}
+
+/* Subtle Animated Tears for Crying Expression */
+.face-tears {
+  pointer-events: none;
+}
+
+.tear-drop {
+  animation: tear-fall 1.8s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+  transform-origin: center top;
+}
+
+.tear-right {
+  animation-delay: 0.65s;
+}
+
+@keyframes tear-fall {
+  0% {
+    transform: translateY(0) scale(0.6);
+    opacity: 0;
+  }
+  20% {
+    opacity: 0.92;
+    transform: translateY(6px) scale(1);
+  }
+  80% {
+    opacity: 0.85;
+    transform: translateY(44px) scale(1.1);
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(60px) scale(0.7);
+  }
+}
+
+/* Robot State Movement Animations */
 .state-idle .friday-face-container {
   animation: face-float 4.8s ease-in-out infinite;
 }
@@ -52,9 +120,13 @@
   animation: face-thinking 3.2s ease-in-out infinite;
 }
 
-.state-speaking .friday-face-container,
-.state-laughing .friday-face-container {
+.state-speaking .friday-face-container {
   animation: face-speaking 1.9s ease-in-out infinite;
+}
+
+.state-laughing .friday-face-container,
+.expression-laugh .friday-face-container {
+  animation: face-laugh-bounce 0.65s ease-in-out infinite;
 }
 
 .state-interrupted .friday-face-container {
@@ -63,17 +135,53 @@
 
 .state-error .friday-face-container {
   animation: face-sad 3.5s ease-in-out infinite;
-  filter: saturate(0.78);
+  filter: saturate(0.85);
 }
 
 .state-sleeping .friday-face-container,
-.expression-sleepy .friday-face-container {
-  animation: face-sleepy 6s ease-in-out infinite;
+.expression-satisfied .friday-face-container {
+  animation: face-satisfied-calm 5.2s ease-in-out infinite;
 }
 
+.expression-happy .friday-face-container,
+.expression-smile .friday-face-container {
+  animation: face-happy-float 4.2s ease-in-out infinite;
+}
+
+.expression-sad .friday-face-container {
+  animation: face-sad 4.2s ease-in-out infinite;
+}
+
+.expression-crying .friday-face-container {
+  animation: face-crying-tremor 3s ease-in-out infinite;
+}
+
+.expression-angry .friday-face-container {
+  animation: face-angry-focus 2.8s ease-in-out infinite;
+}
+
+.expression-sarcastic .friday-face-container {
+  transform: rotate(-1.2deg);
+}
+
+.expression-not-happy .friday-face-container {
+  transform: translateY(2px);
+}
+
+/* Keyframes */
 @keyframes face-float {
   0%, 100% { transform: translateY(0); }
   50% { transform: translateY(-4px); }
+}
+
+@keyframes face-happy-float {
+  0%, 100% { transform: translateY(0) scale(1); }
+  50% { transform: translateY(-5px) scale(1.01); }
+}
+
+@keyframes face-satisfied-calm {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-3px); }
 }
 
 @keyframes face-listening {
@@ -91,6 +199,13 @@
   50% { transform: translateY(-5px); }
 }
 
+@keyframes face-laugh-bounce {
+  0%, 100% { transform: translateY(0) scale(1); }
+  25% { transform: translateY(-6px) scale(1.02); }
+  50% { transform: translateY(1px) scale(0.99); }
+  75% { transform: translateY(-3px) scale(1.01); }
+}
+
 @keyframes face-interrupted {
   0% { transform: scale(0.98); }
   35% { transform: scale(1.025) rotate(1deg); }
@@ -103,76 +218,18 @@
   50% { transform: translateY(5px); }
 }
 
-@keyframes face-sleepy {
+@keyframes face-crying-tremor {
   0%, 100% { transform: translateY(2px); }
-  50% { transform: translateY(5px); }
+  30% { transform: translateY(4px) rotate(0.3deg); }
+  60% { transform: translateY(5px) rotate(-0.3deg); }
 }
 
-/* Brows are the only persistent eye-area overlay; the supplied round eyes stay untouched. */
-.face-eyebrows {
-  opacity: 0;
-  transition: opacity 180ms ease, transform 220ms ease;
+@keyframes face-angry-focus {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(2px); }
 }
 
-.expression-happy .face-eyebrows,
-.expression-laughing .face-eyebrows,
-.expression-sad .face-eyebrows,
-.expression-angry .face-eyebrows,
-.expression-confused .face-eyebrows,
-.expression-sarcastic .face-eyebrows,
-.expression-curious .face-eyebrows,
-.expression-excited .face-eyebrows,
-.expression-thinking .face-eyebrows {
-  opacity: 0.78;
-}
-
-.expression-angry .face-eyebrows {
-  opacity: 0.95;
-}
-
-.expression-thinking .face-eyebrows {
-  animation: thinking-brows 1.8s ease-in-out infinite alternate;
-}
-
-@keyframes thinking-brows {
-  from { transform: translateY(2px); }
-  to { transform: translateY(-4px); }
-}
-
-.face-blink-mask {
-  /* A single smooth vertical closure, not a band or eyelash. */
-  fill: #f7f7f7;
-  opacity: 0.98;
-}
-
-.face-blink-eye {
-  transform-box: fill-box;
-  transform-origin: center;
-  animation: blink-close 120ms ease-out;
-}
-
-@keyframes blink-close {
-  from { transform: scaleY(0.08); }
-  to { transform: scaleY(1); }
-}
-
-/* The supplied black oval is the only mouth shape. Its geometry responds to real RMS audio. */
-.face-mouth-opening {
-  fill: #050505;
-  transition: rx 72ms ease-out, ry 72ms ease-out, transform 110ms ease-out;
-  transform-box: fill-box;
-  transform-origin: center;
-}
-
-.expression-sad .face-mouth-opening {
-  transform: rotate(-4deg);
-}
-
-.expression-confused .face-mouth-opening,
-.expression-sarcastic .face-mouth-opening {
-  transform: rotate(3deg);
-}
-
+/* Floor Shadow */
 .robot-shadow {
   width: 52%;
   height: 14px;
@@ -180,9 +237,9 @@
   border-radius: 50%;
   background: radial-gradient(
     ellipse at center,
-    color-mix(in srgb, var(--accent) 23%, transparent) 0%,
-    color-mix(in srgb, var(--shadow-color) 42%, transparent) 60%,
-    transparent 80%
+    rgba(255, 255, 255, 0.18) 0%,
+    rgba(0, 0, 0, 0.45) 50%,
+    transparent 75%
   );
   transition: width 360ms ease, opacity 360ms ease;
 }
@@ -191,16 +248,15 @@
   width: 58%;
 }
 
-.state-thinking .robot-shadow,
-.expression-sleepy .robot-shadow {
+.state-thinking .robot-shadow {
   opacity: 0.68;
 }
 
 @media (prefers-reduced-motion: reduce) {
   .friday-face-container,
-  .face-eyebrows,
+  .tear-drop,
   .face-mouth-opening {
     animation: none !important;
-    transition-duration: 180ms;
+    transition-duration: 150ms;
   }
 }

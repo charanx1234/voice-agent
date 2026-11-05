@@ -1,10 +1,13 @@
-import { app, BrowserWindow, shell } from 'electron';
+import { app, BrowserWindow, shell, screen } from 'electron';
 import path from 'path';
 import { registerIpcHandlers } from './ipc';
 import { initLogger } from './backend/logger';
 import { memoryService } from '../services/memory/memoryService';
 import { remindersService } from '../services/reminders/remindersService';
 import { systemHealthService } from '../services/system/healthService';
+import { geminiService } from '../services/ai/gemini';
+import { neuralVoiceService } from '../services/voice/neuralVoice';
+import { settingsStore } from '../services/storage/settingsStore';
 
 // Production builds write to a log file only; development keeps terminal output.
 initLogger({ keepConsole: !app.isPackaged });
@@ -19,6 +22,11 @@ process.on('unhandledRejection', (reason) => {
 let mainWindow: BrowserWindow | null = null;
 const getMainWindow = (): BrowserWindow | null => mainWindow;
 
+let petWindow: BrowserWindow | null = null;
+const getPetWindow = (): BrowserWindow | null => petWindow;
+
+let isQuitting = false;
+
 const DEV_SERVER_URL = process.env.VITE_DEV_SERVER_URL || 'http://localhost:5173';
 /** Only the `dev:electron` script sets WAIT_ON_DEV; `npm start` uses the built files. */
 const USE_DEV_SERVER = Boolean(process.env.WAIT_ON_DEV);
@@ -26,6 +34,66 @@ const USE_DEV_SERVER = Boolean(process.env.WAIT_ON_DEV);
 /** Only our own dev server may be navigated to in-app; everything else leaves the window. */
 function isAllowedInAppNavigation(url: string): boolean {
   return USE_DEV_SERVER && url.startsWith(DEV_SERVER_URL);
+}
+
+function createPetWindow(): void {
+  const settings = settingsStore.getSettings();
+  if (settings.desktopPetEnabled === false) return;
+
+  const primaryDisplay = screen.getPrimaryDisplay();
+  const { workArea } = primaryDisplay;
+  const savedPos = settings.petPosition;
+  const initialX = savedPos?.x ?? Math.round(workArea.x + workArea.width - 230);
+  const initialY = savedPos?.y ?? Math.round(workArea.y + workArea.height - 250);
+
+  petWindow = new BrowserWindow({
+    width: 200,
+    height: 220,
+    x: initialX,
+    y: initialY,
+    title: 'FRIDAY Pet',
+    frame: false,
+    transparent: true,
+    alwaysOnTop: true,
+    resizable: false,
+    skipTaskbar: true,
+    hasShadow: false,
+    backgroundColor: '#00000000',
+    show: false,
+    webPreferences: {
+      preload: path.join(__dirname, '../preload/index.js'),
+      contextIsolation: true,
+      nodeIntegration: false,
+      sandbox: false,
+      backgroundThrottling: false,
+    },
+  });
+
+  petWindow.setAlwaysOnTop(true, 'screen-saver');
+
+  petWindow.once('ready-to-show', () => {
+    petWindow?.show();
+  });
+
+  petWindow.on('moved', () => {
+    if (!petWindow || petWindow.isDestroyed()) return;
+    const [x, y] = petWindow.getPosition();
+    settingsStore.saveSettings({ petPosition: { x, y } });
+  });
+
+  const indexPath = path.join(__dirname, '../../dist-renderer/index.html');
+  if (USE_DEV_SERVER) {
+    petWindow.loadURL(`${DEV_SERVER_URL}#pet`).catch((err) => {
+      console.error('[FRIDAY] Pet dev server failed, loading file:', err.message);
+      petWindow?.loadFile(indexPath, { hash: 'pet' });
+    });
+  } else {
+    petWindow.loadFile(indexPath, { hash: 'pet' });
+  }
+
+  petWindow.on('closed', () => {
+    petWindow = null;
+  });
 }
 
 function createWindow(): void {
@@ -46,10 +114,11 @@ function createWindow(): void {
       // The preload script requires the shared IPC channel module, which a fully
       // sandboxed preload cannot load; isolation is still enforced by contextIsolation.
       sandbox: false,
+      backgroundThrottling: false,
     },
   });
 
-  registerIpcHandlers(getMainWindow);
+  registerIpcHandlers(getMainWindow, getPetWindow);
 
   mainWindow.once('ready-to-show', () => {
     mainWindow?.show();
@@ -98,8 +167,19 @@ function createWindow(): void {
     mainWindow.loadFile(indexPath);
   }
 
-  mainWindow.on('close', () => {
-    console.log('[FRIDAY] Window close requested.');
+  mainWindow.on('close', (event) => {
+    if (!isQuitting && petWindow && !petWindow.isDestroyed()) {
+      event.preventDefault();
+      mainWindow?.hide();
+      return;
+    }
+    console.log('[FRIDAY] Window close requested, cancelling active requests and synthesis...');
+    try {
+      geminiService.cancelRequest();
+      neuralVoiceService.cancelAll();
+    } catch (err: any) {
+      console.warn('[FRIDAY] Teardown warning on window close:', err?.message);
+    }
   });
 
   mainWindow.on('closed', () => {
@@ -149,6 +229,7 @@ if (!hasSingleInstanceLock) {
     app.setAppUserModelId('com.friday.ai.companion');
 
     createWindow();
+    createPetWindow();
 
     // Open the memory database off the critical path so the first message is fast.
     memoryService.init().catch((err) => {
@@ -186,5 +267,6 @@ if (!hasSingleInstanceLock) {
 
   app.on('before-quit', () => {
     console.log('[FRIDAY] before-quit fired.');
+    isQuitting = true;
   });
 }

@@ -11,6 +11,7 @@ import {
   Brain,
   Sparkles,
   LayoutDashboard,
+  Globe,
 } from 'lucide-react';
 import { RobotState } from '@/shared/types';
 import { formatRecordingDuration } from '@/services/voice/micErrors';
@@ -38,6 +39,9 @@ interface ControlBarProps {
   dashboardOpen?: boolean;
   dashboardCount?: number;
   onToggleDashboard?: () => void;
+  accessibilityOpen?: boolean;
+  accessibilityActive?: boolean;
+  onToggleAccessibility?: () => void;
 }
 
 export const ControlBar: React.FC<ControlBarProps> = ({
@@ -63,6 +67,9 @@ export const ControlBar: React.FC<ControlBarProps> = ({
   dashboardOpen = false,
   dashboardCount = 0,
   onToggleDashboard,
+  accessibilityOpen = false,
+  accessibilityActive = false,
+  onToggleAccessibility,
 }) => {
   const [inputText, setInputText] = useState('');
 
@@ -194,6 +201,43 @@ export const ControlBar: React.FC<ControlBarProps> = ({
             >
               <LayoutDashboard size={14} />
               {dashboardCount > 0 && <span>{dashboardCount}</span>}
+            </button>
+          )}
+
+          {/* Website Accessibility Assistant Button */}
+          {onToggleAccessibility && (
+            <button
+              onClick={onToggleAccessibility}
+              title="Website Accessibility Assistant"
+              style={{
+                background: accessibilityOpen || accessibilityActive
+                  ? 'color-mix(in srgb, var(--accent) 15%, transparent)'
+                  : 'color-mix(in srgb, var(--text) 5%, transparent)',
+                border: accessibilityOpen || accessibilityActive
+                  ? '1px solid color-mix(in srgb, var(--accent) 40%, transparent)'
+                  : '1px solid color-mix(in srgb, var(--text) 10%, transparent)',
+                borderRadius: '10px',
+                padding: '6px 8px',
+                color: accessibilityOpen || accessibilityActive ? 'var(--accent)' : 'var(--muted)',
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '4px',
+                fontSize: '0.75rem',
+                position: 'relative',
+              }}
+            >
+              <Globe size={14} />
+              {accessibilityActive && (
+                <span
+                  style={{
+                    width: '6px',
+                    height: '6px',
+                    borderRadius: '50%',
+                    backgroundColor: '#10b981',
+                  }}
+                />
+              )}
             </button>
           )}
 

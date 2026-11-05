@@ -1,4 +1,4 @@
-import { ipcMain, dialog, shell, BrowserWindow, clipboard } from 'electron';
+import { ipcMain, dialog, shell, BrowserWindow, clipboard, Menu, app, screen } from 'electron';
 import fs from 'fs';
 import path from 'path';
 import { IPC_CHANNELS } from './security';
@@ -14,11 +14,43 @@ import { systemHealthService } from '../services/system/healthService';
 import { getLogDirectory, readRecentLogLines } from './backend/logger';
 import { ALLOWED_APPLICATIONS, executeAppShortcutsTool } from '../services/agent/appShortcutsTool';
 import { standbyEmitter } from '../services/agent/toolRegistry';
-import { MemoryInputPayload, SpeechSynthesisRequest, ToolConfirmationPayload } from '../shared/types';
+import { websiteAccessibilityService } from '../services/accessibility/websiteAccessibilityService';
+import { providerManager } from '../services/ai/providers/providerManager';
+import { screenUnderstandingService } from '../services/screen/screenUnderstandingService';
+import { desktopControlService } from '../services/desktop/desktopControlService';
+import { executeScreenControlTool } from '../services/agent/screenControlTools';
+import { AiProviderId, ChatMessage, MemoryInputPayload, PetCompanionState, SpeechSynthesisRequest, ToolConfirmationPayload } from '../shared/types';
+import { VoiceCoordinator } from './voiceCoordinator';
 
 let handlersRegistered = false;
 
-export function registerIpcHandlers(getMainWindow: () => BrowserWindow | null): void {
+/** Safely sends an IPC event only if the window and webContents exist and are not destroyed. */
+function safeSend(win: BrowserWindow | null | undefined, channel: string, ...args: any[]): boolean {
+  try {
+    if (!win || win.isDestroyed()) return false;
+    const wc = win.webContents;
+    if (!wc || wc.isDestroyed()) return false;
+    wc.send(channel, ...args);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+let cachedPetState: PetCompanionState = {
+  robotState: 'idle',
+  amplitude: 0,
+  expression: 'neutral',
+  mood: 'calm',
+  soundMuted: false,
+  handsFreeEnabled: true,
+  isSpeaking: false,
+};
+
+export function registerIpcHandlers(
+  getMainWindow: () => BrowserWindow | null,
+  getPetWindow?: () => BrowserWindow | null
+): void {
   // ipcMain.handle throws if the same channel is registered twice, which happens
   // whenever the window is recreated (e.g. macOS "activate").
   if (handlersRegistered) return;
@@ -31,7 +63,7 @@ export function registerIpcHandlers(getMainWindow: () => BrowserWindow | null): 
   toolRegistry.setConfirmationRequester((payload: ToolConfirmationPayload) => {
     return new Promise<boolean>((resolve) => {
       pendingConfirmations.set(payload.id, resolve);
-      getMainWindow()?.webContents.send(IPC_CHANNELS.TOOL_CONFIRM_REQUEST, payload);
+      safeSend(getMainWindow(), IPC_CHANNELS.TOOL_CONFIRM_REQUEST, payload);
 
       // Auto-cancel if user doesn't respond within 60 seconds
       setTimeout(() => {
@@ -86,14 +118,18 @@ export function registerIpcHandlers(getMainWindow: () => BrowserWindow | null): 
 
   // Chat / Voice message
   ipcMain.handle(IPC_CHANNELS.SEND_MESSAGE, async (_event, payload) => {
-    return await geminiService.sendMessage(payload, {
-      onStream: (event) => {
-        if (!payload?.requestId) return;
-        _event.sender.send(IPC_CHANNELS.RESPONSE_STREAM, {
-          ...event,
-          requestId: payload.requestId,
-        });
-      },
+    return await providerManager.generate(payload, (event) => {
+      if (!payload?.requestId) return;
+      try {
+        if (_event.sender && !_event.sender.isDestroyed()) {
+          _event.sender.send(IPC_CHANNELS.RESPONSE_STREAM, {
+            ...event,
+            requestId: payload.requestId,
+          });
+        }
+      } catch {
+        // Window closed or sender destroyed during streaming
+      }
     });
   });
 
@@ -261,29 +297,29 @@ export function registerIpcHandlers(getMainWindow: () => BrowserWindow | null): 
   // Push backend events to the renderer (reminders, dashboard output).
   remindersService.on('changed', async () => {
     const reminders = await remindersService.list(false);
-    getMainWindow()?.webContents.send(IPC_CHANNELS.REMINDERS_CHANGED, reminders);
+    safeSend(getMainWindow(), IPC_CHANNELS.REMINDERS_CHANGED, reminders);
   });
 
   remindersService.on('fired', (reminder) => {
-    getMainWindow()?.webContents.send(IPC_CHANNELS.REMINDER_FIRED, reminder);
+    safeSend(getMainWindow(), IPC_CHANNELS.REMINDER_FIRED, reminder);
   });
 
   remindersService.on('tasks-changed', async () => {
     const tasks = await remindersService.listTasks(false);
-    getMainWindow()?.webContents.send(IPC_CHANNELS.TASKS_CHANGED, tasks);
+    safeSend(getMainWindow(), IPC_CHANNELS.TASKS_CHANGED, tasks);
   });
 
   systemHealthService.onSample((health) => {
-    getMainWindow()?.webContents.send(IPC_CHANNELS.SYSTEM_HEALTH_UPDATE, health);
+    safeSend(getMainWindow(), IPC_CHANNELS.SYSTEM_HEALTH_UPDATE, health);
   });
 
   dashboardBus.on('artifact', (artifact) => {
-    getMainWindow()?.webContents.send(IPC_CHANNELS.DASHBOARD_ARTIFACT, artifact);
+    safeSend(getMainWindow(), IPC_CHANNELS.DASHBOARD_ARTIFACT, artifact);
   });
 
   // Hands-free: the model asks to go to standby (user said "go offline").
   standbyEmitter.on('standby-requested', () => {
-    getMainWindow()?.webContents.send(IPC_CHANNELS.STANDBY_REQUESTED);
+    safeSend(getMainWindow(), IPC_CHANNELS.STANDBY_REQUESTED);
   });
 
   // Hands-free: wake-word gate transcription for standby listening.
@@ -376,6 +412,40 @@ export function registerIpcHandlers(getMainWindow: () => BrowserWindow | null): 
     }
   });
 
+  // Website Accessibility Assistant
+  websiteAccessibilityService.on('state-changed', (state) => {
+    safeSend(getMainWindow(), IPC_CHANNELS.ACCESSIBILITY_STATE_CHANGED, state);
+  });
+
+  ipcMain.handle(IPC_CHANNELS.ACCESSIBILITY_GET_STATE, async () => {
+    return websiteAccessibilityService.getState();
+  });
+
+  ipcMain.handle(IPC_CHANNELS.ACCESSIBILITY_SET_ENABLED, async (_event, enabled: boolean) => {
+    return await websiteAccessibilityService.setEnabled(Boolean(enabled));
+  });
+
+  ipcMain.handle(IPC_CHANNELS.ACCESSIBILITY_OPEN_URL, async (_event, url: string) => {
+    return await websiteAccessibilityService.openUrl(String(url || ''));
+  });
+
+  ipcMain.handle(
+    IPC_CHANNELS.ACCESSIBILITY_EXECUTE_COMMAND,
+    async (_event, payload: { command: string; language?: string } | string) => {
+      const command = typeof payload === 'string' ? payload : payload?.command || '';
+      const language = typeof payload === 'string' ? undefined : payload?.language;
+      return await websiteAccessibilityService.executeNaturalCommand(command, language);
+    }
+  );
+
+  ipcMain.handle(IPC_CHANNELS.ACCESSIBILITY_SET_READING_SPEED, async (_event, speed: number) => {
+    return websiteAccessibilityService.setReadingSpeed(Number(speed) || 1.0);
+  });
+
+  ipcMain.handle(IPC_CHANNELS.ACCESSIBILITY_STOP_READING, async () => {
+    return websiteAccessibilityService.stopReading();
+  });
+
   // Window control
   ipcMain.on(IPC_CHANNELS.MINIMIZE_WINDOW, () => {
     const win = getMainWindow();
@@ -389,6 +459,215 @@ export function registerIpcHandlers(getMainWindow: () => BrowserWindow | null): 
     const win = getMainWindow();
     if (win && !win.isDestroyed()) {
       win.close();
+    }
+  });
+
+  // Floating Desktop Pet Companion Handlers
+  ipcMain.on(IPC_CHANNELS.PET_SHOW_MAIN, () => {
+    const win = getMainWindow();
+    if (win && !win.isDestroyed()) {
+      if (win.isMinimized()) win.restore();
+      win.show();
+      win.focus();
+    }
+  });
+
+  ipcMain.on(IPC_CHANNELS.PET_TOGGLE_MAIN, () => {
+    const win = getMainWindow();
+    if (win && !win.isDestroyed()) {
+      if (win.isVisible() && !win.isMinimized()) {
+        win.hide();
+      } else {
+        if (win.isMinimized()) win.restore();
+        win.show();
+        win.focus();
+      }
+    }
+  });
+
+  ipcMain.on(IPC_CHANNELS.PET_CONTEXT_MENU, () => {
+    const petWin = getPetWindow ? getPetWindow() : null;
+    const current = settingsStore.getSettings();
+    const menu = Menu.buildFromTemplate([
+      {
+        label: 'Open FRIDAY',
+        click: () => {
+          const win = getMainWindow();
+          if (win && !win.isDestroyed()) {
+            if (win.isMinimized()) win.restore();
+            win.show();
+            win.focus();
+          }
+        },
+      },
+      {
+        label: current.soundMuted ? 'Unmute Sound' : 'Mute Sound',
+        click: () => {
+          const updated = !settingsStore.getSettings().soundMuted;
+          settingsStore.saveSettings({ soundMuted: updated });
+          cachedPetState.soundMuted = updated;
+          safeSend(getMainWindow(), IPC_CHANNELS.PET_STATE_CHANGED, cachedPetState);
+          safeSend(petWin, IPC_CHANNELS.PET_STATE_CHANGED, cachedPetState);
+        },
+      },
+      {
+        label: 'Reset Pet Position',
+        click: () => {
+          if (petWin && !petWin.isDestroyed()) {
+            const primaryDisplay = screen.getPrimaryDisplay();
+            const { workArea } = primaryDisplay;
+            const x = Math.round(workArea.x + workArea.width - 240);
+            const y = Math.round(workArea.y + workArea.height - 280);
+            petWin.setPosition(x, y);
+            settingsStore.saveSettings({ petPosition: { x, y } });
+          }
+        },
+      },
+      { type: 'separator' },
+      {
+        label: 'Exit FRIDAY',
+        click: () => {
+          app.quit();
+        },
+      },
+    ]);
+
+    if (petWin && !petWin.isDestroyed()) {
+      menu.popup({ window: petWin });
+    }
+  });
+
+  ipcMain.handle(IPC_CHANNELS.PET_GET_STATE, async () => {
+    return cachedPetState;
+  });
+
+  ipcMain.on(IPC_CHANNELS.PET_STATE_CHANGED, (_event, state: Partial<PetCompanionState>) => {
+    cachedPetState = { ...cachedPetState, ...state };
+    const petWin = getPetWindow ? getPetWindow() : null;
+    safeSend(petWin, IPC_CHANNELS.PET_STATE_CHANGED, cachedPetState);
+  });
+
+  ipcMain.on(IPC_CHANNELS.PET_QUIT, () => {
+    console.log('[IPC] Pet requested full app quit.');
+    app.quit();
+  });
+
+  ipcMain.handle(IPC_CHANNELS.PET_SET_ENABLED, async (_event, enabled: boolean) => {
+    const val = Boolean(enabled);
+    settingsStore.saveSettings({ desktopPetEnabled: val });
+    const petWin = getPetWindow ? getPetWindow() : null;
+    if (petWin && !petWin.isDestroyed()) {
+      if (val) {
+        petWin.show();
+      } else {
+        petWin.hide();
+      }
+    }
+    return val;
+  });
+
+  // Modular AI Provider Handlers
+  ipcMain.handle(IPC_CHANNELS.PROVIDER_GET_STATUS, async () => {
+    return providerManager.getStatus();
+  });
+
+  ipcMain.handle(
+    IPC_CHANNELS.PROVIDER_SET_ACTIVE,
+    async (_event, payload: { provider: AiProviderId; fallback?: AiProviderId }) => {
+      return providerManager.setActiveProvider(payload.provider, payload.fallback);
+    }
+  );
+
+  ipcMain.handle(
+    IPC_CHANNELS.PROVIDER_SAVE_CONFIG,
+    async (_event, payload: { id: AiProviderId; config: any }) => {
+      return providerManager.saveConfig(payload.id, payload.config);
+    }
+  );
+
+  ipcMain.handle(IPC_CHANNELS.PROVIDER_TEST_CONNECTION, async (_event, id: AiProviderId) => {
+    return await providerManager.testConnection(id);
+  });
+
+  // Windows Screen Understanding & Desktop Control Handlers
+  screenUnderstandingService.on('analysis-state', (active: boolean) => {
+    safeSend(getMainWindow(), IPC_CHANNELS.SCREEN_ANALYSIS_ACTIVE, active);
+    safeSend(getPetWindow ? getPetWindow() : null, IPC_CHANNELS.SCREEN_ANALYSIS_ACTIVE, active);
+  });
+
+  ipcMain.handle(IPC_CHANNELS.SCREEN_CAPTURE, async (_event, options) => {
+    return await screenUnderstandingService.captureScreen(options);
+  });
+
+  ipcMain.handle(IPC_CHANNELS.SCREEN_GET_ACTIVE_WINDOW, async () => {
+    return await screenUnderstandingService.getActiveWindow();
+  });
+
+  ipcMain.handle(
+    IPC_CHANNELS.SCREEN_EXECUTE_ACTION,
+    async (_event, payload: { action: string; args?: Record<string, any> }) => {
+      return await executeScreenControlTool(payload.action, payload.args || {});
+    }
+  );
+
+  // Synchronized Conversation Transcript Broadcast
+  ipcMain.on(IPC_CHANNELS.CHAT_BROADCAST_MESSAGE, (_event, message: ChatMessage) => {
+    const mainWin = getMainWindow();
+    const petWin = getPetWindow ? getPetWindow() : null;
+    if (_event.sender !== mainWin?.webContents) {
+      safeSend(mainWin, IPC_CHANNELS.CHAT_BROADCAST_MESSAGE, message);
+    }
+    if (_event.sender !== petWin?.webContents) {
+      safeSend(petWin, IPC_CHANNELS.CHAT_BROADCAST_MESSAGE, message);
+    }
+  });
+
+  // Centralized Voice Coordinator & Single Microphone Ownership
+  const voiceCoordinator = new VoiceCoordinator(getMainWindow, () => (getPetWindow ? getPetWindow() : null));
+
+  ipcMain.on(IPC_CHANNELS.VOICE_TRIGGER_MIC, () => {
+    voiceCoordinator.handleTriggerMic();
+  });
+
+  ipcMain.on(IPC_CHANNELS.VOICE_INTERRUPT, () => {
+    voiceCoordinator.handleInterrupt();
+  });
+
+  ipcMain.on(IPC_CHANNELS.VOICE_STATE_CHANGED, (_event, payload) => {
+    if (!payload?.sessionState) return;
+    voiceCoordinator.setState(payload.sessionState, {
+      expression: payload.expression,
+      mood: payload.mood,
+      isSpeaking: payload.isSpeaking,
+      isVerifiedSpeaker: payload.isVerifiedSpeaker,
+    });
+  });
+
+  ipcMain.on(IPC_CHANNELS.VOICE_LEVEL_UPDATE, (_event, level) => {
+    voiceCoordinator.updateLevel(Number(level) || 0);
+  });
+
+  ipcMain.on(IPC_CHANNELS.VOICE_MOUTH_UPDATE, (_event, payload) => {
+    if (payload) {
+      voiceCoordinator.updateMouth(payload.mouthOpenness || 0, payload.amplitude || 0, payload.frequencies || []);
+    }
+  });
+
+  ipcMain.handle(IPC_CHANNELS.VOICE_SPEAKER_ENROLL, async (_event, profile) => {
+    try {
+      settingsStore.saveSettings({ enrolledVoiceProfile: profile, speakerVerificationEnabled: true });
+      return { success: true };
+    } catch (err: any) {
+      return { success: false, error: err?.message || 'Could not save speaker profile' };
+    }
+  });
+
+  ipcMain.handle(IPC_CHANNELS.VOICE_SPEAKER_CLEAR, async () => {
+    try {
+      settingsStore.saveSettings({ enrolledVoiceProfile: undefined, speakerVerificationEnabled: false });
+      return true;
+    } catch {
+      return false;
     }
   });
 }

@@ -15,37 +15,127 @@ import {
 import { detectLanguageFromText } from '../voice/languages';
 import { analyzeMood, buildMoodInstruction, MoodAnalysis } from './mood';
 import { getLocalResponse } from './localResponses';
+import { classifyFridayError } from '../error/errorHandler';
 
 /**
  * Models tried, in order, when the configured model is unavailable.
- * Gemini model names churn quickly, so a configured name can start returning
- * 404 even though the key itself is perfectly valid.
+ * Updated to use gemini-3.1-pro-preview and modern production 3.x flash models.
  */
 const MODEL_FALLBACKS = [
+  'gemini-3.1-pro-preview',
+  'gemini-3.5-flash',
   'gemini-3.5-flash-lite',
-  'gemini-2.5-flash-lite',
   'gemini-2.5-flash',
-  'gemini-flash-lite-latest',
 ];
 
 /** Ordered, de-duplicated list of models to attempt for a request. */
 export function buildModelCandidates(configured?: string): string[] {
-  const ordered = [configured?.trim(), ...MODEL_FALLBACKS].filter(
+  let initial = configured?.trim();
+  if (
+    initial === 'gemini-2.5-pro' ||
+    initial === 'gemini-2.0-flash' ||
+    initial === 'gemini-1.5-flash'
+  ) {
+    initial = 'gemini-3.1-pro-preview';
+  }
+  const ordered = [initial || 'gemini-3.1-pro-preview', ...MODEL_FALLBACKS].filter(
     (model): model is string => Boolean(model && model.length > 0)
   );
   return Array.from(new Set(ordered));
 }
 
+/** True when an API error is transient (503 unavailable, 429 rate limit, high demand). */
+export function isTransientError(err: any): boolean {
+  const message = String(err?.message || err || '').toLowerCase();
+  const status = err?.status || err?.statusCode || (typeof err?.code === 'number' ? err.code : 0);
+  return (
+    status === 503 ||
+    status === 429 ||
+    message.includes('503') ||
+    message.includes('429') ||
+    message.includes('unavailable') ||
+    message.includes('high demand') ||
+    message.includes('overloaded') ||
+    message.includes('exhausted') ||
+    message.includes('rate limit') ||
+    message.includes('quota') ||
+    message.includes('temporarily unavailable')
+  );
+}
+
 /** True when an API error means "this model cannot serve requests", not "the request failed". */
 export function isModelUnavailableError(err: any): boolean {
   const message = String(err?.message || err || '').toLowerCase();
+  const status = err?.status || err?.statusCode || (typeof err?.code === 'number' ? err.code : 0);
   return (
+    status === 404 ||
     message.includes('404') ||
     message.includes('not found') ||
+    message.includes('no longer available') ||
+    message.includes('not available') ||
     message.includes('is not supported') ||
     message.includes('does not exist') ||
     message.includes('unsupported model')
   );
+}
+
+/** Retries an asynchronous operation using exponential backoff with random jitter. */
+export async function retryWithBackoff<T>(
+  operation: (attempt: number) => Promise<T>,
+  options: {
+    maxRetries?: number;
+    baseDelayMs?: number;
+    maxDelayMs?: number;
+    signal?: AbortSignal;
+    onRetry?: (attempt: number, delay: number, error: any) => void;
+  } = {}
+): Promise<T> {
+  const maxRetries = options.maxRetries ?? 3;
+  const baseDelayMs = options.baseDelayMs ?? 500;
+  const maxDelayMs = options.maxDelayMs ?? 4000;
+  const signal = options.signal;
+
+  let attempt = 0;
+  while (true) {
+    if (signal?.aborted) {
+      throw new Error('Operation cancelled by user.');
+    }
+    try {
+      return await operation(attempt);
+    } catch (err: any) {
+      if (signal?.aborted || isAbortError(err)) {
+        throw err;
+      }
+      if (attempt >= maxRetries || !isTransientError(err)) {
+        throw err;
+      }
+      attempt++;
+      const exponential = baseDelayMs * Math.pow(2, attempt - 1);
+      const jitter = Math.floor(Math.random() * 200);
+      const delay = Math.min(exponential + jitter, maxDelayMs);
+
+      console.warn(
+        `[GeminiService] Transient error (attempt ${attempt}/${maxRetries}): ${err?.message || err}. Retrying in ${delay}ms...`
+      );
+      options.onRetry?.(attempt, delay, err);
+
+      await new Promise<void>((resolve, reject) => {
+        let timer: any = null;
+        const abortHandler = () => {
+          if (timer) clearTimeout(timer);
+          signal?.removeEventListener('abort', abortHandler);
+          reject(new Error('Operation cancelled by user.'));
+        };
+        timer = setTimeout(() => {
+          signal?.removeEventListener('abort', abortHandler);
+          resolve();
+        }, delay);
+        if (signal) {
+          signal.addEventListener('abort', abortHandler, { once: true });
+        }
+      });
+    }
+  }
 }
 
 /**
@@ -199,9 +289,21 @@ export class GeminiService {
   public cancelRequest(requestId?: string): void {
     if (requestId) {
       this.activeRequests.get(requestId)?.abort();
+      this.activeRequests.delete(requestId);
       return;
     }
-    for (const controller of this.activeRequests.values()) controller.abort();
+    for (const controller of this.activeRequests.values()) {
+      try {
+        controller.abort();
+      } catch {
+        // ignore
+      }
+    }
+    this.activeRequests.clear();
+  }
+
+  public cancelAll(): void {
+    this.cancelRequest();
   }
 
   public async testConnection(apiKeyOverride?: string): Promise<{
@@ -404,8 +506,8 @@ export class GeminiService {
           break;
         }
 
-        if (isModelUnavailableError(err)) {
-          console.warn(`[GeminiService] Model "${modelName}" unavailable, trying next candidate.`);
+        if (isModelUnavailableError(err) || (isTransientError(err) && !state.toolsExecuted)) {
+          console.warn(`[GeminiService] Model "${modelName}" unavailable or overloaded (503), trying next candidate.`);
           continue;
         }
 
@@ -413,12 +515,13 @@ export class GeminiService {
       }
     }
 
-    console.error('[GeminiService] Error generating response:', lastError);
-    streamHook({ type: 'error', error: lastError?.message || 'Unknown Gemini error' });
+    const errorResult = classifyFridayError(lastError, { query: userText, provider: 'gemini' });
+    const rawApiKey = settingsStore.getRawApiKey();
+    const rawErrMsg = lastError?.message || 'Unknown Gemini error';
+    const safeErrorMsg = rawApiKey ? rawErrMsg.replaceAll(rawApiKey, '[redacted]') : rawErrMsg;
+    streamHook({ type: 'error', error: errorResult.userMessage });
 
-    const errorText = `I could not complete that request: ${
-      lastError?.message || 'please check your connection and API key.'
-    }`;
+    const errorText = errorResult.userMessage;
 
     // Keep the failure in the transcript for context, but never extract memories from it.
     void memoryService.appendExchange(userText, errorText, {
@@ -429,7 +532,7 @@ export class GeminiService {
     return {
       text: errorText,
       detectedLanguage: params.language || 'en-IN',
-      error: lastError?.message || 'Unknown Gemini error',
+      error: safeErrorMsg,
     };
     } finally {
     if (params.requestId) this.activeRequests.delete(params.requestId);
@@ -533,9 +636,10 @@ export class GeminiService {
 
           functionResponses.push(buildToolResponsePart(call, toolResult));
         } catch (toolErr: any) {
+          const classified = classifyFridayError(toolErr, { toolName: call.name });
           toolRecord.status = 'failed';
-          toolRecord.result = { error: toolErr.message };
-          functionResponses.push(buildToolResponsePart(call, { error: toolErr.message }));
+          toolRecord.result = { error: classified.userMessage, technicalError: toolErr?.message };
+          functionResponses.push(buildToolResponsePart(call, { error: classified.userMessage }));
         }
       }
 
@@ -571,11 +675,21 @@ export class GeminiService {
     signal?: AbortSignal,
     onStream?: (event: Omit<ResponseStreamEvent, 'requestId'>) => void
   ): Promise<any> {
-    const stream = await this.getClient().models.generateContentStream({
-      model: model.model,
-      contents,
-      config: { ...model.config, abortSignal: signal },
-    });
+    const client = this.getClient();
+    const stream = await retryWithBackoff(
+      async () => {
+        return await client.models.generateContentStream({
+          model: model.model,
+          contents,
+          config: { ...model.config, abortSignal: signal },
+        });
+      },
+      {
+        maxRetries: 3,
+        baseDelayMs: 500,
+        signal,
+      }
+    );
     const chunks: any[] = [];
 
     for await (const chunk of stream) {

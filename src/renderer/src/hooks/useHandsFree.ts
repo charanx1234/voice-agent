@@ -1,12 +1,15 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   VoiceActivityDetector,
+  VadOptions,
   DEFAULT_VAD_OPTIONS,
   BARGE_IN_VAD_OPTIONS,
 } from '@/services/voice/voiceActivity';
 import { detectLocalWakePhrase } from '@/services/voice/wakeWord';
+import { localWakeWordDetector } from '@/services/voice/localWakeWord';
+import { speakerVerificationService } from '@/services/voice/speakerVerification';
 import { describeMicError } from '@/services/voice/micErrors';
-import { VoiceProsodySummary } from '@/shared/types';
+import { EnrolledSpeakerProfile, VoiceProsodySummary } from '@/shared/types';
 
 export type HandsFreeMode = 'off' | 'standby' | 'active';
 
@@ -16,17 +19,26 @@ export interface HandsFreeUtterance {
   peakLevel: number;
   recognizedText: string;
   prosody: VoiceProsodySummary;
+  isVerifiedSpeaker?: boolean;
 }
 
 export interface HandsFreeOptions {
   enabled: boolean;
   language?: string;
   silenceTimeoutMs?: number;
+  noiseSuppression?: 'off' | 'standard' | 'strong';
+  echoCancellation?: boolean;
+  autoGainControl?: boolean;
+  vadSensitivity?: 'low' | 'medium' | 'high';
+  speakerVerificationEnabled?: boolean;
+  enrolledVoiceProfile?: EnrolledSpeakerProfile;
+  deviceId?: string;
   isSpeaking: () => boolean;
   isBusy: () => boolean;
   onBargeIn: () => void;
   onSpeechActivity: (speaking: boolean) => void;
   onTranscript?: (text: string, isFinal: boolean) => void;
+  onLevel?: (level: number) => void;
   onUtterance: (utterance: HandsFreeUtterance) => void;
   onWake: (command: string) => void;
   onError: (message: string) => void;
@@ -47,6 +59,28 @@ function blobToBase64(blob: Blob): Promise<string> {
   });
 }
 
+function getVadOptions(sensitivity?: 'low' | 'medium' | 'high'): VadOptions {
+  switch (sensitivity) {
+    case 'high':
+      return {
+        startThreshold: 0.065,
+        endThreshold: 0.035,
+        speechStartMs: 90,
+        speechEndMs: 500,
+      };
+    case 'low':
+      return {
+        startThreshold: 0.22,
+        endThreshold: 0.10,
+        speechStartMs: 140,
+        speechEndMs: 650,
+      };
+    case 'medium':
+    default:
+      return DEFAULT_VAD_OPTIONS;
+  }
+}
+
 interface Segment {
   recorder: MediaRecorder;
   chunks: Blob[];
@@ -54,13 +88,16 @@ interface Segment {
 }
 
 function getSpeechRecognition(): any {
+  if (typeof window !== 'undefined' && (window as any).fridayAPI) {
+    return null;
+  }
   return (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
 }
 
 /**
- * Keeps one microphone stream alive while hands-free mode is enabled. Standby
- * uses the browser's local transcript gate when available and does not send
- * standby audio to Gemini. Active turns are recorded only after wake-up.
+ * Single-stream persistent audio pipeline and hands-free listener.
+ * Integrates WebRTC AEC/AGC/NoiseSuppression, Biquad human voice bandpass filtering,
+ * local offline wake-word pattern matching, and optional local speaker verification.
  */
 export function useHandsFree(options: HandsFreeOptions) {
   const [mode, setModeState] = useState<HandsFreeMode>(options.enabled ? 'standby' : 'off');
@@ -100,12 +137,18 @@ export function useHandsFree(options: HandsFreeOptions) {
     let disposed = false;
     let stream: MediaStream | null = null;
     let audioCtx: AudioContext | null = null;
+    let duckingGain: GainNode | null = null;
+    let highpass: BiquadFilterNode | null = null;
+    let lowpass: BiquadFilterNode | null = null;
+    let compressor: DynamicsCompressorNode | null = null;
     let analyser: AnalyserNode | null = null;
+    let destination: MediaStreamAudioDestinationNode | null = null;
     let samples = new Float32Array(1024);
+    let freqData = new Uint8Array(512);
     let timer: ReturnType<typeof setInterval> | null = null;
     let segment: Segment | null = null;
     let recognition: any = null;
-    let normalVad = new VoiceActivityDetector(DEFAULT_VAD_OPTIONS);
+    let normalVad = new VoiceActivityDetector(getVadOptions(options.vadSensitivity));
     let bargeVad = new VoiceActivityDetector(BARGE_IN_VAD_OPTIONS);
     let usingBarge = false;
     let activeSpeechReported = false;
@@ -115,9 +158,10 @@ export function useHandsFree(options: HandsFreeOptions) {
     const mimeType = MediaRecorder.isTypeSupported('audio/webm') ? 'audio/webm' : 'audio/mp4';
 
     const startSegment = () => {
-      if (!stream || disposed || segment || modeRef.current !== 'active') return;
+      const activeStream = destination?.stream || stream;
+      if (!activeStream || disposed || segment || modeRef.current !== 'active') return;
       try {
-        const recorder = new MediaRecorder(stream, { mimeType });
+        const recorder = new MediaRecorder(activeStream, { mimeType });
         const chunks: Blob[] = [];
         recorder.ondataavailable = (event: BlobEvent) => {
           if (event.data.size > 0) chunks.push(event.data);
@@ -137,7 +181,7 @@ export function useHandsFree(options: HandsFreeOptions) {
       try {
         current.recorder.stop();
       } catch {
-        // The stream may already have been disconnected.
+        // Stream may already be disconnected.
       }
     };
 
@@ -166,35 +210,26 @@ export function useHandsFree(options: HandsFreeOptions) {
     startActiveCaptureRef.current = startSegment;
     stopActiveCaptureRef.current = stopSegment;
 
-    const handleWakeTranscript = (transcript: string) => {
+    const handleWakeTrigger = (command: string) => {
       if (modeRef.current !== 'standby' || wakeAnnounced) return;
-      const wakeResult = detectLocalWakePhrase(transcript);
-      if (!wakeResult.wake) return;
-
       wakeAnnounced = true;
       setMode('active');
       startSegment();
       recognitionText = '';
-      optionsRef.current.onWake(wakeResult.command);
+      optionsRef.current.onWake(command);
     };
 
     const startRecognition = () => {
+      const isElectron = typeof window !== 'undefined' && Boolean((window as any).fridayAPI);
+      if (isElectron) return; // In Electron, local acoustic wake detector runs inside tick()
       const SpeechRecognition = getSpeechRecognition();
-      if (!SpeechRecognition) {
-        optionsRef.current.onError(
-          'Hands-free wake detection is unavailable in this Electron runtime. Use the microphone button or disable hands-free mode.'
-        );
-        return;
-      }
+      if (!SpeechRecognition) return;
 
       try {
         recognition = new SpeechRecognition();
         recognition.continuous = true;
         recognition.interimResults = true;
         recognition.lang = optionsRef.current.language || 'en-IN';
-        // Chromium's local recognition mode is used when the runtime exposes it.
-        // Older Electron builds may not provide processLocally, so the UI reports
-        // the limitation instead of silently sending audio to FRIDAY's backend.
         if ('processLocally' in recognition) recognition.processLocally = true;
         recognition.onresult = (event: any) => {
           let interim = '';
@@ -203,15 +238,20 @@ export function useHandsFree(options: HandsFreeOptions) {
             if (!transcript) continue;
             if (event.results[i].isFinal) {
               if (modeRef.current === 'standby') {
-                handleWakeTranscript(transcript);
+                const wakeResult = detectLocalWakePhrase(transcript);
+                if (wakeResult.wake) handleWakeTrigger(wakeResult.command);
               } else {
                 recognitionText = `${recognitionText} ${transcript}`.trim();
                 optionsRef.current.onTranscript?.(recognitionText, true);
               }
             } else {
               interim = `${interim} ${transcript}`.trim();
-              if (modeRef.current === 'standby') handleWakeTranscript(interim);
-              else optionsRef.current.onTranscript?.(`${recognitionText} ${interim}`.trim(), false);
+              if (modeRef.current === 'standby') {
+                const wakeResult = detectLocalWakePhrase(interim);
+                if (wakeResult.wake) handleWakeTrigger(wakeResult.command);
+              } else {
+                optionsRef.current.onTranscript?.(`${recognitionText} ${interim}`.trim(), false);
+              }
             }
           }
         };
@@ -224,15 +264,12 @@ export function useHandsFree(options: HandsFreeOptions) {
           if (!disposed && optionsRef.current.enabled) {
             try {
               recognition.start();
-            } catch {
-              // Browser may reject a restart while a previous stop is pending.
-            }
+            } catch {}
           }
         };
         recognition.start();
-      } catch (err: any) {
+      } catch {
         recognition = null;
-        optionsRef.current.onError(`Could not start wake detection: ${err?.message || err}`);
       }
     };
 
@@ -240,22 +277,45 @@ export function useHandsFree(options: HandsFreeOptions) {
       if (disposed || !analyser) return;
       const now = Date.now();
       analyser.getFloatTimeDomainData(samples as any);
+      analyser.getByteFrequencyData(freqData);
+
       let sum = 0;
       for (let i = 0; i < samples.length; i++) sum += samples[i] * samples[i];
-      const level = Math.min(1, Math.sqrt(sum / samples.length) * 5);
+      let level = Math.min(1, Math.sqrt(sum / samples.length) * 5);
+
+      // Report live input level for UI meters & aura
+      optionsRef.current.onLevel?.(level);
 
       const speaking = optionsRef.current.isSpeaking();
       const busy = optionsRef.current.isBusy();
       const currentMode = modeRef.current;
 
+      // Software ducking during assistant speech
+      if (duckingGain && audioCtx) {
+        const targetGain = speaking && optionsRef.current.echoCancellation !== false ? 0.08 : 1.0;
+        duckingGain.gain.setTargetAtTime(targetGain, audioCtx.currentTime, 0.05);
+      }
+
+      // Standby Local Wake-Word Evaluation (100% offline acoustic pattern matcher)
+      if (currentMode === 'standby' && !speaking && !busy) {
+        const wakeDetected = localWakeWordDetector.processFrequencyData(
+          freqData,
+          audioCtx?.sampleRate || 44100
+        );
+        if (wakeDetected) {
+          handleWakeTrigger('');
+        }
+      }
+
       if (speaking !== usingBarge) {
         usingBarge = speaking;
-        normalVad = new VoiceActivityDetector(DEFAULT_VAD_OPTIONS);
+        normalVad = new VoiceActivityDetector(getVadOptions(optionsRef.current.vadSensitivity));
         bargeVad = new VoiceActivityDetector(BARGE_IN_VAD_OPTIONS);
       }
 
+      const effectiveLevel = speaking ? level * 0.4 : level;
       const vad = usingBarge ? bargeVad : normalVad;
-      let event = vad.update(level, now);
+      let event = vad.update(effectiveLevel, now);
       if (!event && vad.isSpeaking && segment && now - segment.startedAt > MAX_UTTERANCE_MS) {
         event = vad.finish(now);
       }
@@ -289,15 +349,38 @@ export function useHandsFree(options: HandsFreeOptions) {
           const prosody: VoiceProsodySummary = {
             peakLevel,
             durationMs,
-            speechRate: wordCount > 0 ? (wordCount / durationMs) * 60_000 : undefined,
+            speechRate: durationMs > 0 && wordCount > 0 ? (wordCount / durationMs) * 60_000 : undefined,
           };
-          lastActivityRef.current = Date.now();
+
+          // Speaker verification check
+          let isVerified = true;
+          if (
+            optionsRef.current.speakerVerificationEnabled &&
+            optionsRef.current.enrolledVoiceProfile &&
+            audioCtx
+          ) {
+            try {
+              const arrayBuffer = await blob.arrayBuffer();
+              const decoded = await audioCtx.decodeAudioData(arrayBuffer.slice(0));
+              const pcmData = decoded.getChannelData(0);
+              const verification = speakerVerificationService.verifySpeaker(
+                pcmData,
+                decoded.sampleRate,
+                optionsRef.current.enrolledVoiceProfile
+              );
+              isVerified = verification.verified;
+            } catch {
+              isVerified = true;
+            }
+          }
+
           optionsRef.current.onUtterance({
             audioBase64,
             mimeType,
             peakLevel,
             recognizedText,
             prosody,
+            isVerifiedSpeaker: isVerified,
           });
         });
       } else if (!vad.isSpeaking && segment && now - segment.startedAt > MAX_IDLE_SEGMENT_MS) {
@@ -320,13 +403,15 @@ export function useHandsFree(options: HandsFreeOptions) {
 
     (async () => {
       try {
-        stream = await navigator.mediaDevices.getUserMedia({
+        const constraints: MediaStreamConstraints = {
           audio: {
-            echoCancellation: true,
-            noiseSuppression: true,
-            autoGainControl: true,
+            deviceId: options.deviceId ? { exact: options.deviceId } : undefined,
+            echoCancellation: options.echoCancellation !== false,
+            noiseSuppression: options.noiseSuppression !== 'off',
+            autoGainControl: options.autoGainControl !== false,
           },
-        });
+        };
+        stream = await navigator.mediaDevices.getUserMedia(constraints);
       } catch (err: any) {
         if (!disposed) {
           optionsRef.current.onError(describeMicError(err));
@@ -349,10 +434,43 @@ export function useHandsFree(options: HandsFreeOptions) {
       try {
         const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
         audioCtx = new AudioCtx();
+
+        const source = audioCtx.createMediaStreamSource(stream);
+
+        // Web Audio Filtering Graph for Voice Isolation
+        highpass = audioCtx.createBiquadFilter();
+        highpass.type = 'highpass';
+        highpass.frequency.value = options.noiseSuppression === 'strong' ? 110 : 85;
+
+        lowpass = audioCtx.createBiquadFilter();
+        lowpass.type = 'lowpass';
+        lowpass.frequency.value = options.noiseSuppression === 'strong' ? 3400 : 3800;
+
+        compressor = audioCtx.createDynamicsCompressor();
+        compressor.threshold.value = -24;
+        compressor.knee.value = 20;
+        compressor.ratio.value = options.noiseSuppression === 'strong' ? 10 : 6;
+        compressor.attack.value = 0.003;
+        compressor.release.value = 0.25;
+
+        duckingGain = audioCtx.createGain();
+        duckingGain.gain.value = 1.0;
+
         analyser = audioCtx.createAnalyser();
         analyser.fftSize = 1024;
         samples = new Float32Array(analyser.fftSize);
-        audioCtx.createMediaStreamSource(stream).connect(analyser);
+        freqData = new Uint8Array(analyser.frequencyBinCount);
+
+        destination = audioCtx.createMediaStreamDestination();
+
+        source.connect(highpass);
+        highpass.connect(lowpass);
+        lowpass.connect(compressor);
+        compressor.connect(duckingGain);
+
+        duckingGain.connect(analyser);
+        duckingGain.connect(destination);
+
         if (audioCtx.state === 'suspended') void audioCtx.resume();
       } catch (err: any) {
         optionsRef.current.onError(`Audio monitoring is unavailable: ${err?.message || err}`);
@@ -379,9 +497,14 @@ export function useHandsFree(options: HandsFreeOptions) {
       });
       void audioCtx?.close().catch(() => undefined);
     };
-    // The refs above intentionally keep the persistent session stable while UI callbacks change.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [options.enabled]);
+  }, [
+    options.enabled,
+    options.deviceId,
+    options.noiseSuppression,
+    options.echoCancellation,
+    options.autoGainControl,
+    options.vadSensitivity,
+  ]);
 
   return { mode, goStandby, wake };
 }

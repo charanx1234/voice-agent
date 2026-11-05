@@ -36,14 +36,14 @@ export function cleanForSpeech(text: string): string {
     .replace(/[\p{Extended_Pictographic}\p{Emoji_Presentation}\p{Emoji_Modifier_Base}\p{Regional_Indicator}\uFE0F\u200D]/gu, ' ')
     .replace(/[‘’]/g, "'")
     .replace(/[“”]/g, '"')
-    .replace(/[–—]/g, ', ')
+    .replace(/[–—]/g, ' ')
     .replace(/…/g, '.')
     .replace(/[\u2000-\u206F\u25A0-\u25FF\u2600-\u27BF\u2B00-\u2BFF]/gu, (symbol) =>
       /[.,!?;:'"()[\]{}%&+\-/]/.test(symbol) ? symbol : ' '
     )
     // Ellipses and repeated excitement marks cause exaggerated provider pauses.
     // Keep one meaningful punctuation mark for the displayed meaning in speech.
-    .replace(/\.{3,}/g, '.')
+    .replace(/\.{2,}/g, '.')
     .replace(/!{2,}/g, '!')
     .replace(/\?{2,}/g, '?')
     .replace(/([!?])[!?]+/g, '$1')
@@ -57,9 +57,10 @@ export function cleanForSpeech(text: string): string {
 
 /**
  * Splits speech into sentence-sized chunks so the first one can start playing
- * while later ones are still being synthesized.
+ * while later ones are still being synthesized. Never splits on commas, keeping
+ * clause intonation smooth and preventing artificial audio gaps.
  */
-export function chunkForSpeech(text: string, maxChars = 220): string[] {
+export function chunkForSpeech(text: string, maxChars = 280): string[] {
   const clean = (text || '').trim();
   if (!clean) return [];
 
@@ -79,30 +80,22 @@ export function chunkForSpeech(text: string, maxChars = 220): string[] {
   for (const sentence of sentences) {
     if (sentence.length > maxChars) {
       pushCurrent();
-      // Long sentence: split on commas, then on word boundaries.
-      const pieces = sentence.split(/(?<=,)\s+/);
-      for (const piece of pieces) {
-        if (piece.length <= maxChars) {
-          chunks.push(piece.trim());
-          continue;
+      // Long sentence: split on whitespace words near maxChars, never on commas.
+      let buffer = '';
+      for (const word of sentence.split(/\s+/)) {
+        if ((buffer + ' ' + word).trim().length > maxChars) {
+          if (buffer.trim()) chunks.push(buffer.trim());
+          buffer = word;
+        } else {
+          buffer = `${buffer} ${word}`.trim();
         }
-        let buffer = '';
-        for (const word of piece.split(/\s+/)) {
-          if ((buffer + ' ' + word).trim().length > maxChars) {
-            if (buffer.trim()) chunks.push(buffer.trim());
-            buffer = word;
-          } else {
-            buffer = `${buffer} ${word}`.trim();
-          }
-        }
-        if (buffer.trim()) chunks.push(buffer.trim());
       }
+      if (buffer.trim()) chunks.push(buffer.trim());
       continue;
     }
 
-    // Keep adjacent sentences in one provider request whenever they fit. This
-    // lets the provider create a short full-stop pause instead of inserting a
-    // fresh audio-buffer gap between every sentence.
+    // Keep adjacent short sentences together whenever they fit. This allows the TTS
+    // engine to naturally cadence between sentences without gap delays.
     if (current && (current + ' ' + sentence).length > maxChars) {
       pushCurrent();
     }
@@ -116,7 +109,7 @@ export function chunkForSpeech(text: string, maxChars = 220): string[] {
 /** Pulls only safe sentence-sized text from a still-arriving model stream. */
 export function takeCompleteSpeechChunks(
   buffer: string,
-  maxChars = 220
+  maxChars = 260
 ): { complete: string[]; remainder: string } {
   const clean = buffer || '';
   const matches = [...clean.matchAll(/(?<=[.!?…])(?:\s+|$)/g)];

@@ -74,6 +74,13 @@ export function useVoiceAssistant() {
     analyser.init((amp, freqs) => {
       setAmplitude(amp);
       setFrequencies(freqs);
+      if (typeof window !== 'undefined' && window.fridayAPI?.updateVoiceMouth) {
+        window.fridayAPI.updateVoiceMouth({
+          mouthOpenness: Math.min(1, amp * 1.2),
+          amplitude: amp,
+          frequencies: freqs,
+        });
+      }
     });
 
     const vm = new VoiceManager(analyser);
@@ -204,10 +211,12 @@ export function useVoiceAssistant() {
           );
         }
 
-        // Optional Web Speech API recognition for live transcript feedback.
-        // Electron often lacks this API, so its absence is not an error.
+        // Optional Web Speech API recognition for live transcript feedback in standard browsers.
+        // In Electron, Chromium lacks Google Speech API keys and fails with Error: -2 in the chunked upload stream;
+        // audio recording is reliably handled by MediaRecorder and transcribed natively by Gemini.
+        const isElectron = typeof window !== 'undefined' && Boolean((window as any).fridayAPI);
         const SpeechRec =
-          (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+          !isElectron && ((window as any).SpeechRecognition || (window as any).webkitSpeechRecognition);
         if (SpeechRec) {
           try {
             const recognition = new SpeechRec();

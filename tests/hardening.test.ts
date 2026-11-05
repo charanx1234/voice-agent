@@ -8,6 +8,8 @@ import {
   getFunctionCalls,
   getModelToolCallContent,
   isModelUnavailableError,
+  isTransientError,
+  retryWithBackoff,
   normalizeConversationHistory,
 } from '../src/services/ai/gemini';
 import { isInsideDirectory } from '../src/services/agent/projectSearchTool';
@@ -26,18 +28,54 @@ describe('Gemini model fallback', () => {
   });
 
   it('falls back to a default when nothing is configured', () => {
-    expect(buildModelCandidates(undefined)[0]).toBe('gemini-3.5-flash-lite');
-    expect(buildModelCandidates('   ')[0]).toBe('gemini-3.5-flash-lite');
+    expect(buildModelCandidates(undefined)[0]).toBe('gemini-3.1-pro-preview');
+    expect(buildModelCandidates('   ')[0]).toBe('gemini-3.1-pro-preview');
   });
 
   it('recognises a missing-model error', () => {
     expect(isModelUnavailableError(new Error('404 model not found'))).toBe(true);
     expect(isModelUnavailableError(new Error('INVALID_ARGUMENT: model does not exist'))).toBe(true);
+    expect(
+      isModelUnavailableError(
+        new Error('404 NOT_FOUND: This model models/gemini-2.5-pro is no longer available to new users.')
+      )
+    ).toBe(true);
   });
 
-  it('does not retry a different model for rate limits or auth failures', () => {
-    expect(isModelUnavailableError(new Error('429 quota exceeded'))).toBe(false);
-    expect(isModelUnavailableError(new Error('API key not valid'))).toBe(false);
+  it('recognises 503 and high-demand transient errors for backoff', () => {
+    expect(isTransientError(new Error('503 Service Unavailable'))).toBe(true);
+    expect(isTransientError(new Error('The model is overloaded. Please try again later.'))).toBe(true);
+    expect(isTransientError(new Error('Resource has been exhausted (e.g. check quota).'))).toBe(true);
+    expect(isTransientError(new Error('Invalid API key provided'))).toBe(false);
+  });
+
+  it('retries transient errors with exponential backoff and succeeds', async () => {
+    let callCount = 0;
+    const result = await retryWithBackoff(
+      async () => {
+        callCount++;
+        if (callCount < 2) {
+          throw new Error('503 Service Unavailable');
+        }
+        return 'success';
+      },
+      { maxRetries: 2, baseDelayMs: 10 }
+    );
+    expect(result).toBe('success');
+    expect(callCount).toBe(2);
+  });
+
+  it('aborts retries immediately when aborted by signal', async () => {
+    const controller = new AbortController();
+    controller.abort();
+    await expect(
+      retryWithBackoff(
+        async () => {
+          throw new Error('503 Service Unavailable');
+        },
+        { signal: controller.signal }
+      )
+    ).rejects.toThrow();
   });
 });
 

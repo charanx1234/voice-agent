@@ -6,7 +6,9 @@ dist/
 dist-electron/
 dist-renderer/
 dist-package/
+dist-package*/
 release/
+.opencode/
 
 # Local test/scratch data (SQLite databases, screenshots)
 .data/

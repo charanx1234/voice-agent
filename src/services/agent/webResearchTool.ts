@@ -53,7 +53,7 @@ export async function executeWebResearchTool(
     console.error('[WebResearchTool] Search failed:', err);
     return {
       success: false,
-      error: `Web search could not be completed: ${err.message || 'Network error'}.`,
+      error: 'I cannot access the internet right now. Please check your connection and try again.',
     };
   }
 }
