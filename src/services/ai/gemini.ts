@@ -20,12 +20,16 @@ import { classifyFridayError } from '../error/errorHandler';
 
 /**
  * Models tried, in order, when the configured model is unavailable.
- * Updated to use gemini-3.1-pro-preview and modern production 3.x flash models.
+ * Prioritizes high-quota, verified operational models with audio multimodal capability.
  */
 const MODEL_FALLBACKS = [
-  'gemini-3.1-pro-preview',
-  'gemini-3.5-flash',
+  'gemini-3.1-flash-lite',
   'gemini-3.5-flash-lite',
+  'gemini-3.1-flash-lite-preview',
+  'gemini-flash-lite-latest',
+  'gemini-3-flash-preview',
+  'gemini-3.5-flash',
+  'gemini-3.1-pro-preview',
   'gemini-2.5-flash',
 ];
 
@@ -35,11 +39,13 @@ export function buildModelCandidates(configured?: string): string[] {
   if (
     initial === 'gemini-2.5-pro' ||
     initial === 'gemini-2.0-flash' ||
-    initial === 'gemini-1.5-flash'
+    initial === 'gemini-1.5-flash' ||
+    initial === 'gemini-3.1-pro-preview' ||
+    initial === 'gemini-2.5-flash'
   ) {
-    initial = 'gemini-3.1-pro-preview';
+    initial = 'gemini-3.1-flash-lite';
   }
-  const ordered = [initial || 'gemini-3.1-pro-preview', ...MODEL_FALLBACKS].filter(
+  const ordered = [initial || 'gemini-3.1-flash-lite', ...MODEL_FALLBACKS].filter(
     (model): model is string => Boolean(model && model.length > 0)
   );
   return Array.from(new Set(ordered));
@@ -355,27 +361,44 @@ export class GeminiService {
   ): Promise<string> {
     const settings = settingsStore.getSettings();
     const client = this.getClient();
-    const result = await client.models.generateContent({
-      model: settings.modelName,
-      contents: [
-        {
-          role: 'user',
-          parts: [
-            {
-              inlineData: {
-                mimeType: audioMimeType || 'audio/webm',
-                data: audioBase64,
-              },
-            },
-            {
-              text: 'Wake-word gate. Listen to the audio. If the speaker says the wake word "Friday" (for example "Hey Friday" or "Friday"), reply exactly in the form WAKE|<everything they said, verbatim, in the language spoken>. If the audio does not mention "Friday", reply exactly NONE. No other text, no explanations.',
-            },
-          ],
-        },
-      ],
-    });
+    const cleanMime = (audioMimeType || 'audio/webm').split(';')[0].trim();
+    const candidates = buildModelCandidates(settings.modelName);
 
-    return (result.text || '').trim();
+    for (const modelCandidate of candidates) {
+      try {
+        const result = await retryWithBackoff(
+          async () => {
+            return await client.models.generateContent({
+              model: modelCandidate,
+              contents: [
+                {
+                  role: 'user',
+                  parts: [
+                    {
+                      inlineData: {
+                        mimeType: cleanMime,
+                        data: audioBase64,
+                      },
+                    },
+                    {
+                      text: 'Wake-word gate. Listen to the audio. If the speaker says the wake word "Friday" (for example "Hey Friday" or "Friday"), reply exactly in the form WAKE|<everything they said, verbatim, in the language spoken>. If the audio does not mention "Friday", reply exactly NONE. No other text, no explanations.',
+                    },
+                  ],
+                },
+              ],
+            });
+          },
+          { maxRetries: 1, baseDelayMs: 250 }
+        );
+
+        const text = (result.text || '').trim();
+        if (text) return text;
+      } catch (err: any) {
+        console.warn(`[Gemini] transcribeUtterance attempt with ${modelCandidate} failed:`, err?.message || err);
+      }
+    }
+
+    return 'NONE';
   }
 
   /**
@@ -389,20 +412,29 @@ export class GeminiService {
   ): Promise<string> {
     const settings = settingsStore.getSettings();
     const client = this.getClient();
-    const result = await client.models.generateContent({
-      model: settings.modelName,
-      contents: [
-        {
-          role: 'user',
-          parts: [
-            {
-              inlineData: {
-                mimeType: audioMimeType || 'audio/webm',
-                data: audioBase64,
-              },
-            },
-            {
-              text: `Transcribe this microphone speech verbatim in the exact words and languages spoken.
+    const cleanMime = (audioMimeType || 'audio/webm').split(';')[0].trim();
+    const candidates = buildModelCandidates(settings.modelName);
+
+    let lastError: any = null;
+
+    for (const modelCandidate of candidates) {
+      try {
+        const result = await retryWithBackoff(
+          async () => {
+            return await client.models.generateContent({
+              model: modelCandidate,
+              contents: [
+                {
+                  role: 'user',
+                  parts: [
+                    {
+                      inlineData: {
+                        mimeType: cleanMime,
+                        data: audioBase64,
+                      },
+                    },
+                    {
+                      text: `Transcribe this microphone speech verbatim in the exact words and languages spoken.
 CRITICAL TRANSCRIPTION RULES:
 1. Handle natural code-switching: The speaker frequently mixes English with Telugu (Tenglish) or Hindi (Hinglish). E.g. "Chrome open chey and Java tutorials search chey", "Spotify lo music play chey", "Notepad open karo aur notes save karo".
 2. Keep English technical words, app names, website names, and file names exact in English: e.g. "Chrome", "Spotify", "GitHub", "Java", "Python", "Notepad", "VS Code", "Terminal", "YouTube".
@@ -410,17 +442,39 @@ CRITICAL TRANSCRIPTION RULES:
 4. Preserve Hindi colloquial words without translating: e.g. "karo", "kholo", "chalao", "band karo", "batao", "aur", "pe".
 5. Return ONLY the spoken words verbatim with no commentary, no quotes, no markdown, and no explanations.
 6. If the audio contains only silence, breathing, clicks, or ambient noise without human speech, return exactly: SILENCE`,
-            },
-          ],
-        },
-      ],
-    });
+                    },
+                  ],
+                },
+              ],
+            });
+          },
+          { maxRetries: 2, baseDelayMs: 300 }
+        );
 
-    const text = (result.text || '').trim();
-    if (!text || text.toUpperCase() === 'SILENCE' || text.toUpperCase() === 'NONE' || text.toUpperCase() === 'EMPTY') {
-      return '';
+        let text = (result.text || '').trim();
+        text = text.replace(/^["'`]+|["'`]+$/g, '').trim();
+
+        // Check if output is silence or timestamp artifacts (e.g. 00:00, [00:00:00])
+        if (
+          !text ||
+          text.toUpperCase() === 'SILENCE' ||
+          text.toUpperCase() === 'NONE' ||
+          text.toUpperCase() === 'EMPTY' ||
+          /^\[?\d{1,2}:\d{2}(?::\d{2})?\]?(?:\s*-\s*\[?\d{1,2}:\d{2}(?::\d{2})?\]?)?$/.test(text)
+        ) {
+          return '';
+        }
+        return text;
+      } catch (err: any) {
+        lastError = err;
+        console.warn(`[Gemini] transcribeAudio attempt with ${modelCandidate} failed:`, err?.message || err);
+      }
     }
-    return text;
+
+    if (lastError) {
+      console.error('[Gemini] All transcription model candidates failed:', lastError?.message || lastError);
+    }
+    return '';
   }
 
   public async sendMessage(

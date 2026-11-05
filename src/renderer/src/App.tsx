@@ -450,20 +450,10 @@ export const App: React.FC = () => {
           console.warn('[App] Live speech transcription error:', err);
         }
 
-        // If transcription produced no recognizable words (e.g. silence or unintelligible noise)
-        if (!resolvedText) {
-          setRobotState('idle');
-          const missedText = "Sorry, I couldn't catch that. Could you say it again?";
-          setMessages((prev) => [
-            ...prev,
-            { id: `msg_${Date.now()}_missed`, role: 'assistant', text: missedText, timestamp: Date.now() },
-          ]);
-          void speakResponse(missedText, {
-            languageCode: settings.preferredLanguage,
-            voice: settings.ttsVoice,
-            accent: settings.voiceAccent,
-          });
-          return;
+        // If transcription produced no recognizable words, do not abort:
+        // Gemini's multimodal engine can process the audio directly.
+        if (!resolvedText && audioBase64) {
+          resolvedText = '🎤 [Voice command]';
         }
       }
 

@@ -343,6 +343,7 @@ export function registerIpcHandlers(
         const text = await geminiService.transcribeAudio(audioBase64, audioMimeType);
         return { success: true, text };
       } catch (err: any) {
+        console.error('[FRIDAY IPC] Speech transcription failed:', err?.message || err);
         return { success: false, error: err?.message || 'Speech transcription failed.', text: '' };
       }
     }

@@ -43,7 +43,7 @@ const DEFAULT_SETTINGS: FridaySettings = {
     webResearch: false,
     launchApps: false,
   },
-  modelName: process.env.GEMINI_MODEL || 'gemini-3.1-pro-preview',
+  modelName: process.env.GEMINI_MODEL || 'gemini-3.1-flash-lite',
   soundMuted: false,
   memoryEnabled: true,
   personalityMode: 'moderate',
@@ -88,13 +88,19 @@ export class SettingsStore {
           !model ||
           model === 'gemini-2.5-pro' ||
           model === 'gemini-2.0-flash' ||
-          model === 'gemini-1.5-flash'
+          model === 'gemini-1.5-flash' ||
+          model === 'gemini-3.1-pro-preview' ||
+          model === 'gemini-2.5-flash'
         ) {
-          model = 'gemini-3.1-pro-preview';
+          model = 'gemini-3.1-flash-lite';
         }
 
-        if (parsed.providerConfigs?.gemini?.model === 'gemini-2.5-pro') {
-          parsed.providerConfigs.gemini.model = 'gemini-3.1-pro-preview';
+        if (
+          parsed.providerConfigs?.gemini?.model === 'gemini-2.5-pro' ||
+          parsed.providerConfigs?.gemini?.model === 'gemini-3.1-pro-preview' ||
+          parsed.providerConfigs?.gemini?.model === 'gemini-2.5-flash'
+        ) {
+          parsed.providerConfigs.gemini.model = 'gemini-3.1-flash-lite';
         }
 
         // v1 stored a fixed dark theme; keep those installs dark instead of flipping them.
