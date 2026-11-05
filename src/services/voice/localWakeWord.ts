@@ -26,6 +26,7 @@ export class LocalWakeWordDetector {
   // History buffer for 1.5 seconds of frame metrics (at ~50ms per frame = 30 frames)
   private frameHistory: { time: number; metrics: AcousticFrameMetrics }[] = [];
   private lastWakeTime = 0;
+  private suppressedUntil = 0;
   private readonly WAKE_COOLDOWN_MS = 2500;
 
   constructor(options: WakeDetectorOptions = {}) {
@@ -39,6 +40,17 @@ export class LocalWakeWordDetector {
 
   public setOnWake(cb: (command: string) => void): void {
     this.onWakeCallback = cb;
+  }
+
+  /**
+   * Temporarily suppresses wake-word detection (e.g. during TTS audio playback or barge-in cooldown).
+   */
+  public suppress(durationMs = 800): void {
+    this.suppressedUntil = Math.max(this.suppressedUntil, Date.now() + durationMs);
+  }
+
+  public isSuppressed(): boolean {
+    return Date.now() < this.suppressedUntil;
   }
 
   /**
@@ -57,7 +69,7 @@ export class LocalWakeWordDetector {
     sampleRate = 44100
   ): boolean {
     const now = Date.now();
-    if (now - this.lastWakeTime < this.WAKE_COOLDOWN_MS) {
+    if (this.isSuppressed() || now - this.lastWakeTime < this.WAKE_COOLDOWN_MS) {
       return false;
     }
 
@@ -150,7 +162,7 @@ export class LocalWakeWordDetector {
     // 1. Identify distinct energy peaks (syllables) and troughs (valleys)
     const rmsSeries = history.map((h) => h.metrics.rms);
     const maxRms = Math.max(...rmsSeries);
-    if (maxRms < 0.08) {
+    if (maxRms < 0.12) {
       // Too quiet or background silence
       return false;
     }
@@ -185,7 +197,7 @@ export class LocalWakeWordDetector {
         if (inPeak) {
           inPeak = false;
           const duration = history[i].time - peakStart;
-          // Valid speech syllables are between 90ms and 450ms
+          // Valid speech syllables are between 80ms and 500ms
           if (duration >= 80 && duration <= 500) {
             peaks.push({
               index: peakMaxIdx,
@@ -217,8 +229,8 @@ export class LocalWakeWordDetector {
       const lastPeak = peaks[peaks.length - 1];
       const totalSpan = lastPeak.time - firstPeak.time;
 
-      // Phrase timing should span between 400ms and 1300ms
-      if (totalSpan >= 350 && totalSpan <= 1250) {
+      // Phrase timing should span between 350ms and 1300ms
+      if (totalSpan >= 350 && totalSpan <= 1300) {
         // "Fri-" has a distinctive unvoiced fricative /f/ onset or burst
         const hasFricativeOnset = peaks.some((p) => p.hasFricative);
 
@@ -231,15 +243,15 @@ export class LocalWakeWordDetector {
           for (let v = valleyStart; v <= valleyEnd; v++) {
             if (history[v].metrics.rms < minRms) minRms = history[v].metrics.rms;
           }
-          // The valley should drop by at least 35% compared to the peak
-          if (minRms > peaks[p].rms * 0.75) {
+          // The valley should drop by at least 30% compared to the peak
+          if (minRms > peaks[p].rms * 0.70) {
             hasClearValleys = false;
             break;
           }
         }
 
-        // Trigger condition
-        if (hasClearValleys && (hasFricativeOnset || peaks.length === 3)) {
+        // Trigger condition: Must have clear valleys AND authentic fricative onset (/f/ in "Friday")
+        if (hasClearValleys && hasFricativeOnset) {
           return true;
         }
       }

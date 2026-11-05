@@ -1,0 +1,453 @@
+import { execFile } from 'child_process';
+import { toolRegistry } from './toolRegistry';
+import { desktopControlService } from '../desktop/desktopControlService';
+import { sendMediaKeyEvent } from './musicControlTool';
+import { bestAppMatch, displayNameForAppQuery, ALLOWED_APPLICATIONS } from './appShortcutsTool';
+
+export interface FastLocalIntentResult {
+  matched: boolean;
+  intent: 'launch_app' | 'close_app' | 'media' | 'volume' | 'time' | 'date' | 'battery' | 'window';
+  response: string;
+  toolCalls?: Array<{
+    toolName: string;
+    args: Record<string, any>;
+    result: any;
+    status: 'completed' | 'failed';
+  }>;
+  executionMs: number;
+}
+
+// Windows Virtual-Key Codes for Multimedia & Volume
+const VK_VOLUME_MUTE = 0xad;
+const VK_VOLUME_DOWN = 0xae;
+const VK_VOLUME_UP = 0xaf;
+const VK_MEDIA_NEXT_TRACK = 0xb0;
+const VK_MEDIA_PREV_TRACK = 0xb1;
+const VK_MEDIA_PLAY_PAUSE = 0xb3;
+
+/**
+ * Executes PowerShell snippet quickly with 4s timeout.
+ */
+function runFastPowerShell(script: string): Promise<string> {
+  return new Promise((resolve) => {
+    execFile(
+      'powershell.exe',
+      ['-NoProfile', '-NonInteractive', '-Command', script],
+      { timeout: 4000 },
+      (err, stdout) => {
+        if (err) resolve('');
+        else resolve((stdout || '').trim());
+      }
+    );
+  });
+}
+
+/**
+ * Extracts target app from multilingual launch commands.
+ * Handles:
+ * - English: "open chrome", "launch spotify", "run notepad", "start terminal"
+ * - Telugu: "chrome open chey", "spotify open cheyi", "notepad teeyi", "calculator chalu chey"
+ * - Hinglish: "chrome kholo", "notepad chalao", "spotify open karo"
+ */
+export function extractMultilingualLaunchApp(text: string): string | null {
+  const clean = (text || '').trim();
+  if (!clean || /\b(and|then|after|when|because|kani|mariyu|tarwatha)\b/i.test(clean)) {
+    return null;
+  }
+
+  // English prefix patterns: open / launch / start / run <app>
+  const enMatch = clean.match(
+    /^(?:hey\s+)?(?:friday[\s,]+)?(?:please\s+)?(?:open|launch|start|run)\s+(.+?)\s*[,.!?]*$/i
+  );
+  if (enMatch) {
+    return enMatch[1].replace(/^the\s+/i, '').replace(/\s+(?:application|app)$/i, '').trim();
+  }
+
+  // Telugu suffix patterns: <app> open chey / open cheyi / teeyi / chalu chey
+  const teMatch = clean.match(
+    /^(?:hey\s+)?(?:friday[\s,]+)?(.+?)\s+(?:open\s*chey(?:i)?|chalu\s*chey(?:i)?|teeyi|open\s*sey)\s*[,.!?]*$/i
+  );
+  if (teMatch) {
+    return teMatch[1].replace(/^the\s+/i, '').replace(/\s+(?:application|app)$/i, '').trim();
+  }
+
+  // Hinglish suffix patterns: <app> kholo / open karo / chalao
+  const hiMatch = clean.match(
+    /^(?:hey\s+)?(?:friday[\s,]+)?(.+?)\s+(?:kholo|open\s*karo|chalao)\s*[,.!?]*$/i
+  );
+  if (hiMatch) {
+    return hiMatch[1].replace(/^the\s+/i, '').replace(/\s+(?:application|app)$/i, '').trim();
+  }
+
+  return null;
+}
+
+/**
+ * Extracts target app from multilingual close commands.
+ * Handles:
+ * - English: "close chrome", "quit spotify", "exit notepad"
+ * - Telugu: "chrome close chey", "spotify aapu", "notepad bandh chey", "chrome moosi veyyi"
+ * - Hinglish: "chrome band karo", "spotify close karo"
+ */
+export function extractMultilingualCloseApp(text: string): string | null {
+  const clean = (text || '').trim();
+  if (!clean || /\b(and|then|after|when|because)\b/i.test(clean)) return null;
+
+  // English: close / quit / exit <app>
+  const enMatch = clean.match(
+    /^(?:hey\s+)?(?:friday[\s,]+)?(?:please\s+)?(?:close|quit|exit|kill)\s+(.+?)\s*[,.!?]*$/i
+  );
+  if (enMatch) {
+    return enMatch[1].replace(/^the\s+/i, '').replace(/\s+(?:application|app)$/i, '').trim();
+  }
+
+  // Telugu: <app> close chey / aapu / bandh chey / moosi veyyi
+  const teMatch = clean.match(
+    /^(?:hey\s+)?(?:friday[\s,]+)?(.+?)\s+(?:close\s*chey(?:i)?|aapu|bandh\s*chey(?:i)?|moosi\s*veyyi)\s*[,.!?]*$/i
+  );
+  if (teMatch) {
+    return teMatch[1].replace(/^the\s+/i, '').replace(/\s+(?:application|app)$/i, '').trim();
+  }
+
+  // Hinglish: <app> band karo / close karo
+  const hiMatch = clean.match(
+    /^(?:hey\s+)?(?:friday[\s,]+)?(.+?)\s+(?:band\s*karo|close\s*karo)\s*[,.!?]*$/i
+  );
+  if (hiMatch) {
+    return hiMatch[1].replace(/^the\s+/i, '').replace(/\s+(?:application|app)$/i, '').trim();
+  }
+
+  return null;
+}
+
+/**
+ * Fast Local Intent Router (<100ms Execution).
+ * Intercepts unambiguous voice commands locally without calling cloud LLM APIs.
+ */
+export class FastLocalIntentRouter {
+  public async tryRoute(
+    userInput: string,
+    preferredLanguage = 'en-IN',
+    personalityMode = 'balanced'
+  ): Promise<FastLocalIntentResult | null> {
+    const start = Date.now();
+    const clean = (userInput || '').trim();
+    if (!clean) return null;
+
+    const lower = clean.toLowerCase();
+    const isTelugu = preferredLanguage.startsWith('te') || /\b(chey|cheyi|aapu|undi|entha|cheppu|theedi)\b/i.test(lower);
+    const isHindi = preferredLanguage.startsWith('hi') || /\b(karo|kholo|chalao|batao|hai|kitni)\b/i.test(lower);
+
+    // 1. Time query
+    if (
+      /^(?:hey\s+)?(?:friday[\s,]+)?(?:what\s+time\s+is\s+it|tell\s+me\s+the\s+time|current\s+time|time\s+entha|time\s+cheppu|samayam\s+entha|kya\s+time\s+hua\s+hai|time\s+batao)[?.!]?$/i.test(
+        lower
+      )
+    ) {
+      const now = new Date();
+      const timeStr = now.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
+      let response = `The time is ${timeStr}.`;
+      if (isTelugu) response = `Ippudu time ${timeStr}.`;
+      else if (isHindi) response = `Abhi samay ${timeStr} hua hai.`;
+
+      return {
+        matched: true,
+        intent: 'time',
+        response,
+        executionMs: Date.now() - start,
+      };
+    }
+
+    // 2. Date query
+    if (
+      /^(?:hey\s+)?(?:friday[\s,]+)?(?:what('s|\s+is)\s+today'?s?\s+date|what\s+date\s+is\s+it|today'?s?\s+date|date\s+cheppu|eroju\s+date\s+entha|eroju\s+theedi|aaj\s+ki\s+date|aaj\s+kaun\s+sa\s+din\s+hai)[?.!]?$/i.test(
+        lower
+      )
+    ) {
+      const now = new Date();
+      const dateStr = now.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
+      let response = `Today is ${dateStr}.`;
+      if (isTelugu) response = `Eroju theedi ${dateStr}.`;
+      else if (isHindi) response = `Aaj ki date ${dateStr} hai.`;
+
+      return {
+        matched: true,
+        intent: 'date',
+        response,
+        executionMs: Date.now() - start,
+      };
+    }
+
+    // 3. Battery status
+    if (
+      /^(?:hey\s+)?(?:friday[\s,]+)?(?:battery\s+level|battery\s+status|battery\s+percentage|charge\s+entha\s+undi|battery\s+entha\s+undi|battery\s+kitni\s+hai)[?.!]?$/i.test(
+        lower
+      )
+    ) {
+      const script = `Add-Type -AssemblyName System.Windows.Forms; [math]::Round([System.Windows.Forms.SystemInformation]::PowerStatus.BatteryLifePercent * 100)`;
+      const percentStr = await runFastPowerShell(script);
+      const percent = parseInt(percentStr, 10);
+      let response = 'Battery information is currently unavailable.';
+      if (!isNaN(percent) && percent >= 0) {
+        response = `Battery is at ${percent}%.`;
+        if (isTelugu) response = `Battery ${percent}% undi.`;
+        else if (isHindi) response = `Battery ${percent}% hai.`;
+      }
+
+      return {
+        matched: true,
+        intent: 'battery',
+        response,
+        executionMs: Date.now() - start,
+      };
+    }
+
+    // 4. Media & Music Controls (Play / Pause / Next / Prev)
+    if (
+      /^(?:hey\s+)?(?:friday[\s,]+)?(?:pause\s+music|pause\s+song|pause|resume\s+music|play\s+music|play\s+song|song\s+play\s+chey|music\s+pause\s+chey|music\s+aapu|patalu\s+aapu|song\s+aapu|gana\s+roko|gana\s+chalao)[?.!]?$/i.test(
+        lower
+      )
+    ) {
+      await sendMediaKeyEvent(VK_MEDIA_PLAY_PAUSE);
+      const isPause = lower.includes('pause') || lower.includes('aapu') || lower.includes('roko');
+      let response = isPause ? 'Music paused.' : 'Playback resumed.';
+      if (isTelugu) response = isPause ? 'Music pause chesa.' : 'Music play chestunna.';
+      else if (isHindi) response = isPause ? 'Music pause kar diya.' : 'Music chala diya.';
+
+      return {
+        matched: true,
+        intent: 'media',
+        response,
+        executionMs: Date.now() - start,
+      };
+    }
+
+    if (
+      /^(?:hey\s+)?(?:friday[\s,]+)?(?:next\s+song|next\s+track|skip\s+song|next\s+song\s+play\s+chey|next\s+track\s+veyyi|agla\s+gana)[?.!]?$/i.test(
+        lower
+      )
+    ) {
+      await sendMediaKeyEvent(VK_MEDIA_NEXT_TRACK);
+      let response = 'Skipped to next track.';
+      if (isTelugu) response = 'Next song play chestunna.';
+      else if (isHindi) response = 'Agla gana chala diya.';
+
+      return {
+        matched: true,
+        intent: 'media',
+        response,
+        executionMs: Date.now() - start,
+      };
+    }
+
+    if (
+      /^(?:hey\s+)?(?:friday[\s,]+)?(?:previous\s+song|prev\s+song|last\s+song|venaka\s+paata|pichhla\s+gana)[?.!]?$/i.test(
+        lower
+      )
+    ) {
+      await sendMediaKeyEvent(VK_MEDIA_PREV_TRACK);
+      let response = 'Playing previous track.';
+      if (isTelugu) response = 'Previous song play chestunna.';
+      else if (isHindi) response = 'Pichhla gana chala diya.';
+
+      return {
+        matched: true,
+        intent: 'media',
+        response,
+        executionMs: Date.now() - start,
+      };
+    }
+
+    // 5. Volume controls (Up / Down / Mute)
+    if (
+      /^(?:hey\s+)?(?:friday[\s,]+)?(?:volume\s+up|increase\s+volume|sound\s+penchu|sound\s+ekkuva\s+chey|volume\s+penchu|awaz\s+badhao)[?.!]?$/i.test(
+        lower
+      )
+    ) {
+      for (let i = 0; i < 3; i++) {
+        await sendMediaKeyEvent(VK_VOLUME_UP);
+      }
+      let response = 'Volume increased.';
+      if (isTelugu) response = 'Volume pencha.';
+      else if (isHindi) response = 'Awaz badha di.';
+
+      return {
+        matched: true,
+        intent: 'volume',
+        response,
+        executionMs: Date.now() - start,
+      };
+    }
+
+    if (
+      /^(?:hey\s+)?(?:friday[\s,]+)?(?:volume\s+down|decrease\s+volume|sound\s+thagginchu|sound\s+takkuva\s+chey|volume\s+thagginchu|awaz\s+kam\s+karo)[?.!]?$/i.test(
+        lower
+      )
+    ) {
+      for (let i = 0; i < 3; i++) {
+        await sendMediaKeyEvent(VK_VOLUME_DOWN);
+      }
+      let response = 'Volume decreased.';
+      if (isTelugu) response = 'Volume thaggincha.';
+      else if (isHindi) response = 'Awaz kam kar di.';
+
+      return {
+        matched: true,
+        intent: 'volume',
+        response,
+        executionMs: Date.now() - start,
+      };
+    }
+
+    if (
+      /^(?:hey\s+)?(?:friday[\s,]+)?(?:mute|mute\s+chey|unmute|sound\s+bandh\s+chey|awaz\s+band\s+karo|chup\s+chey)[?.!]?$/i.test(
+        lower
+      )
+    ) {
+      await sendMediaKeyEvent(VK_VOLUME_MUTE);
+      let response = 'Audio muted.';
+      if (isTelugu) response = 'Mute chesa.';
+      else if (isHindi) response = 'Mute kar diya.';
+
+      return {
+        matched: true,
+        intent: 'volume',
+        response,
+        executionMs: Date.now() - start,
+      };
+    }
+
+    // 6. Window controls (Minimize / Maximize)
+    if (
+      /^(?:hey\s+)?(?:friday[\s,]+)?(?:minimize\s+window|minimize|screen\s+thagginchu|minimize\s+chey)[?.!]?$/i.test(
+        lower
+      )
+    ) {
+      const psMinimize = `
+Add-Type -TypeDefinition @"
+  using System;
+  using System.Runtime.InteropServices;
+  public class WinMin {
+    [DllImport("user32.dll")] public static extern IntPtr GetForegroundWindow();
+    [DllImport("user32.dll")] public static extern bool ShowWindowAsync(IntPtr hWnd, int nCmdShow);
+  }
+"@ -ErrorAction SilentlyContinue
+[WinMin]::ShowWindowAsync([WinMin]::GetForegroundWindow(), 6)
+"OK"
+`;
+      await runFastPowerShell(psMinimize);
+      let response = 'Window minimized.';
+      if (isTelugu) response = 'Window minimize chesa.';
+      else if (isHindi) response = 'Window minimize kar diya.';
+
+      return {
+        matched: true,
+        intent: 'window',
+        response,
+        executionMs: Date.now() - start,
+      };
+    }
+
+    if (
+      /^(?:hey\s+)?(?:friday[\s,]+)?(?:maximize\s+window|maximize|full\s+screen\s+chey|maximize\s+chey)[?.!]?$/i.test(
+        lower
+      )
+    ) {
+      const psMaximize = `
+Add-Type -TypeDefinition @"
+  using System;
+  using System.Runtime.InteropServices;
+  public class WinMax {
+    [DllImport("user32.dll")] public static extern IntPtr GetForegroundWindow();
+    [DllImport("user32.dll")] public static extern bool ShowWindowAsync(IntPtr hWnd, int nCmdShow);
+  }
+"@ -ErrorAction SilentlyContinue
+[WinMax]::ShowWindowAsync([WinMax]::GetForegroundWindow(), 3)
+"OK"
+`;
+      await runFastPowerShell(psMaximize);
+      let response = 'Window maximized.';
+      if (isTelugu) response = 'Window maximize chesa.';
+      else if (isHindi) response = 'Window maximize kar diya.';
+
+      return {
+        matched: true,
+        intent: 'window',
+        response,
+        executionMs: Date.now() - start,
+      };
+    }
+
+    // 7. App Launch (Multilingual: English, Telugu, Hinglish)
+    const launchAppQuery = extractMultilingualLaunchApp(clean);
+    if (launchAppQuery) {
+      const appName = displayNameForAppQuery(launchAppQuery);
+      const launchResult = await toolRegistry.executeTool('launch_allowed_app', { appId: launchAppQuery });
+
+      if (launchResult?.success) {
+        let response = `${appName} is ready.`;
+        if (isTelugu) response = `${appName} open chesa.`;
+        else if (isHindi) response = `${appName} open kar diya.`;
+
+        return {
+          matched: true,
+          intent: 'launch_app',
+          response,
+          toolCalls: [
+            {
+              toolName: 'launch_allowed_app',
+              args: { appId: launchAppQuery },
+              result: launchResult,
+              status: 'completed',
+            },
+          ],
+          executionMs: Date.now() - start,
+        };
+      } else {
+        return {
+          matched: true,
+          intent: 'launch_app',
+          response: launchResult?.error || `I couldn't find ${appName} on your computer.`,
+          toolCalls: [
+            {
+              toolName: 'launch_allowed_app',
+              args: { appId: launchAppQuery },
+              result: launchResult,
+              status: 'failed',
+            },
+          ],
+          executionMs: Date.now() - start,
+        };
+      }
+    }
+
+    // 8. App Close (Multilingual: English, Telugu, Hinglish)
+    const closeAppQuery = extractMultilingualCloseApp(clean);
+    if (closeAppQuery) {
+      const closeResult = await desktopControlService.closeWindow(closeAppQuery);
+      if (closeResult.success) {
+        let response = `Closed ${closeAppQuery}.`;
+        if (isTelugu) response = `${closeAppQuery} close chesa.`;
+        else if (isHindi) response = `${closeAppQuery} band kar diya.`;
+
+        return {
+          matched: true,
+          intent: 'close_app',
+          response,
+          executionMs: Date.now() - start,
+        };
+      } else {
+        return {
+          matched: true,
+          intent: 'close_app',
+          response: `Could not find an open window for ${closeAppQuery}.`,
+          executionMs: Date.now() - start,
+        };
+      }
+    }
+
+    return null;
+  }
+}
+
+export const fastLocalIntentRouter = new FastLocalIntentRouter();

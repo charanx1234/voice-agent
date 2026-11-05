@@ -65,15 +65,15 @@ function getVadOptions(sensitivity?: 'low' | 'medium' | 'high'): VadOptions {
       return {
         startThreshold: 0.065,
         endThreshold: 0.035,
-        speechStartMs: 90,
-        speechEndMs: 500,
+        speechStartMs: 80,
+        speechEndMs: 1000,
       };
     case 'low':
       return {
         startThreshold: 0.22,
         endThreshold: 0.10,
         speechStartMs: 140,
-        speechEndMs: 650,
+        speechEndMs: 1500,
       };
     case 'medium':
     default:
@@ -290,10 +290,13 @@ export function useHandsFree(options: HandsFreeOptions) {
       const busy = optionsRef.current.isBusy();
       const currentMode = modeRef.current;
 
-      // Software ducking during assistant speech
+      // Software ducking and wake suppression during assistant speech
       if (duckingGain && audioCtx) {
         const targetGain = speaking && optionsRef.current.echoCancellation !== false ? 0.08 : 1.0;
         duckingGain.gain.setTargetAtTime(targetGain, audioCtx.currentTime, 0.05);
+      }
+      if (speaking) {
+        localWakeWordDetector.suppress(800);
       }
 
       // Standby Local Wake-Word Evaluation (100% offline acoustic pattern matcher)
@@ -308,6 +311,10 @@ export function useHandsFree(options: HandsFreeOptions) {
       }
 
       if (speaking !== usingBarge) {
+        if (!speaking && usingBarge) {
+          // Cooldown after TTS stops to avoid echo waking
+          localWakeWordDetector.suppress(1000);
+        }
         usingBarge = speaking;
         normalVad = new VoiceActivityDetector(getVadOptions(optionsRef.current.vadSensitivity));
         bargeVad = new VoiceActivityDetector(BARGE_IN_VAD_OPTIONS);

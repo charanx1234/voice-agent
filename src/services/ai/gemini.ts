@@ -4,6 +4,7 @@ import { buildSystemInstruction } from './personality';
 import { buildConversationBrief } from './conversationContext';
 import { toolRegistry } from '../agent/toolRegistry';
 import { displayNameForAppQuery, extractDirectLaunchApp } from '../agent/appShortcutsTool';
+import { fastLocalIntentRouter } from '../agent/fastLocalIntent';
 import { memoryService } from '../memory/memoryService';
 import {
   ChatMessage,
@@ -379,7 +380,8 @@ export class GeminiService {
 
   /**
    * Transcribes microphone audio speech verbatim into text.
-   * Handles Telugu, English, Hindi, Tamil, and Kannada accurately.
+   * Handles mixed Telugu, English, Hinglish, Tamil, and Kannada accurately.
+   * Preserves code-switched phrases, colloquial verbs, and technical terms.
    */
   public async transcribeAudio(
     audioBase64: string,
@@ -400,7 +402,14 @@ export class GeminiService {
               },
             },
             {
-              text: 'Transcribe this microphone speech verbatim in the language spoken (Telugu, English, Hindi, Tamil, or Kannada). Return ONLY the spoken words with no commentary, no quotes, no markdown, and no explanations. If the clip contains only silence, breathing, or background noise without speech, return exactly: SILENCE',
+              text: `Transcribe this microphone speech verbatim in the exact words and languages spoken.
+CRITICAL TRANSCRIPTION RULES:
+1. Handle natural code-switching: The speaker frequently mixes English with Telugu (Tenglish) or Hindi (Hinglish). E.g. "Chrome open chey and Java tutorials search chey", "Spotify lo music play chey", "Notepad open karo aur notes save karo".
+2. Keep English technical words, app names, website names, and file names exact in English: e.g. "Chrome", "Spotify", "GitHub", "Java", "Python", "Notepad", "VS Code", "Terminal", "YouTube".
+3. Preserve Telugu colloquial words and verbs without translating or dropping them: e.g. "chey", "chudu", "pettandi", "vellali", "raayi", "teeyi", "entha", "cheppu", "aapu", "chalu", "lo", "ki", "naaku", "kani", "mariyu", "tarwatha".
+4. Preserve Hindi colloquial words without translating: e.g. "karo", "kholo", "chalao", "band karo", "batao", "aur", "pe".
+5. Return ONLY the spoken words verbatim with no commentary, no quotes, no markdown, and no explanations.
+6. If the audio contains only silence, breathing, clicks, or ambient noise without human speech, return exactly: SILENCE`,
             },
           ],
         },
@@ -423,6 +432,30 @@ export class GeminiService {
     const candidates = buildModelCandidates(settings.modelName);
     const userText = (params.message || '').trim();
     const moodAnalysis = analyzeMood(userText, params.prosody);
+
+    // Fast local intent execution (<100ms) for app controls, media, volume, time, date, battery
+    if (!params.audioBase64) {
+      const fastResult = await fastLocalIntentRouter.tryRoute(
+        userText,
+        preferredLang,
+        settings.personalityMode
+      );
+      if (fastResult?.matched) {
+        hooks.onStream?.({ type: 'delta', text: fastResult.response });
+        hooks.onStream?.({ type: 'complete' });
+        void memoryService.appendExchange(userText, fastResult.response, {
+          language: preferredLang,
+        });
+        return {
+          text: fastResult.response,
+          detectedLanguage: preferredLang,
+          toolCalls: (fastResult.toolCalls as ToolCallRecord[]) || [],
+          mood: moodAnalysis.mood,
+          safetyOverride: moodAnalysis.safetyOverride,
+        };
+      }
+    }
+
     const directLaunch = !params.audioBase64 ? extractDirectLaunchApp(userText) : null;
 
     // A one-app desktop command does not need Gemini, memory retrieval or a

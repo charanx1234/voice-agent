@@ -2,7 +2,7 @@
   "appId": "com.friday.ai.companion",
   "productName": "FRIDAY",
   "directories": {
-    "output": "dist-package"
+    "output": "dist-release"
   },
   "files": [
     "dist-electron/**/*",

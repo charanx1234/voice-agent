@@ -30,6 +30,7 @@ import { applyMoodToSpeech } from '@/services/ai/mood';
 import { selectFaceExpression } from '@/services/ai/faceExpressions';
 import { takeCompleteSpeechChunks } from '@/services/voice/speechText';
 import { copyTextToClipboard } from './utils/clipboard';
+import { playWakeChime } from './utils/audioChime';
 
 export const App: React.FC = () => {
   const [settings, setSettings] = useState<FridaySettings>({
@@ -876,41 +877,14 @@ export const App: React.FC = () => {
       if (command) {
         void sendRef.current(command);
       } else {
-         const text =
-           settings.personalityMode === 'simple'
-             ? 'Yes, I’m here with you.'
-             : settings.personalityMode === 'roast'
-               ? 'Yes? Spit it out.'
-               : 'Yes?';
-        setMessages((prev) => [
-          ...prev,
-          { id: `msg_${Date.now()}_wake`, role: 'assistant', text, timestamp: Date.now() },
-        ]);
-        void speakRef.current(text, {
-          languageCode: settings.preferredLanguage,
-           rate: applyMoodToSpeech(
-             settings.speechSpeed,
-             settings.pitch,
-             currentMood,
-             settings.personalityMode
-           ).rate,
-          volume: settings.speechVolume,
-           pitch: applyMoodToSpeech(
-             settings.speechSpeed,
-             settings.pitch,
-             currentMood,
-             settings.personalityMode
-           ).pitch,
-          voiceId: settings.voiceId,
-          voice: settings.ttsVoice,
-          accent: settings.voiceAccent,
-          engine: settings.ttsEngine,
-          elevenLabsVoiceId: settings.elevenLabsVoiceId,
-          elevenLabsModel: settings.elevenLabsModel,
-          elevenLabsStability: settings.elevenLabsStability,
-          elevenLabsSimilarityBoost: settings.elevenLabsSimilarityBoost,
-          elevenLabsStyle: settings.elevenLabsStyle,
-          elevenLabsSpeakerBoost: settings.elevenLabsSpeakerBoost,
+        // Instant silent wake-up: show visual aura, switch robot & pet state to listening, play subtle chime, stay completely silent
+        setRobotState('listening');
+        setFaceExpression('excited');
+        playWakeChime();
+        void window.fridayAPI?.syncDesktopPetState({
+          state: 'LISTENING',
+          robotState: 'listening',
+          expression: 'excited',
         });
       }
     },
