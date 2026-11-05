@@ -435,12 +435,43 @@ export const App: React.FC = () => {
       audioMimeType?: string,
       prosody?: VoiceProsodySummary
     ) => {
-      if (!text && !audioBase64) return;
+      let resolvedText = (text || '').trim();
+
+      // If speech transcript was not available from the browser, transcribe the audio first
+      if (!resolvedText && audioBase64 && window.fridayAPI?.transcribeSpeech) {
+        setRobotState('thinking');
+        try {
+          const res = await window.fridayAPI.transcribeSpeech(audioBase64, audioMimeType);
+          if (res?.success && res.text) {
+            resolvedText = res.text.trim();
+          }
+        } catch (err) {
+          console.warn('[App] Live speech transcription error:', err);
+        }
+
+        // If transcription produced no recognizable words (e.g. silence or unintelligible noise)
+        if (!resolvedText) {
+          setRobotState('idle');
+          const missedText = "Sorry, I couldn't catch that. Could you say it again?";
+          setMessages((prev) => [
+            ...prev,
+            { id: `msg_${Date.now()}_missed`, role: 'assistant', text: missedText, timestamp: Date.now() },
+          ]);
+          void speakResponse(missedText, {
+            languageCode: settings.preferredLanguage,
+            voice: settings.ttsVoice,
+            accent: settings.voiceAccent,
+          });
+          return;
+        }
+      }
+
+      if (!resolvedText) return;
 
       const userMsg: ChatMessage = {
         id: `msg_${Date.now()}_u`,
         role: 'user',
-        text: text || 'Voice message',
+        text: resolvedText,
         timestamp: Date.now(),
         isVoice: Boolean(audioBase64),
       };
@@ -456,7 +487,7 @@ export const App: React.FC = () => {
           state: 'thinking',
           mood: currentMood,
           personalityMode: settings.personalityMode,
-          text,
+          text: resolvedText,
         })
       );
       const requestId = ++requestIdRef.current;
@@ -474,7 +505,7 @@ export const App: React.FC = () => {
       // Check if website accessibility handles the voice command
       const isAccessibilityIntent =
         accessibilityState.enabled ||
-        /\b(accessibility|website|web page|active tab|read (this )?page|summarize (this )?website|next heading|previous heading|next paragraph|scroll (down|up)|click (the )?\w+|find (the )?search|fill (in )?\w+|stop reading|chaduvu|saramsam|heading|nokku|padho|batao)\b/i.test(text);
+        /\b(accessibility|website|web page|active tab|read (this )?page|summarize (this )?website|next heading|previous heading|next paragraph|scroll (down|up)|click (the )?\w+|find (the )?search|fill (in )?\w+|stop reading|chaduvu|saramsam|heading|nokku|padho|batao)\b/i.test(resolvedText);
 
       if (isAccessibilityIntent && window.fridayAPI?.accessibilityExecuteCommand) {
         try {
@@ -544,9 +575,7 @@ export const App: React.FC = () => {
         }
 
         const response = await window.fridayAPI.sendMessage({
-          message: text,
-          audioBase64,
-          audioMimeType,
+          message: resolvedText,
           conversationHistory: messagesRef.current,
           language: settings.preferredLanguage,
           prosody,

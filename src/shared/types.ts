@@ -512,6 +512,8 @@ export interface FridayApiBridge {
 
   // Hands-free standby / wake word
   transcribeUtterance: (audioBase64: string, audioMimeType?: string) => Promise<{ success: boolean; reply?: string; error?: string }>;
+  transcribeSpeech: (audioBase64: string, audioMimeType?: string) => Promise<{ success: boolean; text: string; error?: string }>;
+  appExit: () => void;
   onStandbyRequested: (callback: () => void) => () => void;
 
   // Website Accessibility Assistant

@@ -1,4 +1,4 @@
-import { app, BrowserWindow, shell, screen } from 'electron';
+import { app, BrowserWindow, shell, screen, Tray, Menu, nativeImage } from 'electron';
 import path from 'path';
 import { registerIpcHandlers } from './ipc';
 import { initLogger } from './backend/logger';
@@ -26,6 +26,69 @@ let petWindow: BrowserWindow | null = null;
 const getPetWindow = (): BrowserWindow | null => petWindow;
 
 let isQuitting = false;
+let tray: Tray | null = null;
+
+function createTray(): void {
+  try {
+    const iconPath = path.join(__dirname, '../../src/renderer/public/assets/friday-pet.png');
+    let icon = nativeImage.createFromPath(iconPath);
+    if (icon.isEmpty()) {
+      const altPath = path.join(__dirname, '../renderer/assets/friday-pet.png');
+      icon = nativeImage.createFromPath(altPath);
+    }
+    const trayIcon = icon.resize({ width: 16, height: 16 });
+    tray = new Tray(trayIcon);
+    tray.setToolTip('FRIDAY — Desktop AI Assistant');
+
+    const contextMenu = Menu.buildFromTemplate([
+      {
+        label: 'Open FRIDAY Dashboard',
+        click: () => {
+          if (!mainWindow || mainWindow.isDestroyed()) {
+            createWindow();
+          } else {
+            if (mainWindow.isMinimized()) mainWindow.restore();
+            mainWindow.show();
+            mainWindow.focus();
+          }
+        },
+      },
+      {
+        label: 'Toggle Desktop Pet',
+        click: () => {
+          if (!petWindow || petWindow.isDestroyed()) {
+            createPetWindow();
+          } else if (petWindow.isVisible()) {
+            petWindow.hide();
+          } else {
+            petWindow.show();
+          }
+        },
+      },
+      { type: 'separator' },
+      {
+        label: 'Exit FRIDAY Completely',
+        click: () => {
+          isQuitting = true;
+          app.quit();
+        },
+      },
+    ]);
+
+    tray.setContextMenu(contextMenu);
+    tray.on('double-click', () => {
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        if (mainWindow.isMinimized()) mainWindow.restore();
+        mainWindow.show();
+        mainWindow.focus();
+      } else {
+        createWindow();
+      }
+    });
+  } catch (err: any) {
+    console.warn('[FRIDAY] Tray setup warning:', err?.message);
+  }
+}
 
 const DEV_SERVER_URL = process.env.VITE_DEV_SERVER_URL || 'http://localhost:5173';
 /** Only the `dev:electron` script sets WAIT_ON_DEV; `npm start` uses the built files. */
@@ -230,6 +293,7 @@ if (!hasSingleInstanceLock) {
 
     createWindow();
     createPetWindow();
+    createTray();
 
     // Open the memory database off the critical path so the first message is fast.
     memoryService.init().catch((err) => {

@@ -335,6 +335,25 @@ export function registerIpcHandlers(
     }
   );
 
+  // Live microphone speech transcription (verbatim user query)
+  ipcMain.handle(
+    IPC_CHANNELS.TRANSCRIBE_SPEECH,
+    async (_event, audioBase64: string, audioMimeType?: string) => {
+      try {
+        const text = await geminiService.transcribeAudio(audioBase64, audioMimeType);
+        return { success: true, text };
+      } catch (err: any) {
+        return { success: false, error: err?.message || 'Speech transcription failed.', text: '' };
+      }
+    }
+  );
+
+  // Explicit quit application completely
+  ipcMain.on(IPC_CHANNELS.APP_EXIT, () => {
+    console.log('[FRIDAY IPC] User requested application exit.');
+    app.quit();
+  });
+
   // Grow the window when the dashboard is shown, shrink back when it closes.
   ipcMain.on(IPC_CHANNELS.DASHBOARD_SET_OPEN, (_event, open: boolean) => {
     const win = getMainWindow();

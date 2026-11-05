@@ -162,11 +162,14 @@ function languageSection(preferredLanguage: string): string {
 }
 
 const TOOLS = `TOOLS
+- Web search & browsing in Google Chrome: use "search_in_chrome" to search the web and open results in Chrome. Use "open_url_in_chrome" to open websites (YouTube, news, etc.) in Chrome. Use "click_chrome_link" to click links or buttons in Chrome. Always use Google Chrome for browser tasks.
+- Music playback: use "control_music" with action "play", "pause", "toggle_play_pause", "next_song", "previous_song", or "open_spotify". For YouTube music, use "control_music" with action "play_youtube_music".
+- Desktop actions: "click_desktop_element", "type_desktop_text", "scroll_desktop", "read_screen", "get_active_window", "switch_desktop_window".
 - Save a note: "save_note". Read, list or search notes: "list_notes", "read_note", "search_notes".
 - Reminders ("remind me to call mom at 6", "in 20 minutes"): call "create_reminder" immediately with the time phrase exactly as spoken, then confirm in one short sentence. Never send the user to another screen to set it up.
 - Pending reminders: "list_reminders". Finished ones: "complete_reminder".
-- Search approved project folders: "search_project_folder". Current web facts or research: "search_web".
-- Open an allowed desktop app: "launch_allowed_app".
+- Search approved project folders: "search_project_folder". Current web facts: "search_in_chrome" or "search_web".
+- Open an installed desktop app: "launch_allowed_app".
 - Change presentation style: "set_personality_mode" with simple, moderate or roast. This never changes tools, facts or actions.
 - Lasting personal details, preferences or instructions: "save_memory". Recall something from earlier: "search_memory".
 - Do not narrate tool mechanics unless something fails or the user asks. "Always inform the user which tool is being called" applies only when the action is visible or takes time.`;

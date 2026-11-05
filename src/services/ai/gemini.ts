@@ -377,6 +377,43 @@ export class GeminiService {
     return (result.text || '').trim();
   }
 
+  /**
+   * Transcribes microphone audio speech verbatim into text.
+   * Handles Telugu, English, Hindi, Tamil, and Kannada accurately.
+   */
+  public async transcribeAudio(
+    audioBase64: string,
+    audioMimeType?: string
+  ): Promise<string> {
+    const settings = settingsStore.getSettings();
+    const client = this.getClient();
+    const result = await client.models.generateContent({
+      model: settings.modelName,
+      contents: [
+        {
+          role: 'user',
+          parts: [
+            {
+              inlineData: {
+                mimeType: audioMimeType || 'audio/webm',
+                data: audioBase64,
+              },
+            },
+            {
+              text: 'Transcribe this microphone speech verbatim in the language spoken (Telugu, English, Hindi, Tamil, or Kannada). Return ONLY the spoken words with no commentary, no quotes, no markdown, and no explanations. If the clip contains only silence, breathing, or background noise without speech, return exactly: SILENCE',
+            },
+          ],
+        },
+      ],
+    });
+
+    const text = (result.text || '').trim();
+    if (!text || text.toUpperCase() === 'SILENCE' || text.toUpperCase() === 'NONE' || text.toUpperCase() === 'EMPTY') {
+      return '';
+    }
+    return text;
+  }
+
   public async sendMessage(
     params: SendMessageParams,
     hooks: SendMessageHooks = {}

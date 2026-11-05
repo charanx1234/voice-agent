@@ -58,7 +58,7 @@ export async function executeWebResearchTool(
   }
 }
 
-function fetchDuckDuckGoResults(query: string): Promise<WebSearchResultItem[]> {
+export function fetchDuckDuckGoResults(query: string): Promise<WebSearchResultItem[]> {
   return new Promise((resolve) => {
     // 1. Try DuckDuckGo Instant Answer JSON API
     const apiUrl = `https://api.duckduckgo.com/?q=${encodeURIComponent(query)}&format=json&no_html=1&skip_disambig=1`;

@@ -130,6 +130,9 @@ const apiBridge: FridayApiBridge = {
   // Hands-free standby / wake word
   transcribeUtterance: (audioBase64: string, audioMimeType?: string) =>
     ipcRenderer.invoke(IPC_CHANNELS.TRANSCRIBE_UTTERANCE, audioBase64, audioMimeType),
+  transcribeSpeech: (audioBase64: string, audioMimeType?: string) =>
+    ipcRenderer.invoke(IPC_CHANNELS.TRANSCRIBE_SPEECH, audioBase64, audioMimeType),
+  appExit: () => ipcRenderer.send(IPC_CHANNELS.APP_EXIT),
   onStandbyRequested: (callback: () => void) => {
     const handler = () => callback();
     ipcRenderer.on(IPC_CHANNELS.STANDBY_REQUESTED, handler);

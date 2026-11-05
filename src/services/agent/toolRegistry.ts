@@ -8,6 +8,8 @@ import { reminderToolDefinitions, executeReminderTool } from '../reminders/remin
 import { dashboardToolDefinition, executeDashboardTool } from '../dashboard/dashboardTool';
 import { websiteAccessibilityToolDefinitions, executeWebsiteAccessibilityTool } from './websiteAccessibilityTool';
 import { screenControlToolDefinitions, executeScreenControlTool } from './screenControlTools';
+import { chromeBrowserToolDefinitions, executeChromeBrowserTool } from './chromeBrowserTool';
+import { musicControlToolDefinitions, executeMusicControlTool } from './musicControlTool';
 import { settingsStore } from '../storage/settingsStore';
 import { accentIdFromName, defaultVoiceForAccent } from '../voice/voiceCatalog';
 import { ToolConfirmationPayload } from '../../shared/types';
@@ -138,6 +140,8 @@ export class ToolRegistry {
       appShortcutsToolDefinition,
       ...websiteAccessibilityToolDefinitions,
       ...screenControlToolDefinitions,
+      ...chromeBrowserToolDefinitions,
+      ...musicControlToolDefinitions,
     ];
 
     // Format for @google/genai and @google/generative-ai
@@ -256,6 +260,19 @@ export class ToolRegistry {
       }
       if (toolName.startsWith('website_')) {
         return await executeWebsiteAccessibilityTool(toolName, args);
+      }
+      if (
+        [
+          'search_in_chrome',
+          'open_url_in_chrome',
+          'click_chrome_link',
+          'control_chrome_tabs',
+        ].includes(toolName)
+      ) {
+        return await executeChromeBrowserTool(toolName, args);
+      }
+      if (toolName === 'control_music') {
+        return await executeMusicControlTool(toolName, args);
       }
       if (
         [

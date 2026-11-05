@@ -25,14 +25,6 @@ const LEFT_EYE = { cx: 99, cy: 110, rx: 32, ry: 26 };
 const RIGHT_EYE = { cx: 191, cy: 110, rx: 32, ry: 26 };
 const MOUTH = { cx: 145, cy: 135 };
 
-// Dimensions for the eye expression overlays
-const EYES_BOX = {
-  x: 71,
-  y: 73,
-  width: 148,
-  height: 74,
-};
-
 export const DesktopPet: React.FC = () => {
   const [petState, setPetState] = useState<PetCompanionState>(DEFAULT_STATE);
   const [isBlinking, setIsBlinking] = useState(false);
@@ -269,53 +261,6 @@ export const DesktopPet: React.FC = () => {
     petState.voiceSessionState,
   ]);
 
-  // Determine appropriate Expression Eyes asset
-  const eyeAsset = useMemo(() => {
-    const expr = petState.expression;
-    const vState = petState.voiceSessionState;
-
-    if (
-      vState === 'TASK_UNSUPPORTED' ||
-      vState === 'PERMISSION_REQUIRED' ||
-      vState === 'MICROPHONE_ERROR' ||
-      vState === 'PROVIDER_ERROR' ||
-      vState === 'NETWORK_ERROR' ||
-      activeRobotState === 'error' ||
-      expr === 'not-happy' ||
-      expr === 'not_happy' ||
-      expr === 'confused'
-    ) {
-      return './assets/expressions/not-happy_eyes.png';
-    }
-    if (expr === 'happy' || expr === 'excited') {
-      return './assets/expressions/happy_eyes.png';
-    }
-    if (expr === 'sad') {
-      return './assets/expressions/sad_eyes.png';
-    }
-    if (expr === 'angry') {
-      return './assets/expressions/angry_eyes.png';
-    }
-    if (expr === 'sarcastic') {
-      return './assets/expressions/sarcastic_eyes.png';
-    }
-    if (expr === 'satisfied' || expr === 'sleepy') {
-      return './assets/expressions/satisfied_eyes.png';
-    }
-    if (expr === 'laugh' || expr === 'laughing') {
-      return './assets/expressions/laugh_eyes.png';
-    }
-    if (expr === 'crying') {
-      return './assets/expressions/crying_eyes.png';
-    }
-    if (activeRobotState === 'listening' || vState === 'WAKE_DETECTED' || expr === 'smile') {
-      return './assets/expressions/smile_eyes.png';
-    }
-
-    // Default neutral: natural character eyes
-    return null;
-  }, [activeRobotState, petState.expression, petState.voiceSessionState]);
-
   // Audio-reactive mouth dimensions from centralized mouth stream
   const mouthAmplitude = Math.max(0, Math.min(1, mouthOpenness || liveAmplitude || petState.amplitude));
   const mouthWidth = 7 + mouthAmplitude * 10;
@@ -348,26 +293,13 @@ export const DesktopPet: React.FC = () => {
             draggable={false}
           />
 
-          {/* Overlay for Expressions, Natural Blinking, Eye Shift, and Audio-Reactive Speech */}
+          {/* Overlay for Natural Blinking, Eye Shift, and Audio-Reactive Speech */}
           <svg
             className={`pet-face-svg state-${effectiveAuraState}`}
             viewBox="0 0 290 297"
             preserveAspectRatio="none"
             aria-hidden="true"
           >
-            {/* Expression Eyes Overlay */}
-            {eyeAsset && !isBlinking && (
-              <image
-                href={eyeAsset}
-                x={EYES_BOX.x + eyeShift.x}
-                y={EYES_BOX.y + eyeShift.y}
-                width={EYES_BOX.width}
-                height={EYES_BOX.height}
-                preserveAspectRatio="xMidYMid meet"
-                opacity="0.94"
-              />
-            )}
-
             {/* Eyelids during blink */}
             {isBlinking && (
               <g className="pet-blink-eyelids">

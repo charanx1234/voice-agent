@@ -40,6 +40,8 @@ export const IPC_CHANNELS = {
   SYSTEM_HEALTH_GET: 'friday:system-health-get',
   SYSTEM_HEALTH_UPDATE: 'friday:system-health-update',
   TRANSCRIBE_UTTERANCE: 'friday:transcribe-utterance',
+  TRANSCRIBE_SPEECH: 'friday:transcribe-speech',
+  APP_EXIT: 'friday:app-exit',
   STANDBY_REQUESTED: 'friday:standby-requested',
   LOGS_OPEN_FOLDER: 'friday:logs-open-folder',
   LOGS_READ: 'friday:logs-read',
