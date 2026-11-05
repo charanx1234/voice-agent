@@ -5,8 +5,9 @@ $desktopPaths = @(
     'C:\Users\RAM CHARAN\OneDrive\Desktop'
 ) | Select-Object -Unique | Where-Object { Test-Path $_ }
 
-$targetExe = 'C:\25r11a6760\FRIDAY\dist-release\win-unpacked\FRIDAY.exe'
-$workDir = 'C:\25r11a6760\FRIDAY\dist-release\win-unpacked'
+$targetExe = 'C:\25r11a6760\FRIDAY\FRIDAY.exe'
+$workDir = 'C:\25r11a6760\FRIDAY'
+$iconPath = 'C:\25r11a6760\FRIDAY\src\renderer\public\assets\friday.ico'
 
 foreach ($dp in $desktopPaths) {
     $lnkPath = Join-Path $dp 'FRIDAY.lnk'
@@ -14,14 +15,18 @@ foreach ($dp in $desktopPaths) {
     $shortcut.TargetPath = $targetExe
     $shortcut.WorkingDirectory = $workDir
     $shortcut.Description = 'FRIDAY - AI Voice Companion & Desktop Assistant'
-    $shortcut.IconLocation = "$targetExe,0"
+    if (Test-Path $iconPath) {
+        $shortcut.IconLocation = "$iconPath,0"
+    } else {
+        $shortcut.IconLocation = "$targetExe,0"
+    }
     $shortcut.Save()
 
     # Verify
     $verify = $shell.CreateShortcut($lnkPath)
-    Write-Host "Shortcut at: $($verify.FullName)"
-    Write-Host "Target: $($verify.TargetPath)"
-    Write-Host "WorkingDir: $($verify.WorkingDirectory)"
-    Write-Host "TargetExists: $(Test-Path $verify.TargetPath)"
-    Write-Host "----------------------------------------"
+    Write-Host "Created shortcut: $($verify.FullName)"
+    Write-Host "  Target: $($verify.TargetPath)"
+    Write-Host "  WorkingDir: $($verify.WorkingDirectory)"
+    Write-Host "  IconLocation: $($verify.IconLocation)"
+    Write-Host "  Target Exists: $(Test-Path $verify.TargetPath)"
 }

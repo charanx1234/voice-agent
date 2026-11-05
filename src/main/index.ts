@@ -9,6 +9,8 @@ import { geminiService } from '../services/ai/gemini';
 import { neuralVoiceService } from '../services/voice/neuralVoice';
 import { settingsStore } from '../services/storage/settingsStore';
 
+app.setName('friday-ai-companion');
+
 // Production builds write to a log file only; development keeps terminal output.
 initLogger({ keepConsole: !app.isPackaged });
 
@@ -138,6 +140,13 @@ function createPetWindow(): void {
     petWindow?.show();
   });
 
+  // Guarantee visibility even if ready-to-show is delayed by graphics acceleration
+  setTimeout(() => {
+    if (petWindow && !petWindow.isDestroyed() && !petWindow.isVisible()) {
+      petWindow.show();
+    }
+  }, 1200);
+
   petWindow.on('moved', () => {
     if (!petWindow || petWindow.isDestroyed()) return;
     const [x, y] = petWindow.getPosition();
@@ -186,6 +195,14 @@ function createWindow(): void {
   mainWindow.once('ready-to-show', () => {
     mainWindow?.show();
   });
+
+  // Guarantee window is visible even if ready-to-show is delayed
+  setTimeout(() => {
+    if (mainWindow && !mainWindow.isDestroyed() && !mainWindow.isVisible()) {
+      mainWindow.show();
+      mainWindow.focus();
+    }
+  }, 1200);
 
   // Only the microphone is ever granted; every other permission request is denied.
   mainWindow.webContents.session.setPermissionRequestHandler(
@@ -281,10 +298,13 @@ if (!hasSingleInstanceLock) {
   app.quit();
 } else {
   app.on('second-instance', () => {
-    if (!mainWindow) return;
-    if (mainWindow.isMinimized()) mainWindow.restore();
-    mainWindow.show();
-    mainWindow.focus();
+    if (!mainWindow || mainWindow.isDestroyed()) {
+      createWindow();
+    } else {
+      if (mainWindow.isMinimized()) mainWindow.restore();
+      mainWindow.show();
+      mainWindow.focus();
+    }
   });
 
   app.whenReady().then(() => {
