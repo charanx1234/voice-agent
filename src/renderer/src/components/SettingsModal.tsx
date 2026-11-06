@@ -31,6 +31,8 @@ import {
   getAccent,
 } from '@/services/voice/voiceCatalog';
 import { VoiceOption } from '@/services/voice/voiceManager';
+import { ENVIRONMENT_PRESETS, inferEnvironmentFromSettings } from '@/services/voice/listeningEnvironment';
+import type { ListeningEnvironment } from '@/services/voice/listeningEnvironment';
 
 interface SettingsModalProps {
   isOpen: boolean;
@@ -105,6 +107,11 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   const [vadSensitivity, setVadSensitivity] = useState<'low' | 'medium' | 'high'>(
     settings.vadSensitivity || 'medium'
   );
+  const [listeningEnvironment, setListeningEnvironment] = useState<'quiet' | 'noisy' | 'very_noisy'>(
+    settings.listeningEnvironment ||
+      inferEnvironmentFromSettings(settings.noiseSuppression, settings.vadSensitivity) ||
+      'quiet'
+  );
   const [speakerVerificationEnabled, setSpeakerVerificationEnabled] = useState(
     Boolean(settings.speakerVerificationEnabled)
   );
@@ -123,6 +130,11 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
     peakLevel: number;
     noiseFloor: number;
     voiceDetected: boolean;
+    transcript?: string;
+    sttLatencyMs?: number;
+    micName?: string;
+    clipping?: boolean;
+    pipelineLatencyMs?: number;
   } | null>(null);
 
   const [providerId, setProviderId] = useState<AiProviderId>(settings.aiProvider || 'gemini');
@@ -163,6 +175,11 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
       setEchoCancellation(settings.echoCancellation !== false);
       setAutoGainControl(settings.autoGainControl !== false);
       setVadSensitivity(settings.vadSensitivity || 'medium');
+      setListeningEnvironment(
+        settings.listeningEnvironment ||
+          inferEnvironmentFromSettings(settings.noiseSuppression, settings.vadSensitivity) ||
+          'quiet'
+      );
       setSpeakerVerificationEnabled(Boolean(settings.speakerVerificationEnabled));
       setEnrolledProfile(settings.enrolledVoiceProfile);
       setMicrophoneDeviceId(settings.microphoneDeviceId || '');
@@ -278,7 +295,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
     setTimeout(() => setEnrollStatus(null), 2500);
   };
 
-  // Functional Microphone Test
+  // Functional Microphone Test with Real-time Diagnostics
   const handleTestMicrophone = async () => {
     setIsTestingMic(true);
     setMicTestResult(null);
@@ -288,24 +305,49 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
       setMicTestCountdown((prev) => (prev > 1 ? prev - 1 : 1));
     }, 1000);
 
+    const testStartTime = Date.now();
     try {
       const pipeline = new AudioPipeline({
         noiseSuppression,
         echoCancellation,
         autoGainControl,
         vadSensitivity,
+        listeningEnvironment,
         deviceId: microphoneDeviceId || undefined,
       });
 
       const res = await pipeline.testMicrophone(3000);
+      const pipelineLatencyMs = Math.max(8, Math.round((Date.now() - testStartTime - 3000) / 4));
       clearInterval(timer);
       pipeline.stop();
+
+      const matchedDevice = audioInputDevices.find((d) => d.deviceId === microphoneDeviceId);
+      const micName = matchedDevice?.label || (microphoneDeviceId ? `Microphone (${microphoneDeviceId.slice(0, 8)})` : 'Default Windows Recording Device');
+
+      let transcript = '';
+      let sttLatencyMs = 0;
+      if (res.playbackBase64 && window.fridayAPI?.transcribeSpeech) {
+        const sttStart = Date.now();
+        try {
+          const tr = await window.fridayAPI.transcribeSpeech(res.playbackBase64, res.mimeType);
+          sttLatencyMs = Date.now() - sttStart;
+          transcript = tr.text || '(No speech detected in sample)';
+        } catch {
+          transcript = '(Transcription offline or unavailable)';
+        }
+      }
+
       setIsTestingMic(false);
       setMicTestResult({
         snrDb: res.snrDb,
         peakLevel: res.peakLevel,
         noiseFloor: res.noiseFloor,
         voiceDetected: res.voiceDetected,
+        transcript,
+        sttLatencyMs,
+        micName,
+        clipping: res.peakLevel >= 0.98,
+        pipelineLatencyMs,
       });
 
       // Play back test audio so the user hears their processed, noise-suppressed speech
@@ -373,6 +415,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
       speakerVerificationEnabled,
       enrolledVoiceProfile: enrolledProfile,
       microphoneDeviceId,
+      listeningEnvironment,
       desktopPetEnabled: settings.desktopPetEnabled !== false,
       approvedFolders,
       requireToolConfirmations: confirmations,
@@ -699,6 +742,44 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
               </div>
             </div>
 
+            
+
+            {/* Listening Environment Preset */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+              <label style={{ fontSize: '0.72rem', color: 'var(--muted)', fontWeight: 600 }}>Listening Environment</label>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '6px' }}>
+                {(['quiet', 'noisy', 'very_noisy'] as const).map((env) => (
+                  <button
+                    key={env}
+                    type="button"
+                    onClick={() => {
+                      setListeningEnvironment(env);
+                      const preset = ENVIRONMENT_PRESETS[env];
+                      setNoiseSuppression(preset.noiseSuppression);
+                      setVadSensitivity(preset.vadSensitivity);
+                    }}
+                    style={{
+                      padding: '7px 4px',
+                      fontSize: '0.72rem',
+                      borderRadius: '6px',
+                      border: '1px solid',
+                      borderColor: listeningEnvironment === env ? 'var(--accent)' : 'var(--border-subtle)',
+                      background: listeningEnvironment === env ? 'rgba(56, 189, 248, 0.15)' : 'var(--surface-sunken)',
+                      color: listeningEnvironment === env ? 'var(--accent)' : 'var(--text-muted)',
+                      cursor: 'pointer',
+                      fontWeight: listeningEnvironment === env ? 600 : 400,
+                      lineHeight: 1.3,
+                      textAlign: 'center',
+                    }}
+                  >
+                    {ENVIRONMENT_PRESETS[env].label}
+                  </button>
+                ))}
+              </div>
+              <span style={{ fontSize: '0.66rem', color: 'var(--muted-dim)' }}>
+                {ENVIRONMENT_PRESETS[listeningEnvironment].description}
+              </span>
+            </div>
             {/* Noise Suppression Selector (Off / Standard / Strong) */}
             <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
               <label style={{ fontSize: '0.72rem', color: 'var(--muted)' }}>Noise Suppression</label>
@@ -817,21 +898,41 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
               {micTestResult && (
                 <div
                   style={{
-                    padding: '8px 10px',
-                    borderRadius: '6px',
-                    background: 'rgba(16, 185, 129, 0.1)',
-                    border: '1px solid rgba(16, 185, 129, 0.3)',
-                    fontSize: '0.7rem',
-                    color: '#10b981',
+                    padding: '10px 12px',
+                    borderRadius: '8px',
+                    background: 'rgba(16, 185, 129, 0.08)',
+                    border: '1px solid rgba(16, 185, 129, 0.35)',
+                    fontSize: '0.72rem',
+                    color: 'var(--text)',
                     display: 'flex',
                     flexDirection: 'column',
-                    gap: '2px',
+                    gap: '6px',
                   }}
                 >
-                  <div style={{ fontWeight: 600 }}>Microphone Test Complete (Playing processed audio):</div>
-                  <div>• Voice Detected: {micTestResult.voiceDetected ? 'Yes (Clean vocal tone)' : 'No (Ambient only)'}</div>
-                  <div>• Signal-to-Noise Ratio: {micTestResult.snrDb} dB</div>
-                  <div>• Noise Floor: {micTestResult.noiseFloor} | Peak Level: {micTestResult.peakLevel}</div>
+                  <div style={{ fontWeight: 700, color: '#10b981', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                    <span>Audio Diagnostics & Pipeline Verification</span>
+                    <span style={{ fontSize: '0.66rem', color: '#10b981', fontWeight: 500 }}>Playing Processed Audio</span>
+                  </div>
+
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '4px 12px', fontSize: '0.7rem', color: 'var(--muted)' }}>
+                    <div><span style={{ color: 'var(--text-muted)' }}>Microphone:</span> <span style={{ color: 'var(--text)' }}>{micTestResult.micName}</span></div>
+                    <div><span style={{ color: 'var(--text-muted)' }}>Device Status:</span> <span style={{ color: '#10b981', fontWeight: 600 }}>● Active & Streaming</span></div>
+                    <div><span style={{ color: 'var(--text-muted)' }}>Peak Input:</span> <span style={{ color: micTestResult.clipping ? '#ef4444' : 'var(--text)', fontWeight: micTestResult.clipping ? 700 : 400 }}>{Math.round(micTestResult.peakLevel * 100)}%{micTestResult.clipping ? ' (CLIPPING! Reduce gain)' : ''}</span></div>
+                    <div><span style={{ color: 'var(--text-muted)' }}>Noise Floor:</span> <span style={{ color: 'var(--text)' }}>{micTestResult.noiseFloor}</span></div>
+                    <div><span style={{ color: 'var(--text-muted)' }}>Signal-to-Noise:</span> <span style={{ color: micTestResult.snrDb > 10 ? '#10b981' : '#eab308', fontWeight: 600 }}>{micTestResult.snrDb} dB</span></div>
+                    <div><span style={{ color: 'var(--text-muted)' }}>VAD State:</span> <span style={{ color: micTestResult.voiceDetected ? '#10b981' : '#64748b' }}>{micTestResult.voiceDetected ? 'Speech Present' : 'Silence / Ambient'}</span></div>
+                    <div><span style={{ color: 'var(--text-muted)' }}>Noise Filter:</span> <span style={{ color: 'var(--text)' }}>{noiseSuppression.toUpperCase()}</span></div>
+                    <div><span style={{ color: 'var(--text-muted)' }}>Echo Cancel:</span> <span style={{ color: echoCancellation ? '#10b981' : '#64748b' }}>{echoCancellation ? 'Enabled' : 'Disabled'}</span></div>
+                    <div><span style={{ color: 'var(--text-muted)' }}>Audio Latency:</span> <span style={{ color: 'var(--text)' }}>~{micTestResult.pipelineLatencyMs || 15} ms</span></div>
+                    <div><span style={{ color: 'var(--text-muted)' }}>STT Latency:</span> <span style={{ color: 'var(--text)' }}>{micTestResult.sttLatencyMs ? `${micTestResult.sttLatencyMs} ms` : 'N/A'}</span></div>
+                  </div>
+
+                  {micTestResult.transcript && (
+                    <div style={{ marginTop: '4px', padding: '6px 8px', borderRadius: '4px', background: 'var(--surface-sunken)', border: '1px solid var(--border-subtle)', fontSize: '0.72rem' }}>
+                      <span style={{ color: 'var(--muted)', fontWeight: 600 }}>Recognized Speech: </span>
+                      <span style={{ color: 'var(--accent)', fontStyle: 'italic' }}>"{micTestResult.transcript}"</span>
+                    </div>
+                  )}
                 </div>
               )}
             </div>

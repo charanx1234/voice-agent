@@ -1,21 +1,50 @@
 # FRIDAY — Personal AI Assistant 🤖
 
-**FRIDAY** is an intelligent, opinionated personal AI assistant for Windows, powered by **Google Gemini** with native multilingual Indian voice conversation capabilities and a 2D animated robot character.
+**FRIDAY** is an intelligent, opinionated personal AI assistant for Windows, powered by **Google Gemini** with native multilingual Indian voice conversation capabilities, advanced microphone voice isolation for noisy environments, and a 2D animated robot character.
 
-FRIDAY understands and speaks **Telugu (తెలుగు)**, **Indian English**, **Hindi (हिन्दी)**, **Tamil (தமிழ்)**, and **Kannada (ಕನ್ನಡ)**, responds naturally with lip-synced mouth animations and audio waveforms, and performs real tasks on your PC with your permission.
+FRIDAY understands and speaks **Telugu (తెలుగు)**, **Indian English**, **Hindi (हिन्दी)**, **Tamil (தமிழ்)**, and **Kannada (ಕನ್ನಡ)**, handles natural mixed-language code-switching (e.g. *Tenglish* and *Hinglish*), responds naturally with lip-synced mouth animations and audio waveforms, and performs real desktop tasks on your PC with your permission.
 
 ---
 
 ## 🌟 Key Features
 
-### 1. Expressive 2D Robot Character
+### 1. Advanced Microphone Voice Isolation & Noisy-Environment Speech Recognition 🎙️
+FRIDAY includes a professional, studio-grade audio processing pipeline designed specifically to maintain high accuracy and responsiveness in noisy environments:
+- **Dedicated Audio Processing Graph**:
+  - **High-Pass Filter** (85 Hz – 110 Hz): Eliminates low-frequency desk thumps, air conditioner hum, and fan drone.
+  - **Low-Pass Filter** (3400 Hz – 3800 Hz): Suppresses high-frequency hiss, keyboard chatter, and mouse clicks.
+  - **Peaking Vocal Presence Filter** (1.6 kHz, +3.5 dB boost): Enhances human voice formant intelligibility.
+  - **Dynamics Compressor & AGC Limiter** (6:1 to 10:1 compression, 3ms attack): Normalizes quiet whispers and prevents digital clipping on loud speech.
+  - **Software Ducking & Acoustic Echo Cancellation (AEC)**: Attenuates incoming microphone audio to 0.08 while FRIDAY is speaking so FRIDAY never triggers itself through speakers, while still allowing natural user barge-in interruptions.
+- **Adaptive Listening Modes**:
+  - **Quiet Room**: Balanced speech enhancement with normal sensitivity and lowest processing overhead.
+  - **Noisy Environment**: Stronger noise suppression, adaptive noise gate (1.6× ambient floor), and higher compressor ratio for rooms with fans, background TV, or multiple voices.
+  - **Very Noisy Environment**: Maximum available suppression and conservative command validation. FRIDAY requests repetition when speech is genuinely drowned by noise rather than guessing.
+- **Dynamic Adaptive Voice Activity Detection (VAD)**:
+  - Continuously tracks the ambient noise floor using real-time exponential smoothing.
+  - Dynamically raises start and end thresholds when room noise increases, eliminating premature cut-offs and lost first words.
+  - Extended silence hysteresis accommodates natural pauses during bilingual code-switching.
+- **Multilingual Telugu-English-Hinglish Recognition**:
+  - Preserves natural code-switching: *"Friday, Chrome open chey and Java tutorials search chey"*, *"Spotify lo music play chey"*, *"Naaku tomorrow college ki vellali"*, *"Ee error enti, can you explain?"*.
+  - Strictly preserves English technical vocabulary, app names, website domains, and programming terms without forced translation.
+  - Retains Telugu colloquial verbs and case markers (`chey`, `chudu`, `pettandi`, `vellali`, `raayi`, `teeyi`, `entha`, `cheppu`, `lo`, `ki`, `naaku`, `enti`) and Hindi verbs (`karo`, `kholo`, `chalao`, `band karo`).
+- **Confidence & Uncertainty Handling**:
+  - Never invents words or hallucinates desktop actions to compensate for audio noise.
+  - Noise-only segments and silence are dropped silently during standby without triggering unsolicited greetings (no *"Yes, spit it out"* or unwanted interruptions).
+  - Cut-off or incomplete speech (e.g. *"Friday, open..."*) is recognized as incomplete, and FRIDAY asks *"Which application would you like me to open?"* instead of guessing an application.
+- **Audio Diagnostics & Verification Panel**:
+  - Settings → Voice Isolation includes real-time diagnostics: selected microphone name, device streaming status, peak input level with clipping indicator, running ambient noise floor, Signal-to-Noise Ratio (SNR in dB), VAD state, echo cancellation status, and pipeline/STT latency.
+  - Interactive **Test Microphone** records a 3-second sample and plays back the processed, noise-suppressed audio while displaying the recognized transcript side-by-side.
+
+### 2. Expressive 2D Robot Character & Desktop Pet
 - **Sleek Cyber Aesthetic**: Deep charcoal & metallic black chassis with glowing cyan accents (`#00e5ff`).
 - **Reactive Eyes**: Expressive rounded eyes that spontaneously blink, widen when attentive, scan when thinking, and show gentle alert in error states.
 - **Audio-Driven Lip-Sync**: The LED mouth bars dynamically oscillate and stretch in real-time according to the actual audio frequency amplitude (`AudioAnalyser` Web Audio API) during speech playback.
 - **Visual State Machine**: Seamless transitions across `idle`, `listening`, `thinking`, `speaking`, `interrupted`, and `error`.
 - **Instant Barge-in / Interruption**: Clicking on FRIDAY or tapping the microphone button instantly halts ongoing speech and returns FRIDAY to listening mode.
+- **Floating Desktop Pet**: Can detach into a lightweight transparent desktop companion synchronized with the dashboard voice coordinator.
 
-### 2. Multilingual Indian Voice Assistant
+### 3. Multilingual Indian Voice Assistant
 - **Supported Languages**:
   - **Telugu (తెలుగు)**: `te-IN` (Native script, natural conversational phrasing, and Telugu-English code-switching)
   - **English (India)**: `en-IN` (Friendly, clear Indian English conversational responses)
@@ -27,13 +56,10 @@ FRIDAY understands and speaks **Telugu (తెలుగు)**, **Indian English*
   - **Input**: Microphone audio capture with real-time waveform visualization, sending audio to Gemini Multimodal Audio understanding.
   - **Output**: Neural text-to-speech across **three English accents** — American (17 voices), British (5) and Indian (3) — each with female and male options, plus native voices for Telugu, Hindi, Tamil and Kannada.
   - **Accent & voice selection**: Settings → Voice lets you pick the accent, choose a specific female or male neural voice, audition it with **Play Sample**, and adjust speed, pitch and volume. The choice is saved locally and restored on the next launch.
-  - **Indic languages keep their own voice**: an English accent never overrides Telugu/Hindi/Tamil/Kannada speech.
   - **Fallback chain**: Edge neural → Gemini TTS (`gemini-2.5-flash-preview-tts`, warm female `Kore`) → installed system voice, preferring female voices so it never drops to a male default.
-  - **Natural delivery**: speech is split into sentence chunks, synthesized in a pipeline (the next chunk is generated while the current one plays), with adjustable speed, **pitch (−3…+3 semitones)** and volume. Markdown, code fences and URLs are cleaned before speaking.
-  - **Real lip-sync**: the robot's mouth is driven by the analysed audio waveform, not a simulated animation.
-  - **Barge-in**: talking over FRIDAY (or tapping the mic/robot) cancels synthesis mid-sentence and starts listening immediately.
+  - **Natural delivery**: Speech is split into sentence chunks and synthesized in an asynchronous pipeline with adjustable speed, **pitch (−3…+3 semitones)** and volume.
 
-### 3. Controlled Agent Capabilities (Useful Work)
+### 4. Controlled Agent Capabilities (Useful Work)
 FRIDAY distinguishes between answering questions and executing actions, and never pretends a task was finished without verifying it:
 - **Tool A — Notes**:
   - Create notes via voice or text (e.g., *"Save a note called Grocery with milk and eggs"*).
@@ -45,37 +71,30 @@ FRIDAY distinguishes between answering questions and executing actions, and neve
 - **Tool C — Web Research**:
   - Searches live web data and references, providing clickable source links and separating sourced facts from general model explanations.
 - **Tool D — Application Shortcuts**:
-  - Strict allowlist of safe desktop applications: **Notepad**, **Calculator**, **Paint**, **File Explorer**, and **Command Prompt**.
-  - Asks for explicit user permission via an interactive modal before launching. Never executes arbitrary shell strings.
+  - Fast local intent routing for safe desktop applications: **Chrome**, **Spotify**, **Notepad**, **Calculator**, **Paint**, **File Explorer**, and **Command Prompt**.
+  - Understands natural commands in English and Telugu (*"Chrome open chey"*, *"Spotify lo music play chey"*, *"sound penchu"*, *"sound thagginchu"*, *"mute chey"*).
 
-### 4. Long-Term Memory (SQLite + Semantic Search)
+### 5. Long-Term Memory (SQLite + Semantic Search)
 FRIDAY remembers what matters between sessions, not every word you say:
-- **Curated memories, not a transcript dump**: after each exchange, Gemini extracts at most three durable details — your name, city, job, preferences, standing instructions, and ongoing projects. Small talk, one-off questions, and secrets (passwords, OTPs, card numbers) are explicitly excluded.
-- **Local SQLite database**: memories live in `friday_memory.db` in your AppData directory, with an atomic write path and automatic recovery if the file is ever damaged. No cloud sync, no external service.
-- **Semantic retrieval**: every memory is embedded with `gemini-embedding-001`; each new question is embedded too and matched by cosine similarity combined with keyword overlap, recency, and importance. Only the most relevant memories (plus your core instructions) are injected into the prompt — never the whole database.
-- **Survives restarts**: the conversation itself is persisted in the same database, capped at 200 messages and 30 days, so FRIDAY picks up mid-conversation after a restart while long-term memory stays permanent.
-- **You stay in control**: open the brain icon to view, search, add, edit, or delete any memory, and switch automatic remembering off entirely.
-- **Graceful degradation**: if the embedding API is unreachable, a local hashed embedding keeps search working offline; if extraction fails, an offline rule-based extractor still catches explicit "remember that…" requests.
+- **Curated memories, not a transcript dump**: After each exchange, Gemini extracts at most three durable details — your name, city, job, preferences, standing instructions, and ongoing projects. Small talk, one-off questions, and secrets (passwords, OTPs, card numbers) are explicitly excluded.
+- **Local SQLite database**: Memories live in `friday_memory.db` in your AppData directory, with an atomic write path and automatic recovery if the file is ever damaged.
+- **Semantic retrieval**: Every memory is embedded with `gemini-embedding-001`; each new question is matched by cosine similarity combined with keyword overlap, recency, and importance.
+- **Survives restarts**: The conversation itself is persisted in the same database, capped at 200 messages and 30 days.
 
-### 5. Light & Dark Themes
-- **Light**: cream background (`#F8F4E7`) with burgundy (`#722F37`) accents.
-- **Dark**: pure black (`#000000`) with white text and accents — strictly monochrome, no colour at all, including status states.
-- **Auto by default**: follows the Windows light/dark setting live. Manual override lives in Settings → Appearance (`Auto` / `Light` / `Dark`).
-- Existing installs that had a fixed dark theme are migrated to `Dark` so nothing changes unexpectedly.
+### 6. Light & Dark Themes
+- **Light**: Cream background (`#F8F4E7`) with burgundy (`#722F37`) accents.
+- **Dark**: Pure black (`#000000`) with white text and accents — strictly monochrome, no color at all.
+- **Auto by default**: Follows the Windows light/dark setting live. Manual override lives in Settings → Appearance.
 
-### 6. Voice Reminders & Live Dashboard
-- **Reminders from natural speech**: *"remind me to call mom at 6"*, *"in 20 minutes"*, *"tomorrow at 9"* — created immediately in the same turn and confirmed out loud. No separate reminders screen or form.
-- Reminders persist in SQLite and fire as a Windows toast (plus a spoken announcement) even across restarts; overdue ones are delivered when the app next opens.
-- **Dashboard beside the voice chat**: when a request produces something visual — code, a document, plan, list or table — the window widens and a dashboard pane appears with the full content. Voice never pauses: you can keep talking, ask for changes, and watch the pane update live.
-- The dashboard also lists active reminders, with a one-click "done" action.
+### 7. Voice Reminders & Live Dashboard
+- **Natural speech reminders**: *"remind me to call mom at 6"*, *"in 20 minutes"*, *"tomorrow at 9"* — created immediately in the same turn and confirmed out loud.
+- Reminders persist in SQLite and fire as a Windows toast (plus a spoken announcement) even across restarts.
+- **Dashboard beside the voice chat**: When a request produces something visual — code, a document, plan, list or table — the window widens and a dashboard pane appears with the full content.
 
-### 7. Privacy & Security
+### 8. Privacy & Security
 - **Strict IPC Isolation**: Electron runs with `contextIsolation: true` and `nodeIntegration: false`. The renderer only interacts through a restricted, strongly typed bridge (`window.fridayAPI`).
 - **Zero API Key Leakage**: Keys are never hardcoded or tracked in Git. The API key is stored safely in your local Windows AppData directory or loaded from `.env` in development, and is always masked (`AIza...9xQ`) in UI and logs.
-- **User Confirmation Required**: Sensitive actions (opening apps, searching folders) prompt you for approval with an Allow/Deny modal.
-- **Locked-Down Window Surface**: A strict Content-Security-Policy, blocked `<webview>` embedding, blocked in-app navigation, and a microphone-only permission handler keep the renderer from reaching anything it should not.
-- **Scoped File Search**: Project search never follows symlinks or junctions, so an approved folder cannot be used as a bridge to files outside it.
-- **Resilient Model Routing**: If a configured Gemini model is retired or returns not-found, FRIDAY falls back through known-good models — and never re-runs a tool call while switching models.
+- **User Confirmation Required**: Sensitive actions prompt you for approval with an Allow/Deny modal.
 
 ---
 
@@ -86,11 +105,11 @@ FRIDAY remembers what matters between sessions, not every word you say:
 | **Desktop Application** | Electron 34 |
 | **Frontend UI** | React 19 + TypeScript + Vite |
 | **Icons & Design** | Lucide React + Custom CSS Animations + SVG |
-| **AI Brain** | Google Gemini API (`gemini-2.5-flash` / `gemini-1.5-flash`) |
-| **Long-Term Memory** | SQLite via `sql.js` (WASM, no native rebuild) + Gemini embeddings (`gemini-embedding-001`) |
-| **Audio & Voice** | Web Audio API (`AudioContext`, `AnalyserNode`), SpeechSynthesis, MediaRecorder |
+| **AI Brain** | Google Gemini API (`gemini-3.1-flash-lite` / `gemini-2.5-flash`) |
+| **Audio Processing** | Web Audio API (`AudioContext`, `BiquadFilterNode`, `DynamicsCompressorNode`, `AnalyserNode`), WebRTC AEC/AGC/NoiseSuppression |
+| **Long-Term Memory** | SQLite via `sql.js` (WASM) + Gemini embeddings (`gemini-embedding-001`) |
 | **Local Storage** | JSON Store in Electron `app.getPath('userData')`, SQLite memory database |
-| **Packaging** | Electron Builder (Windows Portable & Installer) |
+| **Packaging** | Electron Builder + Native C# Launcher |
 
 ---
 
@@ -98,200 +117,87 @@ FRIDAY remembers what matters between sessions, not every word you say:
 
 - **Operating System**: Windows 10 or Windows 11 (64-bit)
 - **Node.js**: Version 18, 20, 22, or 24+ installed ([Download Node.js](https://nodejs.org/))
-- **Microphone**: Any built-in or USB microphone
-- **Google Gemini API Key**: Free key from Google AI Studio
+- **Microphone**: Any built-in, headset, or USB microphone
+- **Google Gemini API Key**: Free key from [Google AI Studio](https://aistudio.google.com/app/apikey)
 
 ---
 
-## 🚀 Getting Started (Beginner Guide)
+## 🚀 Getting Started
 
 ### Step 1: Clone or Navigate to the Project
-Open PowerShell or Command Prompt:
 ```powershell
-cd C:\25r11a6760
+cd C:\25r11a6760\FRIDAY
 ```
 
 ### Step 2: Install Dependencies
-Run:
 ```powershell
 npm install
 ```
 
 ### Step 3: Configure Your Google Gemini API Key
 You can configure your key in either of two easy ways:
+- **Through the UI**: Start FRIDAY, open Settings, paste your API key, and click **Save Changes**.
+- **Using `.env`**: Copy `.env.example` to `.env` and set `GEMINI_API_KEY=AIzaSy...YourKey`.
 
-#### Option A: Through the FRIDAY Settings UI (Easiest)
-1. Start FRIDAY (see Step 4).
-2. Click the gear icon (**Settings**) or the orange warning banner at the top.
-3. Paste your Gemini API key and click **Save Changes**. You can also click **Test Connection** to immediately verify it!
-
-#### Option B: Using `.env` File
-1. Copy `.env.example` to `.env`:
-   ```powershell
-   Copy-Item .env.example .env
-   ```
-2. Open `.env` in Notepad and replace `your_gemini_api_key_here` with your real key:
-   ```env
-   GEMINI_API_KEY=AIzaSy...YourActualKeyHere
-   ```
-
-> 💡 **Where do I get a free Gemini API key?**
-> Visit [Google AI Studio](https://aistudio.google.com/app/apikey), sign in with your Google account, and click **Create API Key**. It takes less than 1 minute and includes a free tier!
-
----
-
-## 🏃 Running FRIDAY
-
-### Run the Application:
-To build and launch FRIDAY on your desktop:
+### Step 4: Run FRIDAY
 ```powershell
 npm start
 ```
-*FRIDAY opens as a compact, frameless assistant window on your screen.*
 
-### Running in Hot-Reload Development Mode:
-If you are modifying the React frontend:
+### Step 5: Create a Desktop Shortcut
+A native Windows desktop shortcut can be generated anytime:
 ```powershell
-npm run dev
+powershell -ExecutionPolicy Bypass -File scripts\create_shortcut.ps1
 ```
+This places a `FRIDAY.lnk` shortcut with the custom FRIDAY icon directly onto your desktop.
 
 ---
 
 ## 🗣️ How to Talk with FRIDAY
 
-1. **Voice Conversation**:
-   - Click the large central **Microphone** button.
-   - The microphone pulses cyan and the status changes to `Listening...`.
-   - Speak in your preferred language:
-     - **Telugu**: *"నమస్కారం ఫ్రైడే! ఎలా ఉన్నావు?"* or *"ఒక నోట్ సేవ్ చెయ్యి"*
-     - **English**: *"Hello FRIDAY, can you help me research quantum computing?"*
-     - **Hindi**: *"नमस्ते फ्राइडे! आज का मौसम कैसा है?"*
-     - **Tamil**: *"வணக்கம் FRIDAY! எனக்கு உதவி செய்வாயா?"*
-     - **Kannada**: *"ನಮಸ್ಕಾರ FRIDAY! ಹೇಗಿದ್ದೀರಾ?"*
-   - Click the microphone button again when you finish speaking.
-   - FRIDAY enters `Thinking...` mode, processes your query with Gemini, and speaks the answer aloud while animating its robot mouth and audio visualizer!
-
-2. **Typed Chat**:
-   - Type any question or command into the bottom text input and press **Enter** or click the send button.
-
+1. **Hands-Free Standby ("Hey Friday")**:
+   - Keep hands-free enabled in Settings.
+   - Say *"Hey Friday"* or *"Friday"* to wake the assistant instantly.
+   - Standby remains 100% silent — zero random wake-ups or unwanted audio prompts.
+2. **Push-to-Talk**:
+   - Click the central **Microphone** button.
+   - Speak in English, Telugu, Hindi, Tamil, Kannada, or mixed Tenglish:
+     - *"Friday, Chrome open chey and Java tutorials search chey"*
+     - *"Spotify lo music play chey"*
+     - *"Can you open Notepad and take notes?"*
+     - *"నమస్కారం ఫ్రైడే! ఈ రోజు వాతావరణం ఎలా ఉంది?"*
+   - Tap the button again (or let the adaptive VAD detect natural end-of-speech).
 3. **Interrupting FRIDAY (Barge-In)**:
-   - If FRIDAY is speaking and you want it to stop, simply tap the robot character or click the microphone button. FRIDAY immediately stops speaking!
-
-4. **Conversation Transcript**:
-   - Click the **Chat Bubble** icon in the control bar to slide open the live conversation transcript, view past responses, or clear history.
-
-### 5. If the Microphone Is Not Working
-- **Watch the timer**: while recording, the status badge counts up (`Listening… 0:07`). If it counts, audio is being captured.
-- **FRIDAY tells you what went wrong.** Permission denials, a missing device, or a microphone held by another app (Zoom, Teams) now produce a specific message in the transcript instead of a silent failure.
-- **Silent recordings are caught.** If the mic is muted or muted at the Windows level, FRIDAY says it could not hear anything rather than sending an empty clip.
-- **Check Windows permissions**: Settings → Privacy & security → Microphone → enable *"Let desktop apps access your microphone"* and make sure FRIDAY is allowed.
-- **Check the input device**: Windows Settings → System → Sound → Input, and confirm the right microphone is selected and its level moves when you speak.
-- Recording stops automatically after a double tap guard, and a watchdog prevents the UI hanging on `Thinking...` if the recorder fails to close.
+   - If FRIDAY is speaking and you speak or click the mic/character, FRIDAY stops speaking immediately.
 
 ---
 
-## 🧰 Using Agent Tools
+## 🧪 Automated Testing
 
-### 1. Saving & Managing Notes
-- **Voice**: *"FRIDAY, please save a note with title Shopping and content buy milk and vegetables."*
-- **Action**: FRIDAY creates the note in your application notes directory.
-- **Viewing Notes**: Click **Tools** in the control bar, switch to the **Notes** tab to view, search, or create notes manually.
+FRIDAY includes 32 test suites with 254 unit and integration tests covering audio filtering, adaptive VAD, local intent execution, memory persistence, speaker verification, and tool safety:
 
-### 2. Searching Project Folders
-- Open **Settings** -> **Approved Project Folders** -> Click **Add Folder** to select your project directory.
-- Ask FRIDAY: *"Search my project folder for App.tsx"* or *"Find where handleSendMessage is defined"*.
-- FRIDAY will search only inside that approved folder and show matching files and snippets in the transcript!
-
-### 3. Launching Applications
-- Ask FRIDAY: *"Open Calculator"* or *"Launch Notepad"*.
-- An interactive confirmation prompt will appear asking: *"FRIDAY wants to open Calculator on your computer. Allow or Deny?"*
-- Click **Allow** to launch the tool safely.
-
-### 4. Using Long-Term Memory
-- Just talk normally. Tell FRIDAY *"I'm Ram, I prefer Telugu replies, and I'm building a desktop assistant"* — it extracts and stores the durable parts automatically.
-- Explicitly ask: *"Remember that my office is on the third floor"* — this works even offline.
-- Ask later: *"What am I building?"* or *"Which language should you reply in?"* — the relevant memories are retrieved semantically and used in the answer.
-- Click the **brain icon** in the control bar to open the memory panel:
-  - **Search** runs a semantic query over stored memories.
-  - **Add** stores a memory manually (kind, title, content, importance).
-  - **Pencil** edits a memory, **trash** deletes it after confirmation.
-  - The toggle switches automatic remembering off while keeping the existing memories.
-
-### 5. Using Reminders and the Dashboard
-- Say or type: *"remind me to call mom at 6"* — FRIDAY creates it immediately and confirms aloud; no other screen involved.
-- *"What are my reminders?"* lists them; *"mark the call mom reminder as done"* completes one.
-- Ask for code or a document: *"write a Python retry helper and show it on the dashboard"* — the dashboard pane opens beside the chat with the full code, and FRIDAY gives a short spoken summary.
-- Keep talking while the pane is open: *"add exponential backoff and show it again"* updates the pane in place.
-- The window returns to its compact size when you close the dashboard with the ✕.
-
----
-
-## 🧪 Running the Automated Tests
-
-To run the unit tests for language detection, agent tools, and security boundaries:
 ```powershell
 npm test
 ```
-All tests should pass:
+
+All 32 test suites pass:
 ```
- ✓ tests/languages.test.ts (6 tests)
- ✓ tests/security.test.ts (3 tests)
- ✓ tests/agent-tools.test.ts (2 tests)
- ✓ tests/hardening.test.ts (13 tests)
- ✓ tests/memory.test.ts (22 tests)
- ✓ tests/voice.test.ts (9 tests)
- ✓ tests/tts.test.ts (14 tests)
- ✓ tests/logger.test.ts (5 tests)
- ✓ tests/persona.test.ts (9 tests)
- ✓ tests/voiceCatalog.test.ts (10 tests)
- ✓ tests/greetings.test.ts (6 tests)
- ✓ tests/reminders.test.ts (10 tests)
- Test Files  12 passed (12)
-      Tests  109 passed (109)
+ Test Files  32 passed (32)
+      Tests  254 passed (254)
+   Duration  5.10s
 ```
 
 ---
 
-## 📦 Creating the Windows Executable
+## 📦 Building the Windows Package
 
-To produce a production package for Windows:
+To compile and package the production Windows executable:
 ```powershell
 npm run package:win
 ```
-
-Outputs in `dist-package/`:
-
-| Artefact | Use |
-|---|---|
-| `FRIDAY Setup 1.0.0.exe` | Per-user installer (no admin). Creates Desktop and Start-menu shortcuts. |
-| `win-unpacked\FRIDAY.exe` | Portable build — run directly, no install. |
-
-Both are **GUI-subsystem** executables: launching them from Explorer or a shortcut never opens a console window.
-
----
-
-## 🪵 Logs & Diagnostics
-
-- Logs are written to `%APPDATA%\friday-ai-companion\logs\friday-YYYY-MM-DD.log` (never printed to a terminal in the installed app).
-- Each line carries a timestamp, level (`INFO` / `WARN` / `ERROR`) and source scope.
-- Files rotate at 2 MB and the newest 7 are kept.
-- **Settings → Diagnostics → Open Logs Folder** opens the folder.
-- Only one FRIDAY instance can run at a time: launching it again focuses the existing window instead of starting a second memory/reminder backend.
-- On quit, memory and reminders are flushed and their background timers cancelled.
-
----
-
-## 🌐 Official API Pricing & Documentation
-
-- **Google Gemini API Documentation**: [https://ai.google.dev/docs](https://ai.google.dev/docs)
-- **Google Gemini API Pricing**: [https://ai.google.dev/pricing](https://ai.google.dev/pricing)
-  - Google Gemini 2.5 Flash and 1.5 Flash offer a generous free tier for personal development.
-- **Web Speech API**: Built directly into Windows Chromium at zero cost with offline capabilities.
 
 ---
 
 ## 🛡️ License
 
-MIT License. Built with ❤️ for desktop AI assistant development.
-
-
+MIT License. Built with ❤️ for advanced desktop AI assistant and voice interaction development.

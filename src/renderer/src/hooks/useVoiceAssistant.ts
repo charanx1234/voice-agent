@@ -50,6 +50,15 @@ function blobToBase64(blob: Blob): Promise<string> {
   });
 }
 
+/** Audio processing options forwarded from app settings. */
+export interface VoiceAssistantAudioOptions {
+  /** Selected microphone device ID. Empty string means OS default. */
+  deviceId?: string;
+  noiseSuppression?: 'off' | 'standard' | 'strong';
+  echoCancellation?: boolean;
+  autoGainControl?: boolean;
+}
+
 export function useVoiceAssistant() {
   const [robotState, setRobotState] = useState<RobotState>('idle');
   const [amplitude, setAmplitude] = useState<number>(0);
@@ -63,6 +72,7 @@ export function useVoiceAssistant() {
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
   const activeStreamRef = useRef<MediaStream | null>(null);
+  const activeAudioCtxRef = useRef<AudioContext | null>(null);
   const speechRecognitionRef = useRef<any>(null);
   const liveTranscriptRef = useRef<string>('');
   const listeningStartedAtRef = useRef<number>(0);
@@ -105,7 +115,7 @@ export function useVoiceAssistant() {
     };
   }, []);
 
-  /** Releases the microphone stream and any recognition session. */
+  /** Releases the microphone stream, audio context, and any recognition session. */
   const releaseCapture = useCallback(() => {
     if (speechRecognitionRef.current) {
       try {
@@ -120,6 +130,10 @@ export function useVoiceAssistant() {
         } catch {}
       });
       activeStreamRef.current = null;
+    }
+    if (activeAudioCtxRef.current && activeAudioCtxRef.current.state !== 'closed') {
+      activeAudioCtxRef.current.close().catch(() => undefined);
+      activeAudioCtxRef.current = null;
     }
   }, []);
 
@@ -146,12 +160,26 @@ export function useVoiceAssistant() {
   }, [releaseCapture]);
 
   /**
-   * Starts listening to user's microphone
+   * Starts listening to user's microphone.
+   *
+   * FIX (was: Problem 1 & 7):
+   * The original implementation recorded directly from the raw getUserMedia stream,
+   * bypassing the Web Audio processing graph entirely. This meant zero noise suppression,
+   * no vocal bandpass filtering, and no compressor/AGC were applied to the audio sent
+   * to Gemini. It also ignored the user's selected microphone device.
+   *
+   * Fixed implementation:
+   * - Opens the stream with the user's configured device ID and AEC/AGC/NS constraints.
+   * - Creates a Web Audio processing graph (highpass → lowpass → vocal-presence peak →
+   *   compressor → destination).
+   * - MediaRecorder records from the processed destination stream, not the raw stream.
+   * - AudioAnalyser still receives the raw stream for lightweight visualisation.
    */
   const startListening = useCallback(
     async (
       languageCode = 'te-IN',
-      onSpeechRecognized?: (text: string, isFinal: boolean) => void
+      onSpeechRecognized?: (text: string, isFinal: boolean) => void,
+      audioOptions?: VoiceAssistantAudioOptions
     ) => {
       // Ignore double taps while a capture session is still being set up.
       if (isStartingRef.current) return;
@@ -163,18 +191,45 @@ export function useVoiceAssistant() {
           interrupt();
         }
 
+        // Resolve audio settings — apply any provided options or use sensible defaults
+        const nsEnabled = audioOptions?.noiseSuppression !== 'off';
+        const aecEnabled = audioOptions?.echoCancellation !== false;
+        const agcEnabled = audioOptions?.autoGainControl !== false;
+        const deviceId = audioOptions?.deviceId || undefined;
+
         let stream: MediaStream;
         try {
           stream = await navigator.mediaDevices.getUserMedia({
             audio: {
-              echoCancellation: true,
-              noiseSuppression: true,
-              autoGainControl: true,
+              deviceId: deviceId ? { exact: deviceId } : undefined,
+              echoCancellation: aecEnabled,
+              noiseSuppression: nsEnabled,
+              autoGainControl: agcEnabled,
+              // Request mono 16kHz for lower latency and speech-model compatibility
+              sampleRate: { ideal: 16000 },
+              channelCount: { ideal: 1 },
             },
           });
         } catch (err: any) {
-          console.error('[useVoiceAssistant] Microphone unavailable:', err);
-          throw new Error(describeMicError(err));
+          // If the exact deviceId constraint failed (device unplugged), retry with default
+          if (deviceId) {
+            console.warn('[useVoiceAssistant] Exact device unavailable, falling back to default mic:', err);
+            try {
+              stream = await navigator.mediaDevices.getUserMedia({
+                audio: {
+                  echoCancellation: aecEnabled,
+                  noiseSuppression: nsEnabled,
+                  autoGainControl: agcEnabled,
+                },
+              });
+            } catch (fallbackErr: any) {
+              console.error('[useVoiceAssistant] Microphone unavailable:', fallbackErr);
+              throw new Error(describeMicError(fallbackErr));
+            }
+          } else {
+            console.error('[useVoiceAssistant] Microphone unavailable:', err);
+            throw new Error(describeMicError(err));
+          }
         }
 
         activeStreamRef.current = stream;
@@ -182,20 +237,81 @@ export function useVoiceAssistant() {
         liveTranscriptRef.current = '';
         listeningStartedAtRef.current = Date.now();
 
-        // Connect stream to analyser for visual wave reaction
+        // Connect raw stream to analyser for lightweight visual reaction (mouth lip-sync).
+        // The visualiser uses only the analyser — it does NOT need the processed stream.
         try {
           analyserRef.current.connectMediaStream(stream);
         } catch (err) {
           console.warn('[useVoiceAssistant] Visualiser unavailable:', err);
         }
 
-        // Record audio for Gemini multimodal input
+        // ── Build the Web Audio processing graph ──────────────────────────────
+        // Microphone → highpass → lowpass → vocal-presence boost → compressor → destination
+        // MediaRecorder captures from destination.stream (processed), not from raw stream.
+        let processedStream = stream; // fallback: if Web Audio fails, use raw
+        try {
+          const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
+          const ctx = new AudioCtx();
+          activeAudioCtxRef.current = ctx;
+
+          const source = ctx.createMediaStreamSource(stream);
+
+          // High-pass filter: cut low-frequency rumble, fan drone, desk thumps (<85-110Hz)
+          const highpass = ctx.createBiquadFilter();
+          highpass.type = 'highpass';
+          const isStrong = audioOptions?.noiseSuppression === 'strong';
+          highpass.frequency.value = isStrong ? 110 : 85;
+          highpass.Q.value = isStrong ? 1.0 : 0.7;
+
+          // Low-pass filter: cut hiss, keyboard/mouse clicks (>3400-3800Hz)
+          const lowpass = ctx.createBiquadFilter();
+          lowpass.type = 'lowpass';
+          lowpass.frequency.value = isStrong ? 3400 : 3800;
+          lowpass.Q.value = isStrong ? 1.0 : 0.7;
+
+          // Peaking vocal presence filter: boost 1.6kHz (human speech intelligibility)
+          const vocalBoost = ctx.createBiquadFilter();
+          vocalBoost.type = 'peaking';
+          vocalBoost.frequency.value = 1600;
+          vocalBoost.Q.value = 1.2;
+          vocalBoost.gain.value = 3.5;
+
+          // Dynamics compressor / AGC limiter
+          const compressor = ctx.createDynamicsCompressor();
+          compressor.threshold.value = isStrong ? -28 : -24;
+          compressor.knee.value = 20;
+          compressor.ratio.value = isStrong ? 10 : 6;
+          compressor.attack.value = 0.003;
+          compressor.release.value = 0.25;
+
+          // Destination node: MediaRecorder records this processed stream
+          const destination = ctx.createMediaStreamDestination();
+
+          source.connect(highpass);
+          highpass.connect(lowpass);
+          lowpass.connect(vocalBoost);
+          vocalBoost.connect(compressor);
+          compressor.connect(destination);
+
+          if (ctx.state === 'suspended') void ctx.resume();
+
+          processedStream = destination.stream;
+        } catch (graphErr) {
+          console.warn(
+            '[useVoiceAssistant] Web Audio processing graph unavailable, recording raw stream:',
+            graphErr
+          );
+          // Keep processedStream = stream (raw fallback)
+        }
+        // ── End Web Audio graph ───────────────────────────────────────────────
+
+        // Record from the PROCESSED destination stream (not the raw getUserMedia stream)
         try {
           const mimeType = MediaRecorder.isTypeSupported('audio/webm')
             ? 'audio/webm'
             : 'audio/mp4';
 
-          const recorder = new MediaRecorder(stream, { mimeType });
+          const recorder = new MediaRecorder(processedStream, { mimeType });
           recorder.ondataavailable = (e) => {
             if (e.data.size > 0) {
               audioChunksRef.current.push(e.data);

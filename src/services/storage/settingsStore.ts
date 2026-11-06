@@ -55,6 +55,8 @@ const DEFAULT_SETTINGS: FridaySettings = {
   autoGainControl: true,
   vadSensitivity: 'medium',
   speakerVerificationEnabled: false,
+  listeningEnvironment: 'quiet',
+  audioQualityThreshold: 0.03,
 };
 
 export class SettingsStore {

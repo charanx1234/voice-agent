@@ -450,14 +450,76 @@ export const App: React.FC = () => {
           console.warn('[App] Live speech transcription error:', err);
         }
 
-        // If transcription produced no recognizable words, do not abort:
-        // Gemini's multimodal engine can process the audio directly.
-        if (!resolvedText && audioBase64) {
-          resolvedText = '🎤 [Voice command]';
+        // If transcription produced no recognizable words or detected silence/noise only:
+        // Do NOT send a fabricated message or execute actions on noise.
+        if (!resolvedText || resolvedText.toUpperCase() === 'SILENCE') {
+          setRobotState('idle');
+          return;
         }
       }
 
-      if (!resolvedText) return;
+      if (!resolvedText) {
+        setRobotState('idle');
+        return;
+      }
+
+      // Handle UNCLEAR speech in noisy environments
+      if (resolvedText.toUpperCase() === 'UNCLEAR') {
+        setRobotState('idle');
+        const unclearMsg = settings.preferredLanguage?.startsWith('te')
+          ? 'నాకు స్పష్టంగా వినిపించలేదు. దయచేసి మళ్ళీ చెప్పండి.'
+          : 'I could not hear that clearly due to background noise. Could you please repeat?';
+        const assistMsg: ChatMessage = {
+          id: `msg_${Date.now()}_unclear`,
+          role: 'assistant',
+          text: unclearMsg,
+          timestamp: Date.now(),
+        };
+        setMessages((prev) => [...prev, assistMsg]);
+        window.fridayAPI?.broadcastChatMessage?.(assistMsg);
+        void speakRef.current(unclearMsg, {
+          languageCode: settings.preferredLanguage,
+          voice: settings.ttsVoice,
+          accent: settings.voiceAccent,
+        });
+        return;
+      }
+
+      // Handle incomplete commands (e.g. "Friday, open..." or "open...")
+      const incompleteMatch = resolvedText.match(/^(?:(?:hey|hi|ok|okay)?\s*friday[,:\s]+)?(open|launch|search|play|read|start)[.\s…]*$/i);
+      if (incompleteMatch) {
+        setRobotState('idle');
+        const verb = incompleteMatch[1].toLowerCase();
+        let promptQuestion = `What would you like me to ${verb}?`;
+        if (verb === 'open' || verb === 'launch') {
+          promptQuestion = settings.preferredLanguage?.startsWith('te')
+            ? 'మీరు ఏ అప్లికేషన్ ఓపెన్ చేయాలనుకుంటున్నారు?'
+            : 'Which application would you like me to open?';
+        } else if (verb === 'search') {
+          promptQuestion = settings.preferredLanguage?.startsWith('te')
+            ? 'మీరు దేని గురించి సెర్చ్ చేయాలనుకుంటున్నారు?'
+            : 'What would you like me to search for?';
+        } else if (verb === 'play') {
+          promptQuestion = settings.preferredLanguage?.startsWith('te')
+            ? 'ఏ పాట లేదా సంగీతం ప్లే చేయాలి?'
+            : 'What song or music would you like me to play?';
+        }
+
+        const incompleteMsg: ChatMessage = {
+          id: `msg_${Date.now()}_incomplete`,
+          role: 'assistant',
+          text: promptQuestion,
+          timestamp: Date.now(),
+        };
+        setMessages((prev) => [...prev, incompleteMsg]);
+        window.fridayAPI?.broadcastChatMessage?.(incompleteMsg);
+        void speakRef.current(promptQuestion, {
+          languageCode: settings.preferredLanguage,
+          voice: settings.ttsVoice,
+          accent: settings.voiceAccent,
+        });
+        return;
+      }
 
       const userMsg: ChatMessage = {
         id: `msg_${Date.now()}_u`,
@@ -746,10 +808,11 @@ export const App: React.FC = () => {
         return;
       }
 
-      if (!recognizedText && isLikelySilence(peakLevel)) {
+      const minQualityPeak = settings.audioQualityThreshold || 0.03;
+      if (!recognizedText && (isLikelySilence(peakLevel) || peakLevel < minQualityPeak)) {
         setRobotState('idle');
         appendNotice(
-          'I could not hear anything. Your microphone may be muted, or another app may be using it. Please try again.',
+          'I could not hear any speech clearly. Please speak closer to the microphone.',
           true
         );
         return;
@@ -762,7 +825,16 @@ export const App: React.FC = () => {
     } else {
       // User tapped mic to speak
       try {
-        await startListening(settings.preferredLanguage, (transcript) => setLiveTranscript(transcript));
+        await startListening(
+          settings.preferredLanguage,
+          (transcript) => setLiveTranscript(transcript),
+          {
+            deviceId: settings.microphoneDeviceId,
+            noiseSuppression: settings.noiseSuppression,
+            echoCancellation: settings.echoCancellation,
+            autoGainControl: settings.autoGainControl,
+          }
+        );
       } catch (err: any) {
         setRobotState('error');
         appendNotice(err?.message || 'Could not start the microphone.', true);
@@ -809,6 +881,7 @@ export const App: React.FC = () => {
     echoCancellation: settings.echoCancellation !== false,
     autoGainControl: settings.autoGainControl !== false,
     vadSensitivity: settings.vadSensitivity || 'medium',
+    listeningEnvironment: settings.listeningEnvironment || 'quiet',
     speakerVerificationEnabled: settings.speakerVerificationEnabled,
     enrolledVoiceProfile: settings.enrolledVoiceProfile,
     deviceId: settings.microphoneDeviceId,
@@ -837,7 +910,8 @@ export const App: React.FC = () => {
     },
     onTranscript: (text) => setLiveTranscript(text),
     onUtterance: ({ audioBase64, mimeType, peakLevel, recognizedText, prosody, isVerifiedSpeaker }) => {
-      if (isLikelySilence(peakLevel)) return;
+      const minPeak = settings.audioQualityThreshold || 0.03;
+      if (isLikelySilence(peakLevel) || peakLevel < minPeak) return;
       if (settings.speakerVerificationEnabled && isVerifiedSpeaker === false) {
         const text = "I heard speech, but it doesn't match your enrolled voice. Desktop actions were blocked for security.";
         const msg: ChatMessage = {

@@ -2,6 +2,9 @@
 //
 // The detector is fed microphone levels (0-1) with timestamps and decides when
 // an utterance starts and ends. Pure logic, no DOM, so it is unit-testable.
+//
+// Adaptive thresholds: the caller can feed a live ambient noise floor estimate
+// so the start/end thresholds automatically rise in noisy environments.
 
 export interface VadOptions {
   /** Level that counts as speech (0-1). */
@@ -13,6 +16,13 @@ export interface VadOptions {
   speechStartMs: number;
   /** Quiet must be sustained this long before "end" fires (ms). */
   speechEndMs: number;
+  /**
+   * Noise gate multiplier applied on top of the ambient noise floor.
+   * When > 1, the detector requires the signal to be proportionally
+   * louder than background noise before triggering speech.
+   * Default 1.0 (no additional gate).
+   */
+  noiseGateMultiplier?: number;
 }
 
 export const DEFAULT_VAD_OPTIONS: VadOptions = {
@@ -20,6 +30,7 @@ export const DEFAULT_VAD_OPTIONS: VadOptions = {
   endThreshold: 0.055,
   speechStartMs: 100,
   speechEndMs: 1200,
+  noiseGateMultiplier: 1.0,
 };
 
 /** Barge-in during TTS playback: stricter, so speaker echo does not trigger it. */
@@ -28,11 +39,12 @@ export const BARGE_IN_VAD_OPTIONS: VadOptions = {
   endThreshold: 0.075,
   speechStartMs: 120,
   speechEndMs: 600,
+  noiseGateMultiplier: 1.0,
 };
 
 export type VadEvent =
   | { type: 'start' }
-  | { type: 'end', durationMs: number, peakLevel: number };
+  | { type: 'end'; durationMs: number; peakLevel: number };
 
 export class VoiceActivityDetector {
   private readonly options: VadOptions;
@@ -42,6 +54,9 @@ export class VoiceActivityDetector {
   private quietSince: number | null = null;
   private peak = 0;
 
+  /** Running ambient noise floor estimate. Updated externally via setAmbientFloor(). */
+  private ambientFloor = 0;
+
   constructor(options: Partial<VadOptions> = {}) {
     this.options = { ...DEFAULT_VAD_OPTIONS, ...options };
   }
@@ -50,12 +65,33 @@ export class VoiceActivityDetector {
     return this.speaking;
   }
 
+  /**
+   * Updates the adaptive noise floor. Called from the audio processing loop
+   * when the ambient noise level changes (e.g., a fan turns on).
+   * The VAD dynamically raises its effective threshold to stay above noise.
+   */
+  public setAmbientFloor(floor: number): void {
+    this.ambientFloor = Math.max(0, floor);
+  }
+
+  /** Effective start threshold accounting for adaptive ambient noise floor. */
+  private get effectiveStartThreshold(): number {
+    const gate = this.options.noiseGateMultiplier ?? 1.0;
+    return Math.max(this.options.startThreshold, this.ambientFloor * gate * 1.8);
+  }
+
+  /** Effective end threshold accounting for adaptive ambient noise floor. */
+  private get effectiveEndThreshold(): number {
+    const gate = this.options.noiseGateMultiplier ?? 1.0;
+    return Math.max(this.options.endThreshold, this.ambientFloor * gate * 1.2);
+  }
+
   /** Feed one level sample. Returns an event when the state changes. */
   public update(level: number, nowMs: number): VadEvent | null {
     if (level > this.peak) this.peak = level;
 
     if (!this.speaking) {
-      if (level >= this.options.startThreshold) {
+      if (level >= this.effectiveStartThreshold) {
         this.loudSince ??= nowMs;
         if (nowMs - this.loudSince >= this.options.speechStartMs) {
           this.speaking = true;
@@ -70,7 +106,7 @@ export class VoiceActivityDetector {
     }
 
     // speaking: wait for sustained quiet to close the utterance
-    if (level < this.options.endThreshold) {
+    if (level < this.effectiveEndThreshold) {
       this.quietSince ??= nowMs;
       if (nowMs - this.quietSince >= this.options.speechEndMs) {
         const durationMs = nowMs - this.startedAt;

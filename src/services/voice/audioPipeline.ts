@@ -2,6 +2,7 @@ import { EnrolledSpeakerProfile, FridaySettings, SpeakerVerificationResult } fro
 import { VoiceActivityDetector, VadOptions, DEFAULT_VAD_OPTIONS, BARGE_IN_VAD_OPTIONS } from './voiceActivity';
 import { localWakeWordDetector } from './localWakeWord';
 import { speakerVerificationService } from './speakerVerification';
+import { ListeningEnvironment, getEnvironmentPreset } from './listeningEnvironment';
 
 export interface AudioPipelineConfig {
   noiseSuppression: 'off' | 'standard' | 'strong';
@@ -11,6 +12,11 @@ export interface AudioPipelineConfig {
   deviceId?: string;
   speakerVerificationEnabled?: boolean;
   enrolledVoiceProfile?: EnrolledSpeakerProfile;
+  /**
+   * Listening environment preset. When set, it overrides individual
+   * noiseSuppression / vadSensitivity / compressor parameters.
+   */
+  listeningEnvironment?: ListeningEnvironment;
 }
 
 export interface MicTestResult {
@@ -24,18 +30,53 @@ export interface MicTestResult {
   error?: string;
 }
 
+/** Real-time diagnostics snapshot exposed to the UI. */
+export interface AudioPipelineDiagnostics {
+  /** Selected microphone label (may be empty if permission not yet granted). */
+  micLabel: string;
+  /** Whether the pipeline is running. */
+  active: boolean;
+  /** Whether audio is currently being captured to a recording. */
+  capturing: boolean;
+  /** Whether FRIDAY is speaking (ducking active). */
+  fridaySpeaking: boolean;
+  /** Current live input level (0–1). */
+  liveLevel: number;
+  /** Estimated ambient noise floor (0–1). */
+  ambientNoiseFloor: number;
+  /** Whether the VAD believes speech is in progress. */
+  speechDetected: boolean;
+  /** Noise suppression mode in use. */
+  noiseSuppression: 'off' | 'standard' | 'strong';
+  /** Echo cancellation state. */
+  echoCancellation: boolean;
+  /** VAD sensitivity in use. */
+  vadSensitivity: 'low' | 'medium' | 'high';
+  /** Active listening environment label. */
+  listeningEnvironment: ListeningEnvironment;
+  /** True when signal level approaches clipping. */
+  clipping: boolean;
+}
+
 export interface AudioPipelineCallbacks {
   onLevel?: (level: number) => void;
   onSpeechStart?: () => void;
   onSpeechEnd?: (audioBlob: Blob, samples: Float32Array, verification: SpeakerVerificationResult) => void;
   onWakeWord?: () => void;
   onError?: (err: string) => void;
+  /** Fires every tick with the latest diagnostics snapshot (optional — only connect if UI is showing). */
+  onDiagnostics?: (diag: AudioPipelineDiagnostics) => void;
 }
 
 /**
  * Advanced Voice Isolation & Audio Processing Pipeline
  * Coordinates WebRTC AEC/AGC/NoiseSuppression, Web Audio bandpass & vocal filters,
- * multi-band noise gating, ducking, real-time VAD, local wake-word, and speaker verification.
+ * multi-band noise gating, ducking, real-time adaptive VAD, local wake-word,
+ * and speaker verification.
+ *
+ * Key improvement over the original: the VoiceActivityDetector now receives a
+ * running ambient noise floor update on every tick, so VAD thresholds adapt
+ * dynamically when background noise changes (fan, TV, etc.).
  */
 export class AudioPipeline {
   private config: AudioPipelineConfig = {
@@ -69,6 +110,10 @@ export class AudioPipeline {
   private vad: VoiceActivityDetector;
   private ambientNoiseFloor = 0.02;
   private liveLevel = 0;
+  private clipping = false;
+
+  /** Label of the microphone track that opened successfully. */
+  private micLabel = '';
 
   constructor(config?: Partial<AudioPipelineConfig>) {
     if (config) this.config = { ...this.config, ...config };
@@ -84,7 +129,7 @@ export class AudioPipeline {
     this.config = { ...this.config, ...patch };
 
     // Update VAD sensitivity
-    if (patch.vadSensitivity) {
+    if (patch.vadSensitivity || patch.listeningEnvironment) {
       this.vad = new VoiceActivityDetector(this.getVadOptions());
     }
 
@@ -104,14 +149,48 @@ export class AudioPipeline {
     }
   }
 
+  /** Returns the current ambient noise floor for external monitoring. */
+  public getAmbientNoiseFloor(): number {
+    return this.ambientNoiseFloor;
+  }
+
+  /** Returns whether the VAD is currently detecting speech. */
+  public getIsSpeechDetected(): boolean {
+    return this.vad.isSpeaking;
+  }
+
+  private getEffectiveNoiseSuppression(): 'off' | 'standard' | 'strong' {
+    if (this.config.listeningEnvironment) {
+      return getEnvironmentPreset(this.config.listeningEnvironment).noiseSuppression;
+    }
+    return this.config.noiseSuppression;
+  }
+
+  private getEffectiveVadSensitivity(): 'low' | 'medium' | 'high' {
+    if (this.config.listeningEnvironment) {
+      return getEnvironmentPreset(this.config.listeningEnvironment).vadSensitivity;
+    }
+    return this.config.vadSensitivity;
+  }
+
+  private getNoiseGateMultiplier(): number {
+    if (this.config.listeningEnvironment) {
+      return getEnvironmentPreset(this.config.listeningEnvironment).noiseGateMultiplier;
+    }
+    return 1.0;
+  }
+
   private getVadOptions(): VadOptions {
-    switch (this.config.vadSensitivity) {
+    const sens = this.getEffectiveVadSensitivity();
+    const gate = this.getNoiseGateMultiplier();
+    switch (sens) {
       case 'high':
         return {
           startThreshold: 0.065,
           endThreshold: 0.035,
           speechStartMs: 90,
           speechEndMs: 500,
+          noiseGateMultiplier: gate,
         };
       case 'low':
         return {
@@ -119,10 +198,11 @@ export class AudioPipeline {
           endThreshold: 0.10,
           speechStartMs: 140,
           speechEndMs: 650,
+          noiseGateMultiplier: gate,
         };
       case 'medium':
       default:
-        return DEFAULT_VAD_OPTIONS;
+        return { ...DEFAULT_VAD_OPTIONS, noiseGateMultiplier: gate };
     }
   }
 
@@ -133,18 +213,33 @@ export class AudioPipeline {
     if (this.isRunning) return;
 
     try {
+      const effectiveNS = this.getEffectiveNoiseSuppression();
       const constraints: MediaStreamConstraints = {
         audio: {
           deviceId: this.config.deviceId ? { exact: this.config.deviceId } : undefined,
           echoCancellation: this.config.echoCancellation !== false,
-          noiseSuppression: this.config.noiseSuppression !== 'off',
+          noiseSuppression: effectiveNS !== 'off',
           autoGainControl: this.config.autoGainControl !== false,
+          // Request 16kHz mono for lower latency and better speech model compatibility.
+          // Browsers may not honour all advanced constraints; fail gracefully.
+          sampleRate: { ideal: 16000 },
+          channelCount: { ideal: 1 },
         },
         video: false,
       };
 
       const stream = await navigator.mediaDevices.getUserMedia(constraints);
       this.rawStream = stream;
+
+      // Capture the microphone track label for diagnostics
+      const audioTrack = stream.getAudioTracks()[0];
+      this.micLabel = audioTrack?.label || '';
+
+      // Notify about unexpected device (e.g., user has set a specific device but
+      // the browser opened a different one due to OS routing).
+      if (this.config.deviceId && audioTrack && !audioTrack.getSettings().deviceId?.startsWith(this.config.deviceId)) {
+        console.warn('[AudioPipeline] Opened microphone device does not match requested deviceId. OS may have redirected to a different device.');
+      }
 
       const AudioCtxClass = window.AudioContext || (window as any).webkitAudioContext;
       const ctx = new AudioCtxClass();
@@ -212,17 +307,21 @@ export class AudioPipeline {
   private applyFilterSettings(): void {
     if (!this.highpassFilter || !this.lowpassFilter || !this.compressor) return;
 
-    if (this.config.noiseSuppression === 'off') {
+    const effectiveNS = this.getEffectiveNoiseSuppression();
+    const envPreset = this.config.listeningEnvironment ? getEnvironmentPreset(this.config.listeningEnvironment) : null;
+    const compRatioMult = envPreset?.compressorRatioMultiplier ?? 1.0;
+
+    if (effectiveNS === 'off') {
       this.highpassFilter.frequency.value = 20; // Wide open
       this.lowpassFilter.frequency.value = 20000;
       this.compressor.ratio.value = 1; // Minimal compression
-    } else if (this.config.noiseSuppression === 'strong') {
+    } else if (effectiveNS === 'strong') {
       // Aggressive human speech isolation
       this.highpassFilter.frequency.value = 110; // Steeper low-end cut
       this.highpassFilter.Q.value = 1.0;
       this.lowpassFilter.frequency.value = 3400; // Tighter high-frequency cut
       this.lowpassFilter.Q.value = 1.0;
-      this.compressor.ratio.value = 10;
+      this.compressor.ratio.value = Math.min(20, 10 * compRatioMult);
       this.compressor.threshold.value = -28;
     } else {
       // Standard balance
@@ -230,13 +329,14 @@ export class AudioPipeline {
       this.highpassFilter.Q.value = 0.7;
       this.lowpassFilter.frequency.value = 3800;
       this.lowpassFilter.Q.value = 0.7;
-      this.compressor.ratio.value = 6;
+      this.compressor.ratio.value = Math.min(20, 6 * compRatioMult);
       this.compressor.threshold.value = -24;
     }
   }
 
   /**
    * Sets ducking state: attenuates microphone when FRIDAY is speaking through speakers.
+   * Does not fully silence the mic — the user can still barge-in.
    */
   public setFridaySpeaking(speaking: boolean): void {
     this.isFridaySpeaking = speaking;
@@ -320,7 +420,8 @@ export class AudioPipeline {
 
   /**
    * Real-time Audio Loop:
-   * Extracts RMS level, checks VAD, runs Local Wake Word in Standby, and gathers PCM samples.
+   * Extracts RMS level, updates ambient noise floor, feeds adaptive VAD,
+   * checks Local Wake Word in Standby, and gathers PCM samples.
    */
   private startProcessingLoop(): void {
     if (!this.analyser) return;
@@ -336,17 +437,30 @@ export class AudioPipeline {
 
       // Compute RMS
       let sumSq = 0;
-      for (let i = 0; i < timeDomain.length; i++) sumSq += timeDomain[i] * timeDomain[i];
+      let maxAbs = 0;
+      for (let i = 0; i < timeDomain.length; i++) {
+        const abs = Math.abs(timeDomain[i]);
+        sumSq += timeDomain[i] * timeDomain[i];
+        if (abs > maxAbs) maxAbs = abs;
+      }
       let rms = Math.sqrt(sumSq / timeDomain.length);
 
-      // In Strong mode, apply software spectral noise gate
-      if (this.config.noiseSuppression === 'strong' && rms < this.ambientNoiseFloor * 1.5) {
-        rms = 0;
+      // Clipping detection (sample near ±1.0)
+      this.clipping = maxAbs > 0.98;
+
+      // Track running ambient noise floor using slow exponential smoothing.
+      // Only update from low-energy frames (not from speech or loud transients).
+      if (rms > 0.003 && rms < 0.08) {
+        this.ambientNoiseFloor = this.ambientNoiseFloor * 0.97 + rms * 0.03;
       }
 
-      // Track running ambient noise floor
-      if (rms > 0.005 && rms < 0.08) {
-        this.ambientNoiseFloor = this.ambientNoiseFloor * 0.95 + rms * 0.05;
+      // Feed updated noise floor to adaptive VAD so thresholds self-adjust
+      this.vad.setAmbientFloor(this.ambientNoiseFloor);
+
+      // In Strong mode, apply software spectral noise gate
+      const effectiveNS = this.getEffectiveNoiseSuppression();
+      if (effectiveNS === 'strong' && rms < this.ambientNoiseFloor * this.getNoiseGateMultiplier()) {
+        rms = 0;
       }
 
       this.liveLevel = Math.min(1, rms * 4.5);
@@ -373,6 +487,7 @@ export class AudioPipeline {
       }
 
       // 2. VAD: Detect speech onset / completion
+      // Scale level down when FRIDAY is speaking to suppress echo from speakers.
       const effectiveLevel = this.isFridaySpeaking ? rms * 0.5 : rms;
       const vadEvent = this.vad.update(effectiveLevel, now);
 
@@ -384,6 +499,24 @@ export class AudioPipeline {
         if (this.isCapturing) {
           this.stopCapture();
         }
+      }
+
+      // 3. Emit diagnostics snapshot if a listener is attached
+      if (this.callbacks.onDiagnostics) {
+        this.callbacks.onDiagnostics({
+          micLabel: this.micLabel,
+          active: this.isRunning,
+          capturing: this.isCapturing,
+          fridaySpeaking: this.isFridaySpeaking,
+          liveLevel: this.liveLevel,
+          ambientNoiseFloor: this.ambientNoiseFloor,
+          speechDetected: this.vad.isSpeaking,
+          noiseSuppression: this.getEffectiveNoiseSuppression(),
+          echoCancellation: this.config.echoCancellation !== false,
+          vadSensitivity: this.getEffectiveVadSensitivity(),
+          listeningEnvironment: this.config.listeningEnvironment || 'quiet',
+          clipping: this.clipping,
+        });
       }
 
       this.animFrameId = requestAnimationFrame(tick);

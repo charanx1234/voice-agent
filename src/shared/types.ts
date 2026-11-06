@@ -176,6 +176,19 @@ export interface FridaySettings {
   enrolledVoiceProfile?: EnrolledSpeakerProfile;
   /** Selected microphone device ID. */
   microphoneDeviceId?: string;
+  /**
+   * High-level listening environment preset.
+   * 'quiet'     — normal room, balanced sensitivity.
+   * 'noisy'     — fan, TV, background conversation: stronger suppression.
+   * 'very_noisy'— maximum suppression; FRIDAY requests repetition when unclear.
+   * When set, overrides noiseSuppression and vadSensitivity.
+   */
+  listeningEnvironment?: 'quiet' | 'noisy' | 'very_noisy';
+  /**
+   * Minimum peak audio level (0–1) below which a recording is considered silent
+   * and not sent to Gemini. Default 0.03.
+   */
+  audioQualityThreshold?: number;
 }
 
 export type AiProviderId =

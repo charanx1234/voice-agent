@@ -9,7 +9,9 @@ import { detectLocalWakePhrase } from '@/services/voice/wakeWord';
 import { localWakeWordDetector } from '@/services/voice/localWakeWord';
 import { speakerVerificationService } from '@/services/voice/speakerVerification';
 import { describeMicError } from '@/services/voice/micErrors';
+import { getEnvironmentPreset } from '@/services/voice/listeningEnvironment';
 import { EnrolledSpeakerProfile, VoiceProsodySummary } from '@/shared/types';
+import type { ListeningEnvironment } from '@/services/voice/listeningEnvironment';
 
 export type HandsFreeMode = 'off' | 'standby' | 'active';
 
@@ -30,6 +32,8 @@ export interface HandsFreeOptions {
   echoCancellation?: boolean;
   autoGainControl?: boolean;
   vadSensitivity?: 'low' | 'medium' | 'high';
+  /** High-level listening environment preset. Overrides noiseSuppression/vadSensitivity when set. */
+  listeningEnvironment?: ListeningEnvironment;
   speakerVerificationEnabled?: boolean;
   enrolledVoiceProfile?: EnrolledSpeakerProfile;
   deviceId?: string;
@@ -59,7 +63,15 @@ function blobToBase64(blob: Blob): Promise<string> {
   });
 }
 
-function getVadOptions(sensitivity?: 'low' | 'medium' | 'high'): VadOptions {
+function getVadOptions(
+  sensitivity?: 'low' | 'medium' | 'high',
+  listeningEnvironment?: ListeningEnvironment
+): VadOptions {
+  // If a high-level environment preset is set, derive VAD options from it
+  if (listeningEnvironment) {
+    const preset = getEnvironmentPreset(listeningEnvironment);
+    return getVadOptions(preset.vadSensitivity);
+  }
   switch (sensitivity) {
     case 'high':
       return {
@@ -67,6 +79,7 @@ function getVadOptions(sensitivity?: 'low' | 'medium' | 'high'): VadOptions {
         endThreshold: 0.035,
         speechStartMs: 80,
         speechEndMs: 1000,
+        noiseGateMultiplier: 1.0,
       };
     case 'low':
       return {
@@ -74,10 +87,11 @@ function getVadOptions(sensitivity?: 'low' | 'medium' | 'high'): VadOptions {
         endThreshold: 0.10,
         speechStartMs: 140,
         speechEndMs: 1500,
+        noiseGateMultiplier: 1.0,
       };
     case 'medium':
     default:
-      return DEFAULT_VAD_OPTIONS;
+      return { ...DEFAULT_VAD_OPTIONS };
   }
 }
 
@@ -148,7 +162,7 @@ export function useHandsFree(options: HandsFreeOptions) {
     let timer: ReturnType<typeof setInterval> | null = null;
     let segment: Segment | null = null;
     let recognition: any = null;
-    let normalVad = new VoiceActivityDetector(getVadOptions(options.vadSensitivity));
+    let normalVad = new VoiceActivityDetector(getVadOptions(options.vadSensitivity, options.listeningEnvironment));
     let bargeVad = new VoiceActivityDetector(BARGE_IN_VAD_OPTIONS);
     let usingBarge = false;
     let activeSpeechReported = false;
@@ -273,6 +287,8 @@ export function useHandsFree(options: HandsFreeOptions) {
       }
     };
 
+    let ambientNoiseFloor = 0.02;
+
     const tick = () => {
       if (disposed || !analyser) return;
       const now = Date.now();
@@ -281,7 +297,14 @@ export function useHandsFree(options: HandsFreeOptions) {
 
       let sum = 0;
       for (let i = 0; i < samples.length; i++) sum += samples[i] * samples[i];
-      let level = Math.min(1, Math.sqrt(sum / samples.length) * 5);
+      const rms = Math.sqrt(sum / samples.length);
+      let level = Math.min(1, rms * 5);
+
+      // Track running ambient noise floor using slow exponential smoothing.
+      // Only update from low-energy frames (not from speech or loud transients).
+      if (rms > 0.003 && rms < 0.08) {
+        ambientNoiseFloor = ambientNoiseFloor * 0.97 + rms * 0.03;
+      }
 
       // Report live input level for UI meters & aura
       optionsRef.current.onLevel?.(level);
@@ -316,9 +339,13 @@ export function useHandsFree(options: HandsFreeOptions) {
           localWakeWordDetector.suppress(1000);
         }
         usingBarge = speaking;
-        normalVad = new VoiceActivityDetector(getVadOptions(optionsRef.current.vadSensitivity));
+        normalVad = new VoiceActivityDetector(getVadOptions(optionsRef.current.vadSensitivity, optionsRef.current.listeningEnvironment));
         bargeVad = new VoiceActivityDetector(BARGE_IN_VAD_OPTIONS);
       }
+
+      // Feed updated ambient floor to both VADs for adaptive threshold adjustment
+      normalVad.setAmbientFloor(ambientNoiseFloor);
+      bargeVad.setAmbientFloor(ambientNoiseFloor * 0.5); // barge-in is less aggressive on floor
 
       const effectiveLevel = speaking ? level * 0.4 : level;
       const vad = usingBarge ? bargeVad : normalVad;
@@ -511,6 +538,7 @@ export function useHandsFree(options: HandsFreeOptions) {
     options.echoCancellation,
     options.autoGainControl,
     options.vadSensitivity,
+    options.listeningEnvironment,
   ]);
 
   return { mode, goStandby, wake };

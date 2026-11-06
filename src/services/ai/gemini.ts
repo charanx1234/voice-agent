@@ -436,12 +436,24 @@ export class GeminiService {
                     {
                       text: `Transcribe this microphone speech verbatim in the exact words and languages spoken.
 CRITICAL TRANSCRIPTION RULES:
-1. Handle natural code-switching: The speaker frequently mixes English with Telugu (Tenglish) or Hindi (Hinglish). E.g. "Chrome open chey and Java tutorials search chey", "Spotify lo music play chey", "Notepad open karo aur notes save karo".
-2. Keep English technical words, app names, website names, and file names exact in English: e.g. "Chrome", "Spotify", "GitHub", "Java", "Python", "Notepad", "VS Code", "Terminal", "YouTube".
-3. Preserve Telugu colloquial words and verbs without translating or dropping them: e.g. "chey", "chudu", "pettandi", "vellali", "raayi", "teeyi", "entha", "cheppu", "aapu", "chalu", "lo", "ki", "naaku", "kani", "mariyu", "tarwatha".
-4. Preserve Hindi colloquial words without translating: e.g. "karo", "kholo", "chalao", "band karo", "batao", "aur", "pe".
-5. Return ONLY the spoken words verbatim with no commentary, no quotes, no markdown, and no explanations.
-6. If the audio contains only silence, breathing, clicks, or ambient noise without human speech, return exactly: SILENCE`,
+1. FOREGROUND SPEECH ISOLATION: Prioritize the primary foreground speaker nearest to the microphone. Completely ignore background chatter, television sound, fan drone, music, typing/mouse clicks, or secondary background voices.
+2. NATURAL CODE-SWITCHING: The user speaks natural mixed Telugu-English (Tenglish) and Hinglish. Support mixed language in a single sentence:
+   - "Chrome open chey and Java tutorials search chey"
+   - "Spotify lo music play chey"
+   - "Naaku tomorrow college ki vellali"
+   - "Ee error enti, can you explain?"
+   - "Can you open Chrome and search for Java tutorials?"
+   - "Notepad open karo aur notes save karo"
+3. PRESERVE TECHNICAL & APP WORDS: Always preserve English technical words, application names, websites, and programming keywords exactly in English: "Chrome", "Spotify", "GitHub", "Java", "Python", "Notepad", "VS Code", "Terminal", "YouTube", "Google", "WhatsApp", "Discord", "Settings".
+4. PRESERVE COLLOQUIAL VOCABULARY: Preserve colloquial words without translating or altering:
+   - Telugu: "chey", "chudu", "pettandi", "vellali", "raayi", "teeyi", "entha", "cheppu", "aapu", "chalu", "lo", "ki", "naaku", "kani", "mariyu", "tarwatha", "enti".
+   - Hindi: "karo", "kholo", "chalao", "band karo", "batao", "aur", "pe", "kaise", "kya".
+5. NEVER INVENT WORDS: Do not guess or fabricate words to compensate for audio corruption or pauses.
+6. INCOMPLETE SPEECH: If the user paused or was cut off mid-sentence (e.g. "Friday, open..." or "search for..."), transcribe what was spoken and append "..." at the end.
+7. NO SPEECH OR UNINTELLIGIBLE:
+   - If the audio contains only ambient room noise, fan hum, keyboard clicks, coughing, breathing, or silence: return exactly: SILENCE
+   - If human speech is completely muffled, unintelligible, or overwhelmed by noise such that words cannot be discerned: return exactly: UNCLEAR
+8. Output ONLY the verbatim transcript text. No quotes, no markdown, no conversational commentary.`,
                     },
                   ],
                 },
