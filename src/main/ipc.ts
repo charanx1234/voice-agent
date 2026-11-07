@@ -21,6 +21,7 @@ import { desktopControlService } from '../services/desktop/desktopControlService
 import { executeScreenControlTool } from '../services/agent/screenControlTools';
 import { AiProviderId, ChatMessage, MemoryInputPayload, PetCompanionState, SpeechSynthesisRequest, ToolConfirmationPayload } from '../shared/types';
 import { VoiceCoordinator } from './voiceCoordinator';
+import { capabilityRegistry } from '../services/capabilities/capabilityRegistry';
 
 let handlersRegistered = false;
 
@@ -571,6 +572,62 @@ export function registerIpcHandlers(
     console.log('[IPC] Pet requested full app quit.');
     app.quit();
   });
+
+  let isPetExpanded = false;
+
+  ipcMain.handle(IPC_CHANNELS.PET_SET_EXPANDED, async (_event, expand: boolean) => {
+    const val = Boolean(expand);
+    isPetExpanded = val;
+    const petWin = getPetWindow ? getPetWindow() : null;
+    if (petWin && !petWin.isDestroyed()) {
+      const bounds = petWin.getBounds();
+      const targetW = val ? 380 : 200;
+      const targetH = val ? 580 : 220;
+      
+      let newX = bounds.x - (targetW - bounds.width);
+      let newY = bounds.y - (targetH - bounds.height);
+
+      const display = screen.getDisplayMatching(bounds);
+      const { workArea } = display;
+
+      if (newX < workArea.x) newX = workArea.x;
+      if (newY < workArea.y) newY = workArea.y;
+      if (newX + targetW > workArea.x + workArea.width) {
+        newX = workArea.x + workArea.width - targetW;
+      }
+      if (newY + targetH > workArea.y + workArea.height) {
+        newY = workArea.y + workArea.height - targetH;
+      }
+
+      petWin.setBounds({
+        x: Math.round(newX),
+        y: Math.round(newY),
+        width: targetW,
+        height: targetH,
+      });
+    }
+    return val;
+  });
+
+  ipcMain.handle(IPC_CHANNELS.PET_GET_EXPANDED, async () => {
+    return isPetExpanded;
+  });
+
+  // Shared Capabilities
+  ipcMain.handle(IPC_CHANNELS.CAPABILITIES_LIST, async () => {
+    return capabilityRegistry.listPetCapabilities();
+  });
+
+  ipcMain.handle(
+    IPC_CHANNELS.CAPABILITIES_EXECUTE,
+    async (_event, payload: { id: string; params?: any }) => {
+      try {
+        return await capabilityRegistry.execute(payload.id, payload.params);
+      } catch (err: any) {
+        return { error: err.message };
+      }
+    }
+  );
 
   ipcMain.handle(IPC_CHANNELS.PET_SET_ENABLED, async (_event, enabled: boolean) => {
     const val = Boolean(enabled);

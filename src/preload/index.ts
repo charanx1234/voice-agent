@@ -172,6 +172,15 @@ const apiBridge: FridayApiBridge = {
     ipcRenderer.invoke(IPC_CHANNELS.PET_SET_ENABLED, enabled),
   updatePetState: (state: Partial<PetCompanionState>) =>
     ipcRenderer.send(IPC_CHANNELS.PET_STATE_CHANGED, state),
+  petSetExpanded: (expanded: boolean) =>
+    ipcRenderer.invoke(IPC_CHANNELS.PET_SET_EXPANDED, expanded),
+  petGetExpanded: () =>
+    ipcRenderer.invoke(IPC_CHANNELS.PET_GET_EXPANDED),
+
+  // Shared Capabilities Registry
+  listCapabilities: () => ipcRenderer.invoke(IPC_CHANNELS.CAPABILITIES_LIST),
+  executeCapability: (id: string, params?: any) =>
+    ipcRenderer.invoke(IPC_CHANNELS.CAPABILITIES_EXECUTE, { id, params }),
 
   // Modular AI Providers
   getAiProviders: () => ipcRenderer.invoke(IPC_CHANNELS.PROVIDER_GET_STATUS),

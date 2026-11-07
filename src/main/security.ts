@@ -63,6 +63,12 @@ export const IPC_CHANNELS = {
   PET_QUIT: 'friday:pet-quit',
   PET_SET_ENABLED: 'friday:pet-set-enabled',
   PET_GET_ENABLED: 'friday:pet-get-enabled',
+  PET_SET_EXPANDED: 'friday:pet-set-expanded',
+  PET_GET_EXPANDED: 'friday:pet-get-expanded',
+
+  // Shared Capability & Feature Registry
+  CAPABILITIES_LIST: 'friday:capabilities-list',
+  CAPABILITIES_EXECUTE: 'friday:capabilities-execute',
 
   // Modular AI Providers
   PROVIDER_GET_STATUS: 'friday:provider-get-status',

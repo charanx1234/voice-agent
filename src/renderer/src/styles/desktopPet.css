@@ -341,3 +341,359 @@ body.pet-mode #root {
     opacity: 0.95;
   }
 }
+
+/* ==========================================================================
+   PET-FIRST INTERACTIVE COMPANION INTERFACE
+   ========================================================================== */
+
+.pet-interactive-shell {
+  width: 100vw;
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  position: relative;
+  overflow: hidden;
+  box-sizing: border-box;
+}
+
+/* Hover pill in compact mode */
+.pet-hover-trigger {
+  position: absolute;
+  top: 8px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(17, 24, 39, 0.88);
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  color: #f3f4f6;
+  font-size: 0.72rem;
+  font-weight: 600;
+  padding: 3px 10px;
+  border-radius: 9999px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.35);
+  cursor: pointer;
+  pointer-events: auto;
+  opacity: 0;
+  transition: opacity 0.2s ease, transform 0.2s ease;
+  z-index: 20;
+  white-space: nowrap;
+  -webkit-app-region: no-drag;
+}
+
+.pet-root:hover .pet-hover-trigger {
+  opacity: 1;
+  transform: translateX(-50%) translateY(0);
+}
+
+/* Expanded Card UI */
+.pet-companion-card {
+  width: calc(100vw - 16px);
+  margin: 8px auto 0 auto;
+  flex: 1;
+  min-height: 0;
+  background: rgba(12, 15, 22, 0.94);
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 18px;
+  box-shadow: 0 16px 36px rgba(0, 0, 0, 0.55), 0 0 1px rgba(255, 255, 255, 0.2);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  z-index: 10;
+  pointer-events: auto;
+  -webkit-app-region: no-drag;
+}
+
+.pet-card-header {
+  height: 38px;
+  padding: 0 10px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.03);
+  user-select: none;
+}
+
+.pet-card-header-left {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.pet-status-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #10b981;
+  box-shadow: 0 0 8px #10b981;
+}
+
+.pet-status-dot.listening {
+  background: #38bdf8;
+  box-shadow: 0 0 10px #38bdf8;
+  animation: pet-dot-pulse 1s infinite alternate;
+}
+
+.pet-status-dot.thinking {
+  background: #a855f7;
+  box-shadow: 0 0 10px #a855f7;
+  animation: pet-dot-pulse 1s infinite alternate;
+}
+
+.pet-status-dot.speaking {
+  background: #f59e0b;
+  box-shadow: 0 0 10px #f59e0b;
+  animation: pet-dot-pulse 0.7s infinite alternate;
+}
+
+.pet-status-dot.error {
+  background: #ef4444;
+  box-shadow: 0 0 8px #ef4444;
+}
+
+@keyframes pet-dot-pulse {
+  from { transform: scale(0.9); opacity: 0.7; }
+  to { transform: scale(1.3); opacity: 1; }
+}
+
+.pet-title {
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  color: #ffffff;
+}
+
+/* Personality Mode Selector */
+.pet-personality-group {
+  display: flex;
+  background: rgba(0, 0, 0, 0.4);
+  padding: 2px;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  gap: 2px;
+}
+
+.pet-personality-btn {
+  background: transparent;
+  border: none;
+  color: #9ca3af;
+  font-size: 0.64rem;
+  font-weight: 600;
+  padding: 2px 7px;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.18s ease;
+}
+
+.pet-personality-btn:hover {
+  color: #ffffff;
+}
+
+.pet-personality-btn.active {
+  background: rgba(255, 255, 255, 0.15);
+  color: #ffffff;
+}
+
+.pet-personality-btn.active.roast {
+  background: rgba(239, 68, 68, 0.25);
+  color: #fca5a5;
+}
+
+.pet-personality-btn.active.simple {
+  background: rgba(56, 189, 248, 0.22);
+  color: #7dd3fc;
+}
+
+/* Header Action Buttons */
+.pet-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.pet-icon-btn {
+  background: transparent;
+  border: none;
+  color: #9ca3af;
+  cursor: pointer;
+  padding: 3px;
+  border-radius: 5px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.15s ease;
+}
+
+.pet-icon-btn:hover {
+  color: #ffffff;
+  background: rgba(255, 255, 255, 0.08);
+}
+
+/* Chat & Messages Area */
+.pet-chat-area {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.pet-chat-bubble {
+  max-width: 90%;
+  padding: 7px 11px;
+  border-radius: 12px;
+  font-size: 0.78rem;
+  line-height: 1.42;
+  word-break: break-word;
+}
+
+.pet-chat-bubble.user {
+  align-self: flex-end;
+  background: rgba(255, 255, 255, 0.12);
+  color: #ffffff;
+  border-bottom-right-radius: 3px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.pet-chat-bubble.assistant {
+  align-self: flex-start;
+  background: rgba(18, 24, 38, 0.75);
+  color: #e5e7eb;
+  border-bottom-left-radius: 3px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.pet-live-transcript-box {
+  padding: 6px 10px;
+  background: rgba(56, 189, 248, 0.08);
+  border: 1px dashed rgba(56, 189, 248, 0.35);
+  border-radius: 10px;
+  color: #7dd3fc;
+  font-size: 0.74rem;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  animation: pet-listen-pulse 1.4s infinite alternate;
+}
+
+@keyframes pet-listen-pulse {
+  from { opacity: 0.75; }
+  to { opacity: 1; }
+}
+
+/* Quick Tools Bar */
+.pet-tools-bar {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 10px;
+  background: rgba(0, 0, 0, 0.25);
+  border-top: 1px solid rgba(255, 255, 255, 0.05);
+  overflow-x: auto;
+}
+
+.pet-tool-chip {
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  color: #d1d5db;
+  font-size: 0.66rem;
+  font-weight: 500;
+  padding: 3px 8px;
+  border-radius: 6px;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  white-space: nowrap;
+  transition: all 0.15s ease;
+}
+
+.pet-tool-chip:hover {
+  background: rgba(255, 255, 255, 0.14);
+  color: #ffffff;
+}
+
+/* Input Bar */
+.pet-input-container {
+  padding: 8px 10px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: rgba(10, 12, 18, 0.8);
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.pet-input-field {
+  flex: 1;
+  background: rgba(255, 255, 255, 0.07);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 8px;
+  padding: 6px 10px;
+  color: #ffffff;
+  font-size: 0.76rem;
+  outline: none;
+  transition: border-color 0.15s ease;
+}
+
+.pet-input-field:focus {
+  border-color: rgba(255, 255, 255, 0.35);
+}
+
+.pet-mic-btn {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  background: rgba(255, 255, 255, 0.08);
+  color: #ffffff;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.18s ease;
+}
+
+.pet-mic-btn.active {
+  background: #38bdf8;
+  color: #000000;
+  border-color: #38bdf8;
+  box-shadow: 0 0 12px rgba(56, 189, 248, 0.6);
+}
+
+.pet-mic-btn:hover {
+  transform: scale(1.05);
+}
+
+.pet-send-btn {
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  border: none;
+  background: #ffffff;
+  color: #000000;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  transition: all 0.15s ease;
+}
+
+.pet-send-btn:hover {
+  background: #e5e7eb;
+}
+
+/* Expanded footer character positioning */
+.pet-footer-character {
+  height: 140px;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  padding-right: 14px;
+  pointer-events: auto;
+  position: relative;
+}

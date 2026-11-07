@@ -586,6 +586,12 @@ export interface FridayApiBridge {
   petQuit: () => void;
   setDesktopPetEnabled: (enabled: boolean) => Promise<boolean>;
   updatePetState: (state: Partial<PetCompanionState>) => void;
+  petSetExpanded: (expanded: boolean) => Promise<boolean>;
+  petGetExpanded: () => Promise<boolean>;
+
+  // Shared Capabilities Registry
+  listCapabilities: () => Promise<any[]>;
+  executeCapability: (id: string, params?: any) => Promise<any>;
 
   // Modular AI Providers
   getAiProviders: () => Promise<AiProviderStatus>;

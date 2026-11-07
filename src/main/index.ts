@@ -11,6 +11,9 @@ import { settingsStore } from '../services/storage/settingsStore';
 
 app.setName('friday-ai-companion');
 
+// Prevent black window artifacts on Windows with frameless/transparent windows
+app.commandLine.appendSwitch('disable-gpu-compositing');
+
 // Production builds write to a log file only; development keeps terminal output.
 initLogger({ keepConsole: !app.isPackaged });
 
@@ -150,7 +153,11 @@ function createPetWindow(): void {
   petWindow.on('moved', () => {
     if (!petWindow || petWindow.isDestroyed()) return;
     const [x, y] = petWindow.getPosition();
-    settingsStore.saveSettings({ petPosition: { x, y } });
+    const [w] = petWindow.getSize();
+    // Only persist coordinates when in compact mode
+    if (w <= 240) {
+      settingsStore.saveSettings({ petPosition: { x, y } });
+    }
   });
 
   const indexPath = path.join(__dirname, '../../dist-renderer/index.html');
@@ -192,17 +199,27 @@ function createWindow(): void {
 
   registerIpcHandlers(getMainWindow, getPetWindow);
 
+  // PET-FIRST: By default, FRIDAY runs the Desktop Pet as the primary interface.
+  // The main window runs silently in the background hosting audio and background tasks.
+  const startWithDashboard =
+    process.argv.includes('--dashboard') ||
+    settingsStore.getSettings().desktopPetEnabled === false;
+
   mainWindow.once('ready-to-show', () => {
-    mainWindow?.show();
+    if (startWithDashboard) {
+      mainWindow?.show();
+    }
   });
 
-  // Guarantee window is visible even if ready-to-show is delayed
-  setTimeout(() => {
-    if (mainWindow && !mainWindow.isDestroyed() && !mainWindow.isVisible()) {
-      mainWindow.show();
-      mainWindow.focus();
-    }
-  }, 1200);
+  // Guarantee window is visible only if dashboard mode is requested
+  if (startWithDashboard) {
+    setTimeout(() => {
+      if (mainWindow && !mainWindow.isDestroyed() && !mainWindow.isVisible()) {
+        mainWindow.show();
+        mainWindow.focus();
+      }
+    }, 1200);
+  }
 
   // Only the microphone is ever granted; every other permission request is denied.
   mainWindow.webContents.session.setPermissionRequestHandler(

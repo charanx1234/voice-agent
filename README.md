@@ -1,14 +1,24 @@
 # FRIDAY — Personal AI Assistant 🤖
 
-**FRIDAY** is an intelligent, opinionated personal AI assistant for Windows, powered by **Google Gemini** with native multilingual Indian voice conversation capabilities, advanced microphone voice isolation for noisy environments, and a 2D animated robot character.
+**FRIDAY** is an intelligent personal AI desktop companion for Windows, powered by **Google Gemini** with a **Pet-First Architecture**, native multilingual Indian voice conversation capabilities, advanced microphone voice isolation for noisy environments, and an interactive 2D animated desktop character.
 
-FRIDAY understands and speaks **Telugu (తెలుగు)**, **Indian English**, **Hindi (हिन्दी)**, **Tamil (தமிழ்)**, and **Kannada (ಕನ್ನಡ)**, handles natural mixed-language code-switching (e.g. *Tenglish* and *Hinglish*), responds naturally with lip-synced mouth animations and audio waveforms, and performs real desktop tasks on your PC with your permission.
+In FRIDAY, **the Desktop Pet IS FRIDAY** — the primary, everyday face and interaction point. The dashboard runs seamlessly in the background hosting the audio pipeline, wake-word detection, and agent tools, while you interact directly with the floating desktop companion.
 
 ---
 
 ## 🌟 Key Features
 
-### 1. Robust Universal Audio Pipeline & Voice Isolation 🎙️
+### 1. Pet-First Architecture 🐾
+- **The Pet is the Main Interface**:
+  - The floating Desktop Pet is your primary companion. Clicking the pet expands its sleek translucent glass companion card without cluttering your screen.
+  - Full feature access: Voice conversations, text typing input bar, real-time live transcription, streaming AI responses with one-click copy, and notifications.
+  - **Dynamic Smart Resizing**: The pet floats compactly (200×220) and smoothly expands to an interactive companion interface (380×580) on click or when "Hey Friday" wakes it.
+  - **Personality Mode Switcher**: Switch immediately between **Simple** (succinct), **Moderate** (helpful), and **Roast** (witty banter) modes right from the pet header.
+  - **Quick Capability Tools**: One-click access to Screen Understanding (capture & analyze), Web Reader, Quick Notes, Reminders, and Audio Mute.
+  - **Optional Dashboard**: Closing the dashboard window merely hides it in the background; FRIDAY, the pet, wake-word detection, and memory services continue uninterrupted.
+  - **Single Unified Architecture**: One AI brain, one memory database, one conversation history, and one shared capability registry. The pet never runs a simplified chatbot; it shares 100% of FRIDAY's tools and backend intelligence.
+
+### 2. Robust Universal Audio Pipeline & Voice Isolation 🎙️
 FRIDAY includes a production-grade, lossless linear PCM audio pipeline with hardware-level voice isolation:
 - **Direct Linear PCM -> 16kHz Mono WAV Engine**:
   - Raw audio is captured directly as uncompressed 32-bit float PCM buffers via Web Audio API, downsampled via linear interpolation, and encoded with a standard 44-byte RIFF WAVE header.
@@ -43,7 +53,7 @@ FRIDAY includes a production-grade, lossless linear PCM audio pipeline with hard
   - Silence and ambient noise return cleanly to standby without fake transcripts.
   - Cut-off speech (e.g. *"Friday, open..."*) is recognized as incomplete, and FRIDAY asks *"Which application would you like me to open?"* instead of guessing an application.
 
-### 2. Expressive 2D Robot Character & Desktop Pet
+### 3. Expressive 2D Robot Character & Desktop Pet
 - **Sleek Cyber Aesthetic**: Deep charcoal & metallic black chassis with glowing cyan accents (`#00e5ff`).
 - **Reactive Eyes**: Expressive rounded eyes that spontaneously blink, widen when attentive, scan when thinking, and show gentle alert in error states.
 - **Audio-Driven Lip-Sync**: The LED mouth bars dynamically oscillate and stretch in real-time according to the actual audio frequency amplitude (`AudioAnalyser` Web Audio API) during speech playback.
@@ -181,17 +191,16 @@ This places a `FRIDAY.lnk` shortcut with the custom FRIDAY icon directly onto yo
 
 ## 🧪 Automated Testing
 
-FRIDAY includes 36 test suites with 274 unit and integration tests covering audio filtering, linear PCM to 16kHz WAV encoding, adaptive VAD, local intent execution, memory persistence, speaker verification, and tool safety:
+FRIDAY includes 37 test suites with 278 unit and integration tests covering the Pet-First architecture, capability registry, audio filtering, linear PCM to 16kHz WAV encoding, adaptive VAD, local intent execution, memory persistence, speaker verification, and tool safety:
 
 ```powershell
 cd C:\25r11a6760\FRIDAY; npm test
 ```
 
-All 36 test suites pass cleanly:
+All 37 test suites pass cleanly:
 ```
- Test Files  36 passed (36)
-      Tests  274 passed (274)
-   Duration  4.34s
+ Test Files  37 passed (37)
+      Tests  278 passed (278)
 ```
 
 ---
