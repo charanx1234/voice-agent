@@ -13,6 +13,8 @@ app.setName('friday-ai-companion');
 
 // Prevent black window artifacts on Windows with frameless/transparent windows
 app.commandLine.appendSwitch('disable-gpu-compositing');
+app.commandLine.appendSwitch('autoplay-policy', 'no-user-gesture-required');
+app.commandLine.appendSwitch('disable-background-timer-throttling');
 
 // Production builds write to a log file only; development keeps terminal output.
 initLogger({ keepConsole: !app.isPackaged });

@@ -188,9 +188,11 @@ export class NeuralVoiceService {
   private readonly activeSockets = new Set<WebSocket>();
   private readonly cacheLimit = 40;
   private usageCache: { value: ElevenLabsUsage; expiresAt: number } | null = null;
+  private murfAuthFailedKey: string | null = null;
 
   private getMurfApiKey(): string {
-    if (process.env.MURF_API_KEY?.trim()) return process.env.MURF_API_KEY.trim();
+    const envKey = process.env.MURF_API_KEY?.trim() || process.env.MURF_KEY?.trim();
+    if (envKey) return envKey;
     const rawKey = settingsStore.getElevenLabsApiKey()?.trim();
     if (rawKey && detectApiKeyProvider(rawKey) === 'murf') return rawKey;
     return '';
@@ -210,6 +212,14 @@ export class NeuralVoiceService {
   } {
     const murfKey = this.getMurfApiKey();
     if (murfKey) {
+      if (this.murfAuthFailedKey === murfKey) {
+        return {
+          provider: 'murf',
+          configured: true,
+          displayName: 'Murf AI (Authentication Failed - 401)',
+          details: 'The Murf API key was rejected (401 Invalid api-key). Please update it in Settings. Falling back to Edge Neural.',
+        };
+      }
       return {
         provider: 'murf',
         configured: true,
@@ -257,12 +267,14 @@ export class NeuralVoiceService {
     const settings = settingsStore.getSettings();
     const preferred = settings.ttsEngine || 'auto';
     const murfKey = this.getMurfApiKey();
+    // Do not retry Murf if the currently configured key was already rejected (401)
+    const isMurfAvailable = Boolean(murfKey && this.murfAuthFailedKey !== murfKey);
     const elKey = this.getElevenLabsApiKey();
-    const hasExternal = Boolean(murfKey || elKey);
+    const hasExternal = Boolean(isMurfAvailable || elKey);
 
     const order: Array<'murf' | 'elevenlabs' | 'edge' | 'gemini'> =
       preferred === 'elevenlabs'
-        ? (murfKey ? ['murf', 'edge', 'gemini'] : ['elevenlabs', 'edge', 'gemini'])
+        ? (isMurfAvailable ? ['murf', 'edge', 'gemini'] : ['elevenlabs', 'edge', 'gemini'])
         : preferred === 'gemini'
         ? ['gemini', 'edge']
         : preferred === 'edge'
@@ -270,7 +282,7 @@ export class NeuralVoiceService {
         : preferred === 'system'
         ? []
         : hasExternal
-        ? (murfKey ? ['murf', 'edge', 'gemini'] : ['elevenlabs', 'edge', 'gemini'])
+        ? (isMurfAvailable ? ['murf', 'edge', 'gemini'] : ['elevenlabs', 'edge', 'gemini'])
         : ['edge', 'gemini'];
 
     const synthesis = (async () => {
@@ -359,6 +371,11 @@ export class NeuralVoiceService {
           errDetail = await response.text();
         }
         const safe = redactApiKey(errDetail, [apiKey]);
+        if (response.status === 401) {
+          this.murfAuthFailedKey = apiKey;
+          console.warn('[NeuralVoice] Murf AI authentication failed (401 Unauthorized): Invalid api-key provided. Falling back to Edge Neural / Gemini TTS.');
+          throw new Error('Murf AI request failed (401): Invalid api-key provided. Please update your Murf API key in Settings.');
+        }
         throw new Error(`Murf AI request failed (${response.status}): ${safe}`);
       }
 
@@ -501,6 +518,19 @@ export class NeuralVoiceService {
   public async getUsage(force = false): Promise<ElevenLabsUsage> {
     const murfKey = this.getMurfApiKey();
     if (murfKey) {
+      if (this.murfAuthFailedKey === murfKey) {
+        return {
+          configured: true,
+          available: false,
+          tier: 'Murf AI (Auth Failed - 401)',
+          status: 'unauthorized',
+          characterCount: 0,
+          characterLimit: 0,
+          remainingCharacters: 0,
+          resetAt: null,
+          error: 'Murf AI API key was rejected (401 Invalid api-key). Please update your key in Settings.',
+        };
+      }
       return {
         configured: true,
         available: true,

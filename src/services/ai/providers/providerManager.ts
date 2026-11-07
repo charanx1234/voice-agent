@@ -142,12 +142,31 @@ export class ProviderManager {
     params: ProviderGenerateParams,
     onStream?: (event: Omit<ResponseStreamEvent, 'requestId'>) => void
   ): Promise<ProviderGenerateResult> {
+    const userText = (params?.message || '').trim();
+
+    // Prevent empty or whitespace-only queries from generating requests to AI providers
+    if (!userText && !params?.audioBase64) {
+      const settings = settingsStore.getSettings();
+      const preferredLang = params?.language || settings.preferredLanguage || 'en-IN';
+      const errMessage = preferredLang.startsWith('te')
+        ? 'మీరు చెప్పింది నాకు వినిపించలేదు. దయచేసి మళ్ళీ చెప్పండి లేదా టైప్ చేయండి.'
+        : "I didn't catch that. Please speak or type your request.";
+      onStream?.({ type: 'delta', text: errMessage });
+      onStream?.({ type: 'complete' });
+      return {
+        text: errMessage,
+        detectedLanguage: preferredLang,
+        providerUsed: 'local_fast',
+        error: 'EMPTY_USER_MESSAGE',
+      };
+    }
+
     // Fast local intent execution (<50ms) for app controls, media, volume, time, date, window
-    if (!params.audioBase64 && params.message) {
+    if (!params.audioBase64 && userText) {
       const settings = settingsStore.getSettings();
       const preferredLang = params.language || settings.preferredLanguage || 'en-IN';
       const fastResult = await fastLocalIntentRouter.tryRoute(
-        params.message,
+        userText,
         preferredLang,
         settings.personalityMode
       );

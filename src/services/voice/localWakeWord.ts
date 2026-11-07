@@ -66,10 +66,11 @@ export class LocalWakeWordDetector {
    */
   public processFrequencyData(
     freqData: Uint8Array | Float32Array,
-    sampleRate = 44100
+    sampleRate = 44100,
+    timestamp?: number
   ): boolean {
-    const now = Date.now();
-    if (this.isSuppressed() || now - this.lastWakeTime < this.WAKE_COOLDOWN_MS) {
+    const now = timestamp ?? Date.now();
+    if (this.isSuppressed() || (this.lastWakeTime > 0 && now - this.lastWakeTime < this.WAKE_COOLDOWN_MS)) {
       return false;
     }
 
@@ -162,13 +163,14 @@ export class LocalWakeWordDetector {
     // 1. Identify distinct energy peaks (syllables) and troughs (valleys)
     const rmsSeries = history.map((h) => h.metrics.rms);
     const maxRms = Math.max(...rmsSeries);
-    if (maxRms < 0.12) {
+    const minWakeThreshold = 0.05 * (1.2 - this.sensitivity * 0.5); // ~0.042 at default sensitivity 0.70
+    if (maxRms < minWakeThreshold) {
       // Too quiet or background silence
       return false;
     }
 
-    // Dynamic threshold based on peak level
-    const speechThreshold = maxRms * 0.28;
+    // Dynamic threshold based on peak level and sensitivity
+    const speechThreshold = maxRms * Math.max(0.20, 0.32 - this.sensitivity * 0.12);
     const peaks: { index: number; time: number; rms: number; hasFricative: boolean }[] = [];
 
     let inPeak = false;
@@ -197,8 +199,8 @@ export class LocalWakeWordDetector {
         if (inPeak) {
           inPeak = false;
           const duration = history[i].time - peakStart;
-          // Valid speech syllables are between 80ms and 500ms
-          if (duration >= 80 && duration <= 500) {
+          // Valid speech syllables are between 70ms and 600ms
+          if (duration >= 70 && duration <= 600) {
             peaks.push({
               index: peakMaxIdx,
               time: history[peakMaxIdx].time,
@@ -213,7 +215,7 @@ export class LocalWakeWordDetector {
     if (inPeak) {
       const last = history[history.length - 1];
       const duration = last.time - peakStart;
-      if (duration >= 80 && duration <= 500) {
+      if (duration >= 70 && duration <= 600) {
         peaks.push({
           index: peakMaxIdx,
           time: history[peakMaxIdx].time,
@@ -223,14 +225,14 @@ export class LocalWakeWordDetector {
       }
     }
 
-    // "Hey Friday" produces 3 syllables (or 2 for "Friday")
-    if (peaks.length === 2 || peaks.length === 3) {
+    // "Hey Friday" produces 3 syllables (or 2 for "Friday", or 4 with diphthong splits)
+    if (peaks.length >= 2 && peaks.length <= 4) {
       const firstPeak = peaks[0];
       const lastPeak = peaks[peaks.length - 1];
       const totalSpan = lastPeak.time - firstPeak.time;
 
-      // Phrase timing should span between 350ms and 1300ms
-      if (totalSpan >= 350 && totalSpan <= 1300) {
+      // Phrase timing should span between 300ms and 1500ms
+      if (totalSpan >= 300 && totalSpan <= 1500) {
         // "Fri-" has a distinctive unvoiced fricative /f/ onset or burst
         const hasFricativeOnset = peaks.some((p) => p.hasFricative);
 
@@ -243,15 +245,15 @@ export class LocalWakeWordDetector {
           for (let v = valleyStart; v <= valleyEnd; v++) {
             if (history[v].metrics.rms < minRms) minRms = history[v].metrics.rms;
           }
-          // The valley should drop by at least 30% compared to the peak
-          if (minRms > peaks[p].rms * 0.70) {
+          // The valley should dip noticeably below adjacent peaks
+          if (minRms > peaks[p].rms * 0.85) {
             hasClearValleys = false;
             break;
           }
         }
 
         // Trigger condition: Must have clear valleys AND authentic fricative onset (/f/ in "Friday")
-        if (hasClearValleys && hasFricativeOnset) {
+        if (hasClearValleys && (hasFricativeOnset || this.sensitivity >= 0.70)) {
           return true;
         }
       }

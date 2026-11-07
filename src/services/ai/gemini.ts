@@ -251,10 +251,10 @@ export function assembleStreamedResponse(chunks: any[]): any {
 }
 
 export interface SendMessageParams {
-  message: string;
+  message?: string;
   audioBase64?: string;
   audioMimeType?: string;
-  conversationHistory: ChatMessage[];
+  conversationHistory?: ChatMessage[];
   language?: string;
   prosody?: VoiceProsodySummary;
   requestId?: string;
@@ -597,6 +597,24 @@ CRITICAL TRANSCRIPTION RULES:
     const preferredLang = params.language || settings.preferredLanguage || 'te-IN';
     const candidates = buildModelCandidates(settings.modelName);
     const userText = (params.message || '').trim();
+
+    // Prevent empty or whitespace-only requests from reaching Gemini
+    if (!userText && !params.audioBase64) {
+      const errMessage = preferredLang.startsWith('te')
+        ? 'మీరు చెప్పింది నాకు వినిపించలేదు. దయచేసి మళ్ళీ చెప్పండి లేదా టైప్ చేయండి.'
+        : "I didn't catch that. Please speak or type your request.";
+      hooks.onStream?.({ type: 'delta', text: errMessage });
+      hooks.onStream?.({ type: 'complete' });
+      return {
+        text: errMessage,
+        detectedLanguage: preferredLang,
+        toolCalls: [],
+        mood: 'calm',
+        safetyOverride: false,
+        error: 'EMPTY_USER_MESSAGE',
+      };
+    }
+
     const moodAnalysis = analyzeMood(userText, params.prosody);
 
     // Block unintended desktop execution if command was addressed to another assistant
@@ -697,7 +715,8 @@ CRITICAL TRANSCRIPTION RULES:
 
     try {
     // Local, per-turn situation brief: mode, topic, follow-up, stated constraints.
-    const conversationBrief = buildConversationBrief(params.conversationHistory, userText || 'voice message').text;
+    const rawHistory = Array.isArray(params.conversationHistory) ? params.conversationHistory : [];
+    const conversationBrief = buildConversationBrief(rawHistory, userText || 'voice message').text;
 
     // Long-term memory is retrieved once per turn and injected as system context.
     let memoryBlock = '';
@@ -827,7 +846,9 @@ CRITICAL TRANSCRIPTION RULES:
 
     // Prepare conversation history (keep last 10 turns to conserve context window)
     const formattedHistory: any[] = [];
-    for (const msg of normalizeConversationHistory(params.conversationHistory.slice(-10))) {
+    const validHistory = Array.isArray(params.conversationHistory) ? params.conversationHistory : [];
+    for (const msg of normalizeConversationHistory(validHistory.slice(-10))) {
+      if (!msg || typeof msg.text !== 'string' || !msg.text.trim()) continue;
       formattedHistory.push({
         role: msg.role === 'user' ? 'user' : 'model',
         parts: [{ text: msg.text }],
@@ -841,20 +862,21 @@ CRITICAL TRANSCRIPTION RULES:
 
     // Prepare user parts (text and/or audio)
     const userParts: any[] = [];
+    const safeUserText = (params.message || '').trim();
     if (params.audioBase64) {
       userParts.push({
         inlineData: {
-          mimeType: params.audioMimeType || 'audio/webm',
+          mimeType: params.audioMimeType || 'audio/wav',
           data: params.audioBase64,
         },
       });
       userParts.push({
         text:
-          params.message ||
+          safeUserText ||
           'Please listen to the attached audio, understand what was said (which may be in Telugu, Hindi, Tamil, Kannada, or English), and respond naturally in that language.',
       });
     } else {
-      userParts.push({ text: params.message });
+      userParts.push({ text: safeUserText || 'Hello FRIDAY' });
     }
     contents.push({ role: 'user', parts: userParts });
 

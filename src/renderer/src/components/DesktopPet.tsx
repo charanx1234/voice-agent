@@ -321,12 +321,11 @@ export const DesktopPet: React.FC = () => {
 
     try {
       const res = await window.fridayAPI?.sendMessage({
-        prompt: text,
-        history: messages,
+        message: text,
+        conversationHistory: messages,
         personalityMode: (settings.personalityMode as PersonalityMode) || 'moderate',
-        languageCode: settings.preferredLanguage || 'en-IN',
+        language: settings.preferredLanguage || 'en-IN',
         requestId: reqId,
-        source: 'TEXT',
       });
 
       if (res && res.text) {

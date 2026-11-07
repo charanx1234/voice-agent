@@ -119,13 +119,29 @@ export function registerIpcHandlers(
 
   // Chat / Voice message
   ipcMain.handle(IPC_CHANNELS.SEND_MESSAGE, async (_event, payload) => {
-    return await providerManager.generate(payload, (event) => {
-      if (!payload?.requestId) return;
+    const rawHistory = Array.isArray(payload?.conversationHistory)
+      ? payload.conversationHistory
+      : Array.isArray(payload?.history)
+      ? payload.history
+      : [];
+    const normalizedPayload = {
+      message: (payload?.message || payload?.prompt || payload?.text || '').trim(),
+      audioBase64: payload?.audioBase64,
+      audioMimeType: payload?.audioMimeType,
+      conversationHistory: rawHistory,
+      language: payload?.language || payload?.languageCode,
+      personalityMode: payload?.personalityMode,
+      prosody: payload?.prosody,
+      requestId: payload?.requestId,
+    };
+
+    return await providerManager.generate(normalizedPayload, (event) => {
+      if (!normalizedPayload.requestId) return;
       try {
         if (_event.sender && !_event.sender.isDestroyed()) {
           _event.sender.send(IPC_CHANNELS.RESPONSE_STREAM, {
             ...event,
-            requestId: payload.requestId,
+            requestId: normalizedPayload.requestId,
           });
         }
       } catch {

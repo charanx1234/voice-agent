@@ -216,7 +216,7 @@ export function useHandsFree(options: HandsFreeOptions) {
 
     const startRecordingSession = () => {
       if (disposed || modeRef.current !== 'active') return;
-      console.log('[AudioPipeline] Active voice capture session armed. Waiting for user speech...');
+      console.info('[AudioPipeline] Audio capture started. Waiting for user speech...');
       activeUtterancePcmBuffers = [];
       isCapturingUtterance = false;
       turnInProgress = false;
@@ -341,7 +341,8 @@ export function useHandsFree(options: HandsFreeOptions) {
 
     const handleWakeTrigger = (command: string) => {
       if (modeRef.current !== 'standby' || wakeAnnounced) return;
-      console.log('[AudioPipeline] Wake-word detected! Activating microphone listener...');
+      console.info('[AudioPipeline] Wake phrase detected ("Hey Friday")');
+      console.info('[AudioPipeline] Voice session automatically started');
       wakeAnnounced = true;
       setMode('active');
       startRecordingSession();
@@ -484,7 +485,7 @@ export function useHandsFree(options: HandsFreeOptions) {
               acceptanceDecision: { accepted: true, reason: 'Barge-in speech detected during TTS' },
             });
           } else if (!isCapturingUtterance && !turnInProgress && !optionsRef.current.isTextModeActive) {
-            console.log('[AudioPipeline] VAD SPEECH_START detected! Capturing speech utterance...');
+            console.info('[AudioPipeline] Speech detected (VAD)');
             isCapturingUtterance = true;
             utteranceStartedAt = now;
             // Prepend pre-roll buffer to retain leading phonemes
@@ -502,7 +503,7 @@ export function useHandsFree(options: HandsFreeOptions) {
         }
 
         if (isCapturingUtterance && (currentMode === 'active' || speaking)) {
-          console.log('[AudioPipeline] VAD SPEECH_END detected! Submitting complete utterance...');
+          console.info('[AudioPipeline] End of speech detected (VAD)');
           finalizeAndSubmitUtterance();
         }
       }
@@ -572,7 +573,7 @@ export function useHandsFree(options: HandsFreeOptions) {
       }
 
       micDeviceLabel = activeTrack.label || 'Microphone';
-      console.info(`[AudioPipeline] Microphone opened successfully: "${micDeviceLabel}" (readyState=${activeTrack.readyState})`);
+      console.info(`[AudioPipeline] Microphone initialized: "${micDeviceLabel}" (readyState=${activeTrack.readyState})`);
 
       activeTrack.onended = () => {
         if (!disposed) {
@@ -663,6 +664,8 @@ export function useHandsFree(options: HandsFreeOptions) {
         return;
       }
 
+      console.info('[AudioPipeline] Wake detector initialized');
+      console.info('[AudioPipeline] Wake detector listening in standby');
       timer = setInterval(tick, TICK_MS);
       emitDiagnosticsSnapshot();
     })();

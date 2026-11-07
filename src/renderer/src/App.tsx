@@ -820,6 +820,7 @@ export const App: React.FC = () => {
           throw new Error('Electron API bridge unavailable');
         }
 
+        console.info('[AudioPipeline] AI request started');
         voiceTiming.recordAiStart(activeTurn);
         const response = await window.fridayAPI.sendMessage({
           message: resolvedText,
@@ -834,6 +835,7 @@ export const App: React.FC = () => {
         // User interrupted (barge-in) while this was in flight: drop the stale reply.
         if (activeTurn !== activeStreamIdRef.current || response.cancelled) return;
         voiceTiming.recordAiComplete(activeTurn);
+        console.info('[AudioPipeline] AI request completed');
 
         const failed = Boolean(response.error);
         const assistantMsg: ChatMessage = {
@@ -936,16 +938,23 @@ export const App: React.FC = () => {
         // Flush the final incomplete phrase, or use the legacy full-response path
         // when the provider returned no stream text.
         if (!isMuted) {
-          if (streamedSpeechQueuedRef.current) {
-            if (streamBufferRef.current.trim()) {
-              enqueueSpeech(streamBufferRef.current, speechOptions);
+          console.info('[AudioPipeline] TTS started');
+          try {
+            if (streamedSpeechQueuedRef.current) {
+              if (streamBufferRef.current.trim()) {
+                enqueueSpeech(streamBufferRef.current, speechOptions);
+              }
+            } else {
+              await speakResponse(response.text, { ...speechOptions, audioBase64: response.audioBase64 });
             }
-          } else {
-            await speakResponse(response.text, { ...speechOptions, audioBase64: response.audioBase64 });
+            console.info('[AudioPipeline] TTS completed');
+          } catch (ttsErr: any) {
+            console.warn('[AudioPipeline] TTS failed:', ttsErr?.message);
           }
         }
         setRobotState('idle');
         setVoiceSessionState('STANDBY');
+        console.info('[AudioPipeline] Returned to standby');
 
         // The model called enter_standby ("go offline"): go quiet after the farewell.
         if (standbyPendingRef.current) {
@@ -954,6 +963,7 @@ export const App: React.FC = () => {
         }
       } catch (err: any) {
         setRobotState('error');
+        setVoiceSessionState('ERROR');
         setFaceExpression('sad');
         const errorMsg: ChatMessage = {
           id: `msg_${Date.now()}_err`,
@@ -962,6 +972,17 @@ export const App: React.FC = () => {
           timestamp: Date.now(),
         };
         setMessages((prev) => [...prev, errorMsg]);
+      } finally {
+        setStreamingResponse('');
+        activeStreamIdRef.current = null;
+        setTimeout(() => {
+          setRobotState((prev) => (prev === 'error' || prev === 'thinking' ? 'idle' : prev));
+          setVoiceSessionState((prev) =>
+            prev === 'ERROR' || prev === 'THINKING' || prev === 'PROCESSING_AUDIO' || prev === 'TRANSCRIBING'
+              ? 'STANDBY'
+              : prev
+          );
+        }, 2000);
       }
     },
     [messages, settings, isMuted, currentMood, speakResponse, enqueueSpeech, setRobotState]
@@ -1025,6 +1046,11 @@ export const App: React.FC = () => {
       // When local/browser recognition produced a final transcript, send text
       // directly instead of making Gemini decode the same audio again. Audio
       // remains the fallback when recognition is unavailable.
+      if (recognizedText) {
+        console.info('[AudioPipeline] STT result received');
+      } else {
+        console.info('[AudioPipeline] STT multimodal audio payload prepared');
+      }
       handleSendMessage(recognizedText, recognizedText ? undefined : audioBase64, mimeType, prosody);
     } else {
       // User tapped mic to speak
