@@ -90,6 +90,15 @@ export class VoiceCoordinator {
       isVerifiedSpeaker?: boolean;
     }
   ): void {
+    const stateUnchanged = this.sessionState === sessionState;
+    const expressionUnchanged = !updates?.expression || updates.expression === this.expression;
+    const isSpeakingUnchanged = updates?.isSpeaking === undefined || updates.isSpeaking === this.isSpeaking;
+
+    if (stateUnchanged && expressionUnchanged && isSpeakingUnchanged) {
+      // Prevent duplicate transitions and console spam
+      return;
+    }
+
     this.sessionState = sessionState;
 
     if (updates?.expression) this.expression = updates.expression;

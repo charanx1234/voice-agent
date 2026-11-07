@@ -324,6 +324,39 @@ describe('FRIDAY Bug Fix Verification Suite', () => {
       expect(coordinator.getState().isSpeaking).toBe(false);
     });
 
+    it('prevents duplicate repeated SPEAKING state transitions and IPC broadcast spam', () => {
+      const mockWin = {
+        isDestroyed: () => false,
+        webContents: {
+          isDestroyed: () => false,
+          send: vi.fn(),
+        },
+      } as any;
+      const petWin = {
+        isDestroyed: () => false,
+        webContents: {
+          isDestroyed: () => false,
+          send: vi.fn(),
+        },
+      } as any;
+
+      const coordinator = new VoiceCoordinator(() => mockWin, () => petWin);
+
+      // Transition to SPEAKING once
+      coordinator.setState('SPEAKING');
+      expect(mockWin.webContents.send).toHaveBeenCalledTimes(2); // VOICE_STATE_CHANGED and PET_STATE_CHANGED
+
+      mockWin.webContents.send.mockClear();
+
+      // Repeated calls with SPEAKING (e.g. from TTS chunks or amplitude frames)
+      coordinator.setState('SPEAKING');
+      coordinator.setState('SPEAKING');
+      coordinator.setState('SPEAKING');
+
+      // MUST NOT broadcast again or log duplicate transitions
+      expect(mockWin.webContents.send).not.toHaveBeenCalled();
+    });
+
     it('interrupts ongoing speech on user barge-in', () => {
       const mockWin = {
         isDestroyed: () => false,

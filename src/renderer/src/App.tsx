@@ -249,7 +249,7 @@ export const App: React.FC = () => {
         isSpeaking: robotState === 'speaking' || robotState === 'laughing',
       });
     }
-  }, [robotState, amplitude, faceExpression, currentMood, isMuted, settings.handsFreeEnabled]);
+  }, [robotState, faceExpression, currentMood, isMuted, settings.handsFreeEnabled]);
 
   // Listen for pet mic trigger click or interrupt
   useEffect(() => {
@@ -820,7 +820,7 @@ export const App: React.FC = () => {
           throw new Error('Electron API bridge unavailable');
         }
 
-        console.info('[AudioPipeline] AI request started');
+        console.info('[AI] Request started');
         voiceTiming.recordAiStart(activeTurn);
         const response = await window.fridayAPI.sendMessage({
           message: resolvedText,
@@ -938,7 +938,7 @@ export const App: React.FC = () => {
         // Flush the final incomplete phrase, or use the legacy full-response path
         // when the provider returned no stream text.
         if (!isMuted) {
-          console.info('[AudioPipeline] TTS started');
+          console.info('[TTS] Playback started');
           try {
             if (streamedSpeechQueuedRef.current) {
               if (streamBufferRef.current.trim()) {
@@ -954,7 +954,10 @@ export const App: React.FC = () => {
         }
         setRobotState('idle');
         setVoiceSessionState('STANDBY');
-        console.info('[AudioPipeline] Returned to standby');
+        console.info('[VoiceCoordinator] Returned to wake-word standby');
+        console.info('[WakeWord] Standby listening locally');
+        console.info('[WakeWord] No conversation recording active');
+        console.info('[WakeWord] No cloud audio transmission');
 
         // The model called enter_standby ("go offline"): go quiet after the farewell.
         if (standbyPendingRef.current) {
@@ -1004,10 +1007,15 @@ export const App: React.FC = () => {
 
   // Toggle microphone
   const handleToggleMic = async () => {
+    if (robotState === 'speaking') {
+      interrupt();
+      return;
+    }
+
     // Hands-free owns the persistent microphone session. A mic click wakes it
     // instead of creating a second competing MediaStream.
-    if (handsFreeEnabled && handsFreeRef.current.mode !== 'off') {
-      if (handsFreeRef.current.mode === 'standby') {
+    if (handsFreeEnabled) {
+      if (handsFreeRef.current.mode === 'standby' || handsFreeRef.current.mode === 'off') {
         handsFreeRef.current.wake();
         setRobotState('listening');
         setVoiceSessionState('LISTENING');
@@ -1090,13 +1098,7 @@ export const App: React.FC = () => {
   }, [isListening]);
 
   // ---- Hands-free: always-on wake word, barge-in and standby ----
-  const [handsFreeEnabled, setHandsFreeEnabled] = useState<boolean>(() => {
-    try {
-      return window.localStorage.getItem('friday:handsFree') !== 'off';
-    } catch {
-      return true;
-    }
-  });
+  const [handsFreeEnabled, setHandsFreeEnabled] = useState<boolean>(true);
 
   const sendRef = useRef(handleSendMessage);
   sendRef.current = handleSendMessage;
@@ -1221,9 +1223,13 @@ export const App: React.FC = () => {
         setVoiceSessionState('LISTENING');
         setFaceExpression('excited');
         playWakeChime();
-        void window.fridayAPI?.syncDesktopPetState({
-          state: 'LISTENING',
+        window.fridayAPI?.updatePetState?.({
+          voiceSessionState: 'LISTENING',
           robotState: 'listening',
+          expression: 'excited',
+        });
+        window.fridayAPI?.updateVoiceState?.({
+          sessionState: 'LISTENING',
           expression: 'excited',
         });
       }
@@ -1242,8 +1248,11 @@ export const App: React.FC = () => {
   }, []);
 
   const handleToggleHandsFree = () => {
-    const next = !handsFreeEnabled;
+    const next = handsFreeRef.current.mode === 'off';
     setHandsFreeEnabled(next);
+    if (next) {
+      handsFreeRef.current.goStandby();
+    }
     void handleSaveSettings({ handsFreeEnabled: next });
     try {
       window.localStorage.setItem('friday:handsFree', next ? 'on' : 'off');

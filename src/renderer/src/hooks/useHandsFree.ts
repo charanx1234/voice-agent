@@ -117,8 +117,10 @@ export function useHandsFree(options: HandsFreeOptions) {
   const finalizeUtteranceRef = useRef<() => void>(() => undefined);
 
   const setMode = useCallback((next: HandsFreeMode) => {
-    console.log(`[AudioPipeline] Hands-free mode transition: ${modeRef.current} -> ${next}`);
-    modeRef.current = next;
+    if (modeRef.current !== next) {
+      console.log(`[AudioPipeline] Hands-free mode transition: ${modeRef.current} -> ${next}`);
+      modeRef.current = next;
+    }
     lastActivityRef.current = Date.now();
     setModeState(next);
   }, []);
@@ -216,9 +218,9 @@ export function useHandsFree(options: HandsFreeOptions) {
 
     const startRecordingSession = () => {
       if (disposed || modeRef.current !== 'active') return;
-      console.info('[AudioPipeline] Audio capture started. Waiting for user speech...');
+      console.info('[AudioPipeline] Audio capture started. Listening for user command...');
       activeUtterancePcmBuffers = [];
-      isCapturingUtterance = false;
+      isCapturingUtterance = true;
       turnInProgress = false;
       utteranceStartedAt = Date.now();
     };
@@ -265,6 +267,10 @@ export function useHandsFree(options: HandsFreeOptions) {
       stopRecordingSession();
       setMode('standby');
       wakeAnnounced = false;
+      console.info('[VoiceCoordinator] Returned to wake-word standby');
+      console.info('[WakeWord] Standby listening locally');
+      console.info('[WakeWord] No conversation recording active');
+      console.info('[WakeWord] No cloud audio transmission');
 
       // Audio Quality Gate: Reject noise bursts, clicks, or quiet background drift
       if (durationMs < MIN_UTTERANCE_MS || peakLevel < MIN_PEAK_LEVEL) {
@@ -320,6 +326,7 @@ export function useHandsFree(options: HandsFreeOptions) {
         acceptanceDecision: { accepted: true, reason: 'Submitted single utterance for transcription' },
       });
 
+      console.info('[STT] Transcription started');
       optionsRef.current.onUtterance({
         audioBase64,
         mimeType: 'audio/wav',
@@ -341,8 +348,8 @@ export function useHandsFree(options: HandsFreeOptions) {
 
     const handleWakeTrigger = (command: string) => {
       if (modeRef.current !== 'standby' || wakeAnnounced) return;
-      console.info('[AudioPipeline] Wake phrase detected ("Hey Friday")');
-      console.info('[AudioPipeline] Voice session automatically started');
+      console.info('[WakeWord] Hey Friday detected');
+      console.info('[VoiceCoordinator] Conversation capture started');
       wakeAnnounced = true;
       setMode('active');
       startRecordingSession();
@@ -371,6 +378,9 @@ export function useHandsFree(options: HandsFreeOptions) {
         stream.getAudioTracks().forEach((t) => {
           if (!t.enabled) t.enabled = true;
         });
+        if (modeRef.current === 'off' && optionsRef.current.enabled) {
+          setMode('standby');
+        }
       }
 
       // 2. Text Mode Active Check
@@ -485,11 +495,10 @@ export function useHandsFree(options: HandsFreeOptions) {
               acceptanceDecision: { accepted: true, reason: 'Barge-in speech detected during TTS' },
             });
           } else if (!isCapturingUtterance && !turnInProgress && !optionsRef.current.isTextModeActive) {
-            console.info('[AudioPipeline] Speech detected (VAD)');
+            console.info('[VoiceCoordinator] Speech detected');
             isCapturingUtterance = true;
             utteranceStartedAt = now;
-            // Prepend pre-roll buffer to retain leading phonemes
-            activeUtterancePcmBuffers = [...preRollPcmBuffers];
+            activeUtterancePcmBuffers = [];
             if (!activeSpeechReported) {
               activeSpeechReported = true;
               optionsRef.current.onSpeechActivity(true);
@@ -503,7 +512,7 @@ export function useHandsFree(options: HandsFreeOptions) {
         }
 
         if (isCapturingUtterance && (currentMode === 'active' || speaking)) {
-          console.info('[AudioPipeline] End of speech detected (VAD)');
+          console.info('[VoiceCoordinator] Utterance completed');
           finalizeAndSubmitUtterance();
         }
       }
@@ -556,6 +565,12 @@ export function useHandsFree(options: HandsFreeOptions) {
           console.error('[AudioPipeline] Microphone access denied or unavailable:', msg);
           optionsRef.current.onError(msg);
           setMode('off');
+          setTimeout(() => {
+            if (!disposed && optionsRef.current.enabled && modeRef.current === 'off') {
+              console.log('[AudioPipeline] Retrying microphone connection...');
+              setMode('standby');
+            }
+          }, 2000);
         }
         return;
       }
@@ -624,20 +639,19 @@ export function useHandsFree(options: HandsFreeOptions) {
         processorNode = audioCtx.createScriptProcessor(2048, 1, 1);
         processorNode.onaudioprocess = (event: AudioProcessingEvent) => {
           if (disposed) return;
+          // STATE A (Standby): Zero audio recording or PCM buffering
+          if (modeRef.current !== 'active' || !isCapturingUtterance) {
+            const outputChannel = event.outputBuffer.getChannelData(0);
+            outputChannel.fill(0);
+            return;
+          }
+
           const inputChannel = event.inputBuffer.getChannelData(0);
           const copy = new Float32Array(inputChannel.length);
           copy.set(inputChannel);
 
-          // Rolling pre-roll buffer to retain opening phonemes before VAD threshold
-          preRollPcmBuffers.push(copy);
-          if (preRollPcmBuffers.length > MAX_PRE_ROLL_BLOCKS) {
-            preRollPcmBuffers.shift();
-          }
-
-          // Accumulate raw PCM samples if currently capturing speech
-          if (isCapturingUtterance) {
-            activeUtterancePcmBuffers.push(copy);
-          }
+          // STATE B (Active Conversation): Accumulate command audio
+          activeUtterancePcmBuffers.push(copy);
 
           // Silence the output so the processor never feeds back into speakers
           const outputChannel = event.outputBuffer.getChannelData(0);
@@ -664,8 +678,11 @@ export function useHandsFree(options: HandsFreeOptions) {
         return;
       }
 
-      console.info('[AudioPipeline] Wake detector initialized');
-      console.info('[AudioPipeline] Wake detector listening in standby');
+      console.info('[WakeWord] Local detector initialized');
+      console.info('[WakeWord] Standby listening locally');
+      console.info('[WakeWord] No conversation recording active');
+      console.info('[WakeWord] No cloud audio transmission');
+      setMode('standby');
       timer = setInterval(tick, TICK_MS);
       emitDiagnosticsSnapshot();
     })();

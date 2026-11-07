@@ -456,28 +456,34 @@ export const ControlBar: React.FC<ControlBarProps> = ({
       <div style={{ display: 'flex', justifyContent: 'center', margin: '2px 0' }}>
         <button
           onClick={onToggleMic}
-          title={isListening ? 'Stop listening' : 'Start speaking to FRIDAY'}
+          title={
+            state === 'listening' || isListening || handsFreeMode === 'active'
+              ? 'Listening (click to send immediately)'
+              : handsFreeMode === 'standby'
+                ? 'Standby (Say "Hey Friday" or click to speak)'
+                : 'Start speaking to FRIDAY'
+          }
           style={{
             position: 'relative',
             width: '64px',
             height: '64px',
             borderRadius: '50%',
-            background: isListening
+            background: (state === 'listening' || isListening || handsFreeMode === 'active')
               ? 'linear-gradient(135deg, var(--accent) 0%, var(--accent-dim) 100%)'
               : 'linear-gradient(135deg, var(--surface) 0%, var(--surface) 100%)',
-            border: isListening ? '2px solid var(--text)' : '2px solid color-mix(in srgb, var(--accent) 35%, transparent)',
-            color: isListening ? 'var(--bg)' : 'var(--accent)',
+            border: (state === 'listening' || isListening || handsFreeMode === 'active') ? '2px solid var(--text)' : '2px solid color-mix(in srgb, var(--accent) 35%, transparent)',
+            color: (state === 'listening' || isListening || handsFreeMode === 'active') ? 'var(--bg)' : 'var(--accent)',
             cursor: 'pointer',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
-            boxShadow: isListening
+            boxShadow: (state === 'listening' || isListening || handsFreeMode === 'active')
               ? '0 0 25px color-mix(in srgb, var(--accent) 70%, transparent), inset 0 0 10px color-mix(in srgb, var(--text) 60%, transparent)'
               : '0 4px 16px color-mix(in srgb, var(--shadow-color) 40%, transparent)',
             transition: 'all 0.25s cubic-bezier(0.16, 1, 0.3, 1)',
           }}
         >
-          {isListening ? <MicOff size={28} /> : <Mic size={28} />}
+          {state === 'listening' || isListening || handsFreeMode === 'active' ? <MicOff size={28} /> : <Mic size={28} />}
         </button>
       </div>
 
