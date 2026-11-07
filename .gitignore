@@ -13,6 +13,7 @@ release/
 
 # Local test/scratch data (SQLite databases, screenshots)
 .data/
+userDataBackup/
 
 # Environment files & secrets
 .env

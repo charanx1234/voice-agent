@@ -10,6 +10,7 @@ import { ToolShortcutsPanel } from './components/ToolShortcutsPanel';
 import { MemoryPanel } from './components/MemoryPanel';
 import { Dashboard } from './components/Dashboard';
 import { WebsiteAccessibilityPanel } from './components/WebsiteAccessibilityPanel';
+import { VoiceDiagnosticsPanel } from './components/VoiceDiagnosticsPanel';
 import { useVoiceAssistant } from './hooks/useVoiceAssistant';
 import { useHandsFree } from './hooks/useHandsFree';
 import {
@@ -21,7 +22,9 @@ import {
   PersonalityMode,
   ReminderItem,
   ToolConfirmationPayload,
+  VoiceDiagnosticsData,
   VoiceProsodySummary,
+  VoiceSessionState,
   WebsiteAccessibilityState,
 } from '@/shared/types';
 import { pickGreeting } from '@/services/voice/greetings';
@@ -31,6 +34,9 @@ import { selectFaceExpression } from '@/services/ai/faceExpressions';
 import { takeCompleteSpeechChunks } from '@/services/voice/speechText';
 import { copyTextToClipboard } from './utils/clipboard';
 import { playWakeChime } from './utils/audioChime';
+import { voiceTiming } from './utils/voiceTiming';
+import { validateVoiceAction } from '@/services/agent/voiceActionGuard';
+import { voiceSessionManager } from '@/services/voice/voiceSession';
 
 export const App: React.FC = () => {
   const [settings, setSettings] = useState<FridaySettings>({
@@ -86,7 +92,42 @@ export const App: React.FC = () => {
   const [currentMood, setCurrentMood] = useState<ConversationMood>('calm');
   const [faceExpression, setFaceExpression] = useState<FaceExpression>('neutral');
   const [streamCopyStatus, setStreamCopyStatus] = useState<'idle' | 'copied' | 'error'>('idle');
+  const [isMicMuted, setIsMicMuted] = useState(false);
+  const [isTextModeActive, setIsTextModeActive] = useState(false);
+  const [voiceSessionState, setVoiceSessionState] = useState<VoiceSessionState>('STANDBY');
+  const voiceSessionStateRef = useRef<VoiceSessionState>('STANDBY');
+  voiceSessionStateRef.current = voiceSessionState;
   const [accessibilityOpen, setAccessibilityOpen] = useState(false);
+  const [diagnosticsOpen, setDiagnosticsOpen] = useState(false);
+  const diagnosticsOpenRef = useRef(false);
+  diagnosticsOpenRef.current = diagnosticsOpen;
+  const lastDiagUpdateRef = useRef(0);
+  const [voiceDiagnostics, setVoiceDiagnostics] = useState<VoiceDiagnosticsData>({
+    selectedMicDevice: 'Default Microphone',
+    micPermissionStatus: 'granted',
+    streamStatus: 'inactive',
+    trackStatus: {
+      label: 'Microphone',
+      readyState: 'live',
+      enabled: true,
+      muted: false,
+    },
+    audioFormat: '16-bit Mono WAV (16,000 Hz)',
+    sampleRate: 48000,
+    liveLevel: 0,
+    peakLevel: 0,
+    ambientNoiseFloor: 0.02,
+    isSpeechDetected: false,
+    capturedDurationMs: 0,
+    audioBufferSizeKb: 0,
+    sessionState: 'STANDBY',
+    sttStatus: 'idle',
+    sttModel: 'gemini-2.5-flash',
+    sttTranscript: '',
+    geminiStatus: 'idle',
+    ttsStatus: 'idle',
+    lastError: null,
+  });
   const [accessibilityState, setAccessibilityState] = useState<WebsiteAccessibilityState>({
     enabled: false,
     connected: false,
@@ -149,10 +190,18 @@ export const App: React.FC = () => {
   const standbyPendingRef = useRef(false);
   const streamCopyTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const goStandbyRef = useRef<() => void>(() => undefined);
-  const handsFreeRef = useRef<{ mode: 'off' | 'standby' | 'active'; wake: () => void; goStandby: () => void }>({
+  const handsFreeRef = useRef<{
+    mode: 'off' | 'standby' | 'active';
+    wake: () => void;
+    goStandby: () => void;
+    cancelActiveUtterance: () => void;
+    finalizeCurrentUtterance: () => void;
+  }>({
     mode: 'off',
     wake: () => undefined,
     goStandby: () => undefined,
+    cancelActiveUtterance: () => undefined,
+    finalizeCurrentUtterance: () => undefined,
   });
 
   // State transitions also drive the face when no response-specific emotion
@@ -248,6 +297,7 @@ export const App: React.FC = () => {
     return window.fridayAPI.onResponseStream((event) => {
       if (!event.requestId || event.requestId !== activeStreamIdRef.current) return;
       if (event.type === 'delta' && event.text) {
+        if (event.requestId) voiceTiming.recordFirstToken(event.requestId);
         streamedResponseRef.current += event.text;
         setStreamingResponse(streamedResponseRef.current);
         streamBufferRef.current += event.text;
@@ -434,38 +484,178 @@ export const App: React.FC = () => {
       text: string,
       audioBase64?: string,
       audioMimeType?: string,
-      prosody?: VoiceProsodySummary
+      prosody?: VoiceProsodySummary,
+      turnId?: string,
+      source: 'TEXT' | 'VOICE' = audioBase64 ? 'VOICE' : 'TEXT'
     ) => {
+      const activeTurn = turnId || `turn_${Date.now()}_${++requestIdRef.current}`;
+      activeStreamIdRef.current = activeTurn;
       let resolvedText = (text || '').trim();
+
+      if (source === 'TEXT') {
+        handsFreeRef.current?.cancelActiveUtterance?.();
+        voiceSessionManager.startSession('TEXT');
+      }
 
       // If speech transcript was not available from the browser, transcribe the audio first
       if (!resolvedText && audioBase64 && window.fridayAPI?.transcribeSpeech) {
         setRobotState('thinking');
+        setVoiceSessionState('TRANSCRIBING');
+        setVoiceDiagnostics((prev) => ({
+          ...prev,
+          sttStatus: 'requesting',
+          sessionState: 'TRANSCRIBING',
+          sttModel: 'gemini-2.5-flash',
+        }));
+        voiceTiming.recordTranscriptionStart(activeTurn);
+
+        const sttStart = Date.now();
+        let isTimedOut = false;
+        const sttTimeout = setTimeout(() => {
+          isTimedOut = true;
+          console.warn('[App] STT request timed out after 12 seconds');
+          setVoiceDiagnostics((prev) => ({
+            ...prev,
+            sttStatus: 'timeout',
+            lastError: 'Speech transcription timed out after 12s.',
+            sessionState: 'ERROR',
+          }));
+        }, 12000);
+
         try {
           const res = await window.fridayAPI.transcribeSpeech(audioBase64, audioMimeType);
+          clearTimeout(sttTimeout);
+          const sttDuration = Date.now() - sttStart;
+          voiceTiming.recordTranscriptionEnd(activeTurn);
+
+          if (activeStreamIdRef.current !== activeTurn) return; // Interrupted/superseded
+
           if (res?.success && res.text) {
             resolvedText = res.text.trim();
+            setVoiceSessionState('TRANSCRIPT_RECEIVED');
+            setVoiceDiagnostics((prev) => ({
+              ...prev,
+              sttStatus: 'completed',
+              sttLatencyMs: sttDuration,
+              sttTranscript: resolvedText,
+              sessionState: 'TRANSCRIPT_RECEIVED',
+            }));
+          } else if (res?.error) {
+            console.error('[App] STT returned error:', res.error);
+            setVoiceDiagnostics((prev) => ({
+              ...prev,
+              sttStatus: 'error',
+              lastError: res.error || 'Speech transcription failed',
+              sessionState: 'ERROR',
+            }));
+            setRobotState('error');
+            setVoiceSessionState('ERROR');
+            appendNotice(`Speech recognition failed: ${res.error}`, true);
+            return;
+          } else {
+            console.warn('[App] STT returned empty result');
+            setVoiceDiagnostics((prev) => ({
+              ...prev,
+              sttStatus: 'completed',
+              sttLatencyMs: sttDuration,
+              sttTranscript: '',
+            }));
           }
-        } catch (err) {
-          console.warn('[App] Live speech transcription error:', err);
+        } catch (err: any) {
+          clearTimeout(sttTimeout);
+          console.error('[App] Live speech transcription exception:', err);
+          const errMsg = err?.message || 'Speech recognition network error';
+          setVoiceDiagnostics((prev) => ({
+            ...prev,
+            sttStatus: 'error',
+            lastError: errMsg,
+            sessionState: 'ERROR',
+          }));
+          setRobotState('error');
+          setVoiceSessionState('ERROR');
+          appendNotice(`Speech recognition error: ${errMsg}`, true);
+          return;
         }
 
-        // If transcription produced no recognizable words or detected silence/noise only:
-        // Do NOT send a fabricated message or execute actions on noise.
-        if (!resolvedText || resolvedText.toUpperCase() === 'SILENCE') {
+        // If transcription produced explicit silence, return to standby cleanly without submitting
+        if (resolvedText.toUpperCase() === 'SILENCE') {
+          console.info('[App] Audio contained only ambient silence. Returning to standby.');
           setRobotState('idle');
+          setVoiceSessionState('STANDBY');
+          return;
+        }
+
+        // If user spoke but no speech words could be discerned:
+        if (!resolvedText) {
+          console.warn('[App] No discernable speech found in audio.');
+          setRobotState('idle');
+          setVoiceSessionState('STANDBY');
+          appendNotice(
+            settings.preferredLanguage?.startsWith('te')
+              ? 'నాకు మాటలు స్పష్టంగా వినిపించలేదు. దయచేసి మైక్రోఫోన్‌కు దగ్గరగా మాట్లాడండి.'
+              : 'I could not hear any clear speech. Please speak closer to the microphone.',
+            true
+          );
           return;
         }
       }
 
-      if (!resolvedText) {
+      if (activeStreamIdRef.current !== activeTurn) return;
+
+      if (!resolvedText && !audioBase64) {
         setRobotState('idle');
+        setVoiceSessionState('STANDBY');
         return;
+      }
+
+      // Strict Voice Action Protection: Block foreign assistant prompts and hallucinated background noise
+      if (source === 'VOICE') {
+        const actionCheck = validateVoiceAction(resolvedText, 'VOICE');
+        if (!actionCheck.allowed) {
+          setRobotState('idle');
+          setVoiceSessionState('STANDBY');
+
+          if (actionCheck.isForeignAssistant) {
+            const foreignMsg = settings.preferredLanguage?.startsWith('te')
+              ? 'ఆ కమాండ్ వేరే అసిస్టెంట్‌కి (Google/Siri/Alexa) ఉద్దేశించినది కాబట్టి నేను ఎటువంటి డెస్క్‌టాప్ యాక్షన్ చేయలేదు.'
+              : 'That command was addressed to another assistant (Google/Siri/Alexa). Desktop actions were blocked for security.';
+            const assistMsg: ChatMessage = {
+              id: `msg_${Date.now()}_foreign`,
+              role: 'assistant',
+              text: foreignMsg,
+              timestamp: Date.now(),
+            };
+            setMessages((prev) => [...prev, assistMsg]);
+            window.fridayAPI?.broadcastChatMessage?.(assistMsg);
+            void speakRef.current(foreignMsg, {
+              languageCode: settings.preferredLanguage,
+              voice: settings.ttsVoice,
+              accent: settings.voiceAccent,
+            });
+            voiceSessionManager.log({
+              source: 'VOICE',
+              turnId: activeTurn,
+              sttResult: resolvedText,
+              actionDecision: { executed: false, reason: 'Blocked foreign assistant command' },
+            });
+            return;
+          }
+
+          // Discard noise / hallucinated background speech silently
+          voiceSessionManager.log({
+            source: 'VOICE',
+            turnId: activeTurn,
+            sttResult: resolvedText,
+            actionDecision: { executed: false, reason: actionCheck.reason },
+          });
+          return;
+        }
       }
 
       // Handle UNCLEAR speech in noisy environments
       if (resolvedText.toUpperCase() === 'UNCLEAR') {
         setRobotState('idle');
+        setVoiceSessionState('STANDBY');
         const unclearMsg = settings.preferredLanguage?.startsWith('te')
           ? 'నాకు స్పష్టంగా వినిపించలేదు. దయచేసి మళ్ళీ చెప్పండి.'
           : 'I could not hear that clearly due to background noise. Could you please repeat?';
@@ -489,6 +679,7 @@ export const App: React.FC = () => {
       const incompleteMatch = resolvedText.match(/^(?:(?:hey|hi|ok|okay)?\s*friday[,:\s]+)?(open|launch|search|play|read|start)[.\s…]*$/i);
       if (incompleteMatch) {
         setRobotState('idle');
+        setVoiceSessionState('STANDBY');
         const verb = incompleteMatch[1].toLowerCase();
         let promptQuestion = `What would you like me to ${verb}?`;
         if (verb === 'open' || verb === 'launch') {
@@ -524,9 +715,9 @@ export const App: React.FC = () => {
       const userMsg: ChatMessage = {
         id: `msg_${Date.now()}_u`,
         role: 'user',
-        text: resolvedText,
+        text: resolvedText || '🎤 Spoken message',
         timestamp: Date.now(),
-        isVoice: Boolean(audioBase64),
+        isVoice: source === 'VOICE',
       };
 
       setMessages((prev) => [...prev, userMsg]);
@@ -535,6 +726,7 @@ export const App: React.FC = () => {
       setStreamingResponse('');
       setStreamCopyStatus('idle');
       setRobotState('thinking');
+      setVoiceSessionState('THINKING');
       setFaceExpression(
         selectFaceExpression({
           state: 'thinking',
@@ -543,9 +735,6 @@ export const App: React.FC = () => {
           text: resolvedText,
         })
       );
-      const requestId = ++requestIdRef.current;
-      const streamId = `response_${Date.now()}_${requestId}`;
-      activeStreamIdRef.current = streamId;
       streamBufferRef.current = '';
       streamedResponseRef.current = '';
       streamedSpeechQueuedRef.current = false;
@@ -562,7 +751,7 @@ export const App: React.FC = () => {
 
       if (isAccessibilityIntent && window.fridayAPI?.accessibilityExecuteCommand) {
         try {
-          const a11yResult = await window.fridayAPI.accessibilityExecuteCommand(text, {
+          const a11yResult = await window.fridayAPI.accessibilityExecuteCommand(resolvedText, {
             language: settings.preferredLanguage,
           });
 
@@ -576,6 +765,7 @@ export const App: React.FC = () => {
             };
             setMessages((prev) => [...prev, assistantMsg]);
             setRobotState('speaking');
+            setVoiceSessionState('SPEAKING');
             setFaceExpression(
               selectFaceExpression({
                 state: 'speaking',
@@ -585,10 +775,10 @@ export const App: React.FC = () => {
               })
             );
             if (!settings.soundMuted) {
-              speakResponse(a11yResult.speechText, streamSpeechOptionsRef.current);
-            } else {
-              setRobotState('idle');
+              await speakResponse(a11yResult.speechText, streamSpeechOptionsRef.current);
             }
+            setRobotState('idle');
+            setVoiceSessionState('STANDBY');
             return;
           }
         } catch (err) {
@@ -612,6 +802,9 @@ export const App: React.FC = () => {
         elevenLabsStyle: settings.elevenLabsStyle,
         elevenLabsSpeakerBoost: settings.elevenLabsSpeakerBoost,
         onChunkStart: (chunkText: string) => {
+          voiceTiming.recordFirstTtsAudio(activeTurn);
+          setRobotState('speaking');
+          setVoiceSessionState('SPEAKING');
           const chunkExpr = selectFaceExpression({
             state: 'speaking',
             mood: currentMood,
@@ -627,16 +820,20 @@ export const App: React.FC = () => {
           throw new Error('Electron API bridge unavailable');
         }
 
+        voiceTiming.recordAiStart(activeTurn);
         const response = await window.fridayAPI.sendMessage({
           message: resolvedText,
+          audioBase64: resolvedText ? undefined : audioBase64,
+          audioMimeType,
           conversationHistory: messagesRef.current,
           language: settings.preferredLanguage,
           prosody,
-          requestId: streamId,
+          requestId: activeTurn,
         });
 
         // User interrupted (barge-in) while this was in flight: drop the stale reply.
-        if (requestId !== requestIdRef.current || response.cancelled) return;
+        if (activeTurn !== activeStreamIdRef.current || response.cancelled) return;
+        voiceTiming.recordAiComplete(activeTurn);
 
         const failed = Boolean(response.error);
         const assistantMsg: ChatMessage = {
@@ -746,9 +943,9 @@ export const App: React.FC = () => {
           } else {
             await speakResponse(response.text, { ...speechOptions, audioBase64: response.audioBase64 });
           }
-        } else {
-          setRobotState('idle');
         }
+        setRobotState('idle');
+        setVoiceSessionState('STANDBY');
 
         // The model called enter_standby ("go offline"): go quiet after the farewell.
         if (standbyPendingRef.current) {
@@ -789,8 +986,15 @@ export const App: React.FC = () => {
     // Hands-free owns the persistent microphone session. A mic click wakes it
     // instead of creating a second competing MediaStream.
     if (handsFreeEnabled && handsFreeRef.current.mode !== 'off') {
-      if (handsFreeRef.current.mode === 'standby') handsFreeRef.current.wake();
-      else handsFreeRef.current.goStandby();
+      if (handsFreeRef.current.mode === 'standby') {
+        handsFreeRef.current.wake();
+        setRobotState('listening');
+        setVoiceSessionState('LISTENING');
+        setFaceExpression('curious');
+      } else {
+        // User clicked mic while listening/speaking: finalize and submit utterance immediately
+        handsFreeRef.current.finalizeCurrentUtterance();
+      }
       return;
     }
 
@@ -875,6 +1079,8 @@ export const App: React.FC = () => {
 
   const handsFree = useHandsFree({
     enabled: handsFreeEnabled,
+    isMicMuted,
+    isTextModeActive,
     language: settings.preferredLanguage,
     silenceTimeoutMs: settings.handsFreeSilenceTimeoutMs,
     noiseSuppression: settings.noiseSuppression || 'standard',
@@ -894,22 +1100,60 @@ export const App: React.FC = () => {
     isBusy: () => robotStateRef.current === 'thinking',
     onBargeIn: () => {
       // Invalidate any in-flight reply and stop talking so we hear the user first.
+      const cancelledTurn = activeStreamIdRef.current;
       requestIdRef.current += 1;
       standbyPendingRef.current = false;
-      window.fridayAPI?.cancelResponse(activeStreamIdRef.current || undefined);
+      voiceTiming.recordInterruption();
+      window.fridayAPI?.cancelResponse(cancelledTurn || undefined);
+      window.fridayAPI?.cancelSpeech();
       activeStreamIdRef.current = null;
       streamBufferRef.current = '';
       setStreamingResponse('');
       interrupt();
+      voiceTiming.recordPlaybackCancelled();
       if (window.fridayAPI?.voiceInterrupt) {
         window.fridayAPI.voiceInterrupt();
       }
+      setRobotState('interrupted');
+      setVoiceSessionState('INTERRUPTED');
+      setFaceExpression('surprised');
+      setTimeout(() => {
+        if (robotStateRef.current === 'interrupted') {
+          setRobotState('listening');
+          setVoiceSessionState('LISTENING');
+          setFaceExpression('curious');
+        }
+      }, 180);
     },
     onSpeechActivity: (speaking) => {
-      if (speaking) setRobotState('listening');
+      if (speaking) {
+        setRobotState('listening');
+        setVoiceSessionState('SPEECH_DETECTED');
+        setVoiceDiagnostics((prev) => ({ ...prev, sessionState: 'SPEECH_DETECTED', isSpeechDetected: true }));
+      } else {
+        setVoiceDiagnostics((prev) => ({ ...prev, isSpeechDetected: false }));
+      }
+    },
+    onDiagnostics: (diag) => {
+      if (!diagnosticsOpenRef.current) return;
+      const now = Date.now();
+      if (now - lastDiagUpdateRef.current < 200) return;
+      lastDiagUpdateRef.current = now;
+      setVoiceDiagnostics((prev) => ({
+        ...prev,
+        ...diag,
+        sessionState: voiceSessionStateRef.current,
+      }));
     },
     onTranscript: (text) => setLiveTranscript(text),
-    onUtterance: ({ audioBase64, mimeType, peakLevel, recognizedText, prosody, isVerifiedSpeaker }) => {
+    onUtterance: ({ audioBase64, mimeType, peakLevel, durationMs, recognizedText, prosody, isVerifiedSpeaker, turnId }) => {
+      setVoiceSessionState('PROCESSING_AUDIO');
+      setVoiceDiagnostics((prev) => ({
+        ...prev,
+        sessionState: 'PROCESSING_AUDIO',
+        capturedDurationMs: durationMs,
+        peakLevel,
+      }));
       const minPeak = settings.audioQualityThreshold || 0.03;
       if (isLikelySilence(peakLevel) || peakLevel < minPeak) return;
       if (settings.speakerVerificationEnabled && isVerifiedSpeaker === false) {
@@ -930,19 +1174,25 @@ export const App: React.FC = () => {
         });
         return;
       }
+      const resolvedTurn = turnId || `turn_${Date.now()}_${++requestIdRef.current}`;
+      voiceTiming.startTurn(resolvedTurn, Date.now() - (prosody?.durationMs || 500));
+      voiceTiming.recordSpeechEnd(resolvedTurn);
       void sendRef.current(
         recognizedText,
         recognizedText ? undefined : audioBase64,
         mimeType,
-        prosody
+        prosody,
+        resolvedTurn
       );
     },
     onWake: (command) => {
+      setVoiceSessionState('WAKE_WORD_DETECTED');
       if (command) {
         void sendRef.current(command);
       } else {
         // Instant silent wake-up: show visual aura, switch robot & pet state to listening, play subtle chime, stay completely silent
         setRobotState('listening');
+        setVoiceSessionState('LISTENING');
         setFaceExpression('excited');
         playWakeChime();
         void window.fridayAPI?.syncDesktopPetState({
@@ -1221,6 +1471,7 @@ export const App: React.FC = () => {
           {/* Bottom Control Bar */}
           <ControlBar
             state={robotState}
+            voiceSessionState={voiceSessionState}
             isListening={isListening}
             isMuted={isMuted}
             hasApiKey={settings.hasCustomKey}
@@ -1233,7 +1484,18 @@ export const App: React.FC = () => {
             currentMood={currentMood}
             onToggleHandsFree={handleToggleHandsFree}
             onToggleMic={handleToggleMic}
-            onSendMessage={(txt) => handleSendMessage(txt)}
+            isMicMuted={isMicMuted}
+            onToggleMicMute={() => {
+              const next = !isMicMuted;
+              setIsMicMuted(next);
+              voiceSessionManager.setMicMuted(next);
+            }}
+            onTextFocus={() => setIsTextModeActive(true)}
+            onTextBlur={() => setIsTextModeActive(false)}
+            onSendMessage={(txt) => {
+              setIsTextModeActive(false);
+              handleSendMessage(txt, undefined, undefined, undefined, undefined, 'TEXT');
+            }}
             onToggleMute={() => {
               const next = !isMuted;
               setIsMuted(next);
@@ -1249,6 +1511,8 @@ export const App: React.FC = () => {
             accessibilityOpen={accessibilityOpen}
             accessibilityActive={accessibilityState.enabled}
             onToggleAccessibility={() => setAccessibilityOpen(!accessibilityOpen)}
+            diagnosticsOpen={diagnosticsOpen}
+            onOpenDiagnostics={() => setDiagnosticsOpen(!diagnosticsOpen)}
           />
         </div>
 
@@ -1333,6 +1597,13 @@ export const App: React.FC = () => {
           window.fridayAPI?.accessibilityStopReading();
           interrupt();
         }}
+      />
+
+      {/* Real-time Voice Diagnostics Panel */}
+      <VoiceDiagnosticsPanel
+        isOpen={diagnosticsOpen}
+        onClose={() => setDiagnosticsOpen(false)}
+        diagnostics={voiceDiagnostics}
       />
     </div>
   );

@@ -337,6 +337,29 @@ export async function executeAppShortcutsTool(
       : { success: false, error: `Could not open ${displayName}: ${result.error}` };
   }
 
+  // 4. Well-known web apps & services (YouTube, Google, GitHub, Reddit, etc.)
+  const normalized = normalizeAppName(query);
+  const KNOWN_WEB_APPS: Record<string, { name: string; url: string }> = {
+    youtube: { name: 'YouTube', url: 'https://www.youtube.com' },
+    google: { name: 'Google', url: 'https://www.google.com' },
+    github: { name: 'GitHub', url: 'https://www.github.com' },
+    gmail: { name: 'Gmail', url: 'https://mail.google.com' },
+    twitter: { name: 'Twitter', url: 'https://twitter.com' },
+    x: { name: 'X', url: 'https://x.com' },
+    reddit: { name: 'Reddit', url: 'https://www.reddit.com' },
+    netflix: { name: 'Netflix', url: 'https://www.netflix.com' },
+    whatsapp: { name: 'WhatsApp', url: 'https://web.whatsapp.com' },
+    chatgpt: { name: 'ChatGPT', url: 'https://chat.openai.com' },
+  };
+
+  const webApp = KNOWN_WEB_APPS[normalized];
+  if (webApp) {
+    const result = await launchCommand('explorer.exe', [webApp.url]);
+    return result.success
+      ? { success: true, message: `Opened ${webApp.name}.`, app: webApp.name }
+      : { success: false, error: `Could not open ${webApp.name}: ${result.error}` };
+  }
+
   return {
     success: false,
     error: `I couldn't find that application on your computer.`,

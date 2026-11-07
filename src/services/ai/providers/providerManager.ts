@@ -10,6 +10,7 @@ import { AnthropicProvider } from './anthropicProvider';
 import { IAiProvider, ProviderConnectionTestResult, ProviderGenerateParams, ProviderGenerateResult } from './types';
 import { geminiService } from '../gemini';
 import { classifyFridayError } from '../../error/errorHandler';
+import { fastLocalIntentRouter } from '../../agent/fastLocalIntent';
 
 const DEFAULT_MODELS: Record<AiProviderId, string[]> = {
   gemini: ['gemini-3.1-pro-preview', 'gemini-3.5-flash', 'gemini-3.5-flash-lite', 'gemini-2.5-flash'],
@@ -141,6 +142,27 @@ export class ProviderManager {
     params: ProviderGenerateParams,
     onStream?: (event: Omit<ResponseStreamEvent, 'requestId'>) => void
   ): Promise<ProviderGenerateResult> {
+    // Fast local intent execution (<50ms) for app controls, media, volume, time, date, window
+    if (!params.audioBase64 && params.message) {
+      const settings = settingsStore.getSettings();
+      const preferredLang = params.language || settings.preferredLanguage || 'en-IN';
+      const fastResult = await fastLocalIntentRouter.tryRoute(
+        params.message,
+        preferredLang,
+        settings.personalityMode
+      );
+      if (fastResult?.matched) {
+        onStream?.({ type: 'delta', text: fastResult.response });
+        onStream?.({ type: 'complete' });
+        return {
+          text: fastResult.response,
+          detectedLanguage: preferredLang,
+          toolCalls: fastResult.toolCalls as any,
+          providerUsed: 'local_fast',
+        };
+      }
+    }
+
     const status = this.getStatus();
     const primaryId = status.activeProvider;
     const fallbackId = status.fallbackProvider;
@@ -150,15 +172,26 @@ export class ProviderManager {
     } catch (primaryErr: any) {
       console.warn(`[ProviderManager] Primary provider "${primaryId}" failed:`, primaryErr?.message);
 
-      if (fallbackId && fallbackId !== primaryId) {
-        const fallbackConfig = status.providers[fallbackId];
+      // Determine fallback provider: explicit fallback or any configured provider with an active key
+      let targetFallbackId = (fallbackId && fallbackId !== primaryId) ? fallbackId : undefined;
+      if (!targetFallbackId) {
+        const candidate = (Object.keys(status.providers) as AiProviderId[]).find(
+          (pId) => pId !== primaryId && status.providers[pId]?.hasKey && status.providers[pId]?.enabled
+        );
+        if (candidate) {
+          targetFallbackId = candidate;
+        }
+      }
+
+      if (targetFallbackId) {
+        const fallbackConfig = status.providers[targetFallbackId];
         if (fallbackConfig && fallbackConfig.hasKey) {
           onStream?.({
             type: 'delta',
             text: `[Primary provider ${primaryId} unavailable; falling back to ${fallbackConfig.name}...]\n`,
           });
-          console.info(`[ProviderManager] Switching to fallback provider "${fallbackId}".`);
-          return await this.dispatchProvider(fallbackId, params, onStream);
+          console.info(`[ProviderManager] Switching to fallback provider "${targetFallbackId}".`);
+          return await this.dispatchProvider(targetFallbackId, params, onStream);
         }
       }
 

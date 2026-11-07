@@ -189,20 +189,22 @@ export class AudioPipeline {
           startThreshold: 0.065,
           endThreshold: 0.035,
           speechStartMs: 90,
-          speechEndMs: 500,
+          speechEndMs: 1100,
           noiseGateMultiplier: gate,
+          maxUtteranceMs: 30000,
         };
       case 'low':
         return {
           startThreshold: 0.22,
           endThreshold: 0.10,
           speechStartMs: 140,
-          speechEndMs: 650,
+          speechEndMs: 1600,
           noiseGateMultiplier: gate,
+          maxUtteranceMs: 30000,
         };
       case 'medium':
       default:
-        return { ...DEFAULT_VAD_OPTIONS, noiseGateMultiplier: gate };
+        return { ...DEFAULT_VAD_OPTIONS, speechEndMs: 1300, noiseGateMultiplier: gate, maxUtteranceMs: 30000 };
     }
   }
 

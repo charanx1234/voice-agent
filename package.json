@@ -1,6 +1,6 @@
 {
   "name": "friday-ai-companion",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "FRIDAY - Personal AI assistant with multilingual voice, memory and tools",
   "main": "dist-electron/main/index.js",
   "author": "Friday AI Companion Team",

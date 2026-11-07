@@ -12,14 +12,17 @@ import {
   Sparkles,
   LayoutDashboard,
   Globe,
+  Activity,
 } from 'lucide-react';
-import { RobotState } from '@/shared/types';
+import { RobotState, VoiceSessionState } from '@/shared/types';
 import { formatRecordingDuration } from '@/services/voice/micErrors';
 
 interface ControlBarProps {
   state: RobotState;
+  voiceSessionState?: VoiceSessionState;
   isListening: boolean;
   isMuted: boolean;
+  isMicMuted?: boolean;
   hasApiKey: boolean;
   messageCount: number;
   memoryCount: number;
@@ -30,6 +33,9 @@ interface ControlBarProps {
   currentMood?: string;
   onToggleHandsFree?: () => void;
   onToggleMic: () => void;
+  onToggleMicMute?: () => void;
+  onTextFocus?: () => void;
+  onTextBlur?: () => void;
   onSendMessage: (text: string) => void;
   onToggleMute: () => void;
   onToggleTranscript: () => void;
@@ -42,12 +48,16 @@ interface ControlBarProps {
   accessibilityOpen?: boolean;
   accessibilityActive?: boolean;
   onToggleAccessibility?: () => void;
+  diagnosticsOpen?: boolean;
+  onOpenDiagnostics?: () => void;
 }
 
 export const ControlBar: React.FC<ControlBarProps> = ({
   state,
+  voiceSessionState,
   isListening,
   isMuted,
+  isMicMuted = false,
   hasApiKey,
   messageCount,
   memoryCount,
@@ -58,6 +68,9 @@ export const ControlBar: React.FC<ControlBarProps> = ({
   personalityMode = 'moderate',
   currentMood = 'calm',
   onToggleMic,
+  onToggleMicMute,
+  onTextFocus,
+  onTextBlur,
   onSendMessage,
   onToggleMute,
   onToggleTranscript,
@@ -70,6 +83,8 @@ export const ControlBar: React.FC<ControlBarProps> = ({
   accessibilityOpen = false,
   accessibilityActive = false,
   onToggleAccessibility,
+  diagnosticsOpen = false,
+  onOpenDiagnostics,
 }) => {
   const [inputText, setInputText] = useState('');
 
@@ -88,30 +103,45 @@ export const ControlBar: React.FC<ControlBarProps> = ({
   };
 
   const getStatusBadge = () => {
-    switch (state) {
-      case 'listening':
-        return {
-          label:
-            recordingSeconds > 0
-              ? `Listening… ${formatRecordingDuration(recordingSeconds)}`
-              : 'Listening...',
-          color: 'var(--accent)',
-          bg: 'color-mix(in srgb, var(--accent) 15%, transparent)',
-        };
-      case 'thinking':
-        return { label: 'Thinking...', color: 'var(--info)', bg: 'color-mix(in srgb, var(--info) 15%, transparent)' };
-      case 'speaking':
-        return { label: 'Speaking...', color: 'var(--success)', bg: 'color-mix(in srgb, var(--success) 15%, transparent)' };
-      case 'interrupted':
-        return { label: 'Interrupted', color: 'var(--warning)', bg: 'color-mix(in srgb, var(--warning) 15%, transparent)' };
-      case 'error':
-        return { label: 'Service Error', color: 'var(--danger)', bg: 'color-mix(in srgb, var(--danger) 15%, transparent)' };
-      default:
-        if (handsFreeMode === 'standby') {
-          return { label: 'Standby \u2014 say "Hey Friday"', color: 'var(--muted)', bg: 'color-mix(in srgb, var(--muted) 10%, transparent)' };
-        }
-        return { label: 'FRIDAY Ready', color: 'var(--muted)', bg: 'color-mix(in srgb, var(--muted) 10%, transparent)' };
+    // Explicit 9 pipeline states
+    if (state === 'error' || voiceSessionState === 'ERROR' || voiceSessionState === 'MICROPHONE_ERROR' || voiceSessionState === 'TASK_UNSUPPORTED') {
+      return { label: 'Service Error', color: 'var(--danger)', bg: 'color-mix(in srgb, var(--danger) 15%, transparent)' };
     }
+    if (state === 'speaking' || voiceSessionState === 'SPEAKING') {
+      return { label: 'Speaking', color: 'var(--success)', bg: 'color-mix(in srgb, var(--success) 15%, transparent)' };
+    }
+    if (state === 'interrupted' || voiceSessionState === 'INTERRUPTED') {
+      return { label: 'Interrupted', color: 'var(--warning)', bg: 'color-mix(in srgb, var(--warning) 15%, transparent)' };
+    }
+    if (voiceSessionState === 'SPEECH_DETECTED') {
+      return { label: 'Speech Detected', color: 'var(--accent)', bg: 'color-mix(in srgb, var(--accent) 20%, transparent)' };
+    }
+    if (voiceSessionState === 'PROCESSING_AUDIO') {
+      return { label: 'Processing Audio', color: 'var(--info)', bg: 'color-mix(in srgb, var(--info) 18%, transparent)' };
+    }
+    if (voiceSessionState === 'TRANSCRIBING') {
+      return { label: 'Transcribing Voice...', color: 'var(--info)', bg: 'color-mix(in srgb, var(--info) 18%, transparent)' };
+    }
+    if (voiceSessionState === 'TRANSCRIPT_RECEIVED') {
+      return { label: 'Transcript Received', color: 'var(--success)', bg: 'color-mix(in srgb, var(--success) 18%, transparent)' };
+    }
+    if (state === 'thinking' || voiceSessionState === 'THINKING' || voiceSessionState === 'PROCESSING') {
+      return { label: 'Thinking...', color: 'var(--info)', bg: 'color-mix(in srgb, var(--info) 15%, transparent)' };
+    }
+    if (state === 'listening' || isListening || voiceSessionState === 'LISTENING') {
+      return {
+        label:
+          recordingSeconds > 0
+            ? `Listening (MIC ACTIVE - ${formatRecordingDuration(recordingSeconds)})`
+            : 'Listening (MIC ACTIVE)',
+        color: 'var(--accent)',
+        bg: 'color-mix(in srgb, var(--accent) 15%, transparent)',
+      };
+    }
+    if (handsFreeMode === 'standby' || voiceSessionState === 'STANDBY') {
+      return { label: 'Ready (Say "Hey Friday")', color: 'var(--muted)', bg: 'color-mix(in srgb, var(--muted) 10%, transparent)' };
+    }
+    return { label: 'Idle', color: 'var(--muted)', bg: 'color-mix(in srgb, var(--muted) 10%, transparent)' };
   };
 
   const status = getStatusBadge();
@@ -167,11 +197,22 @@ export const ControlBar: React.FC<ControlBarProps> = ({
           >
             {personalityLabel}
           </span>
-          {handsFreeMode !== 'off' && (
-            <span style={{ fontSize: '0.66rem', color: 'var(--muted-dim)' }} title="Microphone access is active">
-              MIC ACTIVE · {currentMood}
+          {isMicMuted ? (
+            <span style={{ fontSize: '0.66rem', color: 'var(--danger, #ef4444)', fontWeight: 600 }} title="Microphone is muted">
+              MIC MUTED
             </span>
-          )}
+          ) : handsFreeMode !== 'off' ? (
+            <span
+              style={{
+                fontSize: '0.66rem',
+                color: isListening ? 'var(--accent)' : 'var(--muted-dim)',
+                fontWeight: isListening ? 600 : 400,
+              }}
+              title="Microphone state"
+            >
+              {isListening ? 'MIC ACTIVE' : 'MIC READY (STANDBY)'} · {currentMood}
+            </span>
+          ) : null}
         </div>
 
         {/* Action icons (Shortcuts, Transcript, Mute, Settings) */}
@@ -304,6 +345,24 @@ export const ControlBar: React.FC<ControlBarProps> = ({
             {messageCount > 0 && <span>{messageCount}</span>}
           </button>
 
+          {/* Microphone Mute */}
+          {onToggleMicMute && (
+            <button
+              onClick={onToggleMicMute}
+              title={isMicMuted ? 'Unmute microphone' : 'Mute microphone'}
+              style={{
+                background: isMicMuted ? 'color-mix(in srgb, var(--danger, #ef4444) 18%, transparent)' : 'color-mix(in srgb, var(--text) 5%, transparent)',
+                border: isMicMuted ? '1px solid color-mix(in srgb, var(--danger, #ef4444) 50%, transparent)' : '1px solid color-mix(in srgb, var(--text) 10%, transparent)',
+                borderRadius: '10px',
+                padding: '6px 8px',
+                color: isMicMuted ? 'var(--danger, #ef4444)' : 'var(--muted)',
+                cursor: 'pointer',
+              }}
+            >
+              {isMicMuted ? <MicOff size={15} /> : <Mic size={15} />}
+            </button>
+          )}
+
           {/* Sound Mute */}
           <button
             onClick={onToggleMute}
@@ -319,6 +378,27 @@ export const ControlBar: React.FC<ControlBarProps> = ({
           >
             {isMuted ? <VolumeX size={15} /> : <Volume2 size={15} />}
           </button>
+
+          {/* Voice Diagnostics Button */}
+          {onOpenDiagnostics && (
+            <button
+              onClick={onOpenDiagnostics}
+              title="Voice Pipeline Real-time Diagnostics"
+              style={{
+                background: diagnosticsOpen ? 'color-mix(in srgb, var(--accent) 15%, transparent)' : 'color-mix(in srgb, var(--text) 5%, transparent)',
+                border: diagnosticsOpen ? '1px solid color-mix(in srgb, var(--accent) 40%, transparent)' : '1px solid color-mix(in srgb, var(--text) 10%, transparent)',
+                borderRadius: '10px',
+                padding: '6px 8px',
+                color: diagnosticsOpen ? 'var(--accent)' : 'var(--muted)',
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '4px',
+              }}
+            >
+              <Activity size={15} />
+            </button>
+          )}
 
           {/* Settings */}
           <button
@@ -417,6 +497,8 @@ export const ControlBar: React.FC<ControlBarProps> = ({
           type="text"
           value={inputText}
           onChange={(e) => setInputText(e.target.value)}
+          onFocus={onTextFocus}
+          onBlur={onTextBlur}
           onKeyDown={handleKeyDown}
           placeholder=""
           style={{

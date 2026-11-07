@@ -17,19 +17,16 @@ import { detectLanguageFromText } from '../voice/languages';
 import { analyzeMood, buildMoodInstruction, MoodAnalysis } from './mood';
 import { getLocalResponse } from './localResponses';
 import { classifyFridayError } from '../error/errorHandler';
+import { isForeignAssistantCommand } from '../agent/voiceActionGuard';
 
 /**
  * Models tried, in order, when the configured model is unavailable.
  * Prioritizes high-quota, verified operational models with audio multimodal capability.
  */
 const MODEL_FALLBACKS = [
-  'gemini-3.1-flash-lite',
   'gemini-3.5-flash-lite',
-  'gemini-3.1-flash-lite-preview',
   'gemini-flash-lite-latest',
-  'gemini-3-flash-preview',
-  'gemini-3.5-flash',
-  'gemini-3.1-pro-preview',
+  'gemini-flash-latest',
   'gemini-2.5-flash',
 ];
 
@@ -37,15 +34,16 @@ const MODEL_FALLBACKS = [
 export function buildModelCandidates(configured?: string): string[] {
   let initial = configured?.trim();
   if (
+    !initial ||
+    initial === 'gemini-3.1-flash-lite' ||
     initial === 'gemini-2.5-pro' ||
     initial === 'gemini-2.0-flash' ||
     initial === 'gemini-1.5-flash' ||
-    initial === 'gemini-3.1-pro-preview' ||
-    initial === 'gemini-2.5-flash'
+    initial === 'gemini-3.1-pro-preview'
   ) {
-    initial = 'gemini-3.1-flash-lite';
+    initial = 'gemini-3.5-flash-lite';
   }
-  const ordered = [initial || 'gemini-3.1-flash-lite', ...MODEL_FALLBACKS].filter(
+  const ordered = [initial, ...MODEL_FALLBACKS].filter(
     (model): model is string => Boolean(model && model.length > 0)
   );
   return Array.from(new Set(ordered));
@@ -351,6 +349,77 @@ export class GeminiService {
   }
 
   /**
+   * Transcribes audio using Groq Whisper (whisper-large-v3-turbo).
+   * Extremely fast (<250ms), highly accurate on Telugu/Hindi/English code-switching,
+   * and immune to Google Gemini free-tier daily rate limits.
+   */
+  private async transcribeWithGroqWhisper(
+    audioBase64: string,
+    audioMimeType?: string,
+    prompt?: string
+  ): Promise<string | null> {
+  const settings = settingsStore.getSettings();
+  const apiKey = (settings.providerConfigs?.groq?.apiKey || process.env.GROQ_API_KEY || '').trim();
+  if (!apiKey) return null;
+
+  try {
+    const cleanMime = (audioMimeType || 'audio/webm').split(';')[0].trim();
+    const ext = cleanMime.includes('mp4') ? 'mp4' : cleanMime.includes('wav') ? 'wav' : 'webm';
+    const buffer = Buffer.from(audioBase64, 'base64');
+    if (buffer.length < 300) return '';
+
+    const form = new FormData();
+    const blob = new Blob([buffer], { type: cleanMime });
+    form.append('file', blob, `speech.${ext}`);
+    form.append('model', 'whisper-large-v3-turbo');
+    form.append('response_format', 'json');
+    if (prompt) {
+      form.append('prompt', prompt);
+    } else {
+      form.append('prompt', 'Telugu, English, Hinglish, Spotify, Chrome, YouTube, VS Code, Friday, open, search, play');
+    }
+
+    const res = await fetch('https://api.groq.com/openai/v1/audio/transcriptions', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+      },
+      body: form,
+    });
+
+    if (!res.ok) {
+      const errBody = await res.text().catch(() => '');
+      console.warn(`[GroqWhisper] API returned HTTP ${res.status}:`, errBody);
+      return null;
+    }
+
+    const data: any = await res.json();
+    let text = (data?.text || '').trim();
+    text = text.replace(/^["'`]+|["'`]+$/g, '').trim();
+
+    // Ignore known Whisper noise/hallucination artifacts
+    if (
+      !text ||
+      text.toUpperCase() === 'SILENCE' ||
+      text.toUpperCase() === 'NONE' ||
+      text.toUpperCase() === 'THANK YOU.' ||
+      text.toUpperCase() === 'THANK YOU FOR WATCHING.' ||
+      text.toUpperCase() === 'THANKS FOR WATCHING.' ||
+      text.toUpperCase() === 'YOU' ||
+      /^\[?\d{1,2}:\d{2}(?::\d{2})?\]?(?:\s*-\s*\[?\d{1,2}:\d{2}(?::\d{2})?\]?)?$/.test(text)
+    ) {
+      return '';
+    }
+
+    console.info(`[GroqWhisper] Transcribed: "${text}"`);
+    return text;
+  } catch (err: any) {
+    console.warn('[GroqWhisper] Request failed:', err?.message || err);
+    return null;
+  }
+}
+
+  /**
    * Wake-word gate for hands-free standby mode. One cheap audio call, no
    * persona, tools, history or memory side effects: it only decides whether
    * the clip mentions "Friday" and returns what was said.
@@ -359,12 +428,25 @@ export class GeminiService {
     audioBase64: string,
     audioMimeType?: string
   ): Promise<string> {
-    const settings = settingsStore.getSettings();
-    const client = this.getClient();
-    const cleanMime = (audioMimeType || 'audio/webm').split(';')[0].trim();
-    const candidates = buildModelCandidates(settings.modelName);
+    // 1. Try Groq Whisper (ultra fast & reliable)
+    const groqText = await this.transcribeWithGroqWhisper(
+      audioBase64,
+      audioMimeType,
+      'Wake-word detection. Speaker says Friday.'
+    );
+    if (groqText !== null) {
+      if (!groqText) return 'NONE';
+      const hasFriday = /\b(?:hey\s+|hi\s+|ok\s+|okay\s+)?friday\b/i.test(groqText);
+      return hasFriday ? `WAKE|${groqText}` : 'NONE';
+    }
 
-    for (const modelCandidate of candidates) {
+    // 2. Gemini fallback (using only audio-capable Gemini models)
+    const AUDIO_GEMINI_MODELS = ['gemini-2.5-flash', 'gemini-flash-latest', 'gemini-2.5-flash-lite'];
+    const client = this.getClient();
+    const cleanBase64 = audioBase64.replace(/^data:audio\/[^;]+;base64,/, '');
+    const cleanMime = (audioMimeType || 'audio/wav').split(';')[0].trim();
+
+    for (const modelCandidate of AUDIO_GEMINI_MODELS) {
       try {
         const result = await retryWithBackoff(
           async () => {
@@ -377,7 +459,7 @@ export class GeminiService {
                     {
                       inlineData: {
                         mimeType: cleanMime,
-                        data: audioBase64,
+                        data: cleanBase64,
                       },
                     },
                     {
@@ -410,15 +492,29 @@ export class GeminiService {
     audioBase64: string,
     audioMimeType?: string
   ): Promise<string> {
-    const settings = settingsStore.getSettings();
+    const cleanBase64 = audioBase64.replace(/^data:audio\/[^;]+;base64,/, '');
+    const cleanMime = (audioMimeType || 'audio/wav').split(';')[0].trim();
+    const sizeKb = Math.round((cleanBase64.length * 0.75) / 1024);
+
+    console.info(`[STT Pipeline] Received audio for transcription: ${sizeKb} KB, mime=${cleanMime}`);
+
+    // 1. Try Groq Whisper first (ultra-fast <200ms, accurate, no quota limits)
+    const groqResult = await this.transcribeWithGroqWhisper(cleanBase64, cleanMime);
+    if (groqResult !== null) {
+      console.info(`[STT Pipeline] Groq Whisper transcribed: "${groqResult}"`);
+      return groqResult;
+    }
+
+    // 2. Fall back to Gemini multimodal audio models
+    const AUDIO_GEMINI_MODELS = ['gemini-2.5-flash', 'gemini-flash-latest', 'gemini-2.5-flash-lite'];
     const client = this.getClient();
-    const cleanMime = (audioMimeType || 'audio/webm').split(';')[0].trim();
-    const candidates = buildModelCandidates(settings.modelName);
 
     let lastError: any = null;
 
-    for (const modelCandidate of candidates) {
+    for (const modelCandidate of AUDIO_GEMINI_MODELS) {
       try {
+        console.info(`[STT Pipeline] Attempting transcription with ${modelCandidate}...`);
+        const startTime = Date.now();
         const result = await retryWithBackoff(
           async () => {
             return await client.models.generateContent({
@@ -430,7 +526,7 @@ export class GeminiService {
                     {
                       inlineData: {
                         mimeType: cleanMime,
-                        data: audioBase64,
+                        data: cleanBase64,
                       },
                     },
                     {
@@ -465,6 +561,9 @@ CRITICAL TRANSCRIPTION RULES:
 
         let text = (result.text || '').trim();
         text = text.replace(/^["'`]+|["'`]+$/g, '').trim();
+        const duration = Date.now() - startTime;
+
+        console.info(`[STT Pipeline] Model ${modelCandidate} returned in ${duration}ms: "${text}"`);
 
         // Check if output is silence or timestamp artifacts (e.g. 00:00, [00:00:00])
         if (
@@ -485,6 +584,7 @@ CRITICAL TRANSCRIPTION RULES:
 
     if (lastError) {
       console.error('[Gemini] All transcription model candidates failed:', lastError?.message || lastError);
+      throw new Error(`Speech recognition service failed: ${lastError?.message || 'All models unavailable'}`);
     }
     return '';
   }
@@ -498,6 +598,23 @@ CRITICAL TRANSCRIPTION RULES:
     const candidates = buildModelCandidates(settings.modelName);
     const userText = (params.message || '').trim();
     const moodAnalysis = analyzeMood(userText, params.prosody);
+
+    // Block unintended desktop execution if command was addressed to another assistant
+    if (isForeignAssistantCommand(userText)) {
+      const response = preferredLang.startsWith('te')
+        ? 'ఆ కమాండ్ వేరే అసిస్టెంట్‌కి (Google/Siri/Alexa) ఉద్దేశించినది కాబట్టి నేను ఎటువంటి డెస్క్‌టాప్ యాక్షన్ చేయలేదు.'
+        : 'That command was addressed to another assistant (Google/Siri/Alexa). Desktop actions were blocked for security.';
+      hooks.onStream?.({ type: 'delta', text: response });
+      hooks.onStream?.({ type: 'complete' });
+      void memoryService.appendExchange(userText, response, { language: preferredLang });
+      return {
+        text: response,
+        detectedLanguage: preferredLang,
+        toolCalls: [],
+        mood: moodAnalysis.mood,
+        safetyOverride: moodAnalysis.safetyOverride,
+      };
+    }
 
     // Fast local intent execution (<100ms) for app controls, media, volume, time, date, battery
     if (!params.audioBase64) {

@@ -3,6 +3,7 @@ import { toolRegistry } from './toolRegistry';
 import { desktopControlService } from '../desktop/desktopControlService';
 import { sendMediaKeyEvent } from './musicControlTool';
 import { bestAppMatch, displayNameForAppQuery, ALLOWED_APPLICATIONS } from './appShortcutsTool';
+import { isForeignAssistantCommand, validateVoiceAction } from './voiceActionGuard';
 
 export interface FastLocalIntentResult {
   matched: boolean;
@@ -56,8 +57,9 @@ export function extractMultilingualLaunchApp(text: string): string | null {
   }
 
   // English prefix patterns: open / launch / start / run <app>
+  // Supports conversational prefixes: "wait, first open YouTube", "first open Chrome", etc.
   const enMatch = clean.match(
-    /^(?:hey\s+)?(?:friday[\s,]+)?(?:please\s+)?(?:open|launch|start|run)\s+(.+?)\s*[,.!?]*$/i
+    /^(?:(?:wait|no|okay|ok|actually)[, ]+)*(?:first[, ]+)?(?:hey\s+)?(?:friday[\s,]+)?(?:please\s+)?(?:open|launch|start|run)\s+(.+?)\s*[,.!?]*$/i
   );
   if (enMatch) {
     return enMatch[1].replace(/^the\s+/i, '').replace(/\s+(?:application|app)$/i, '').trim();
@@ -65,7 +67,7 @@ export function extractMultilingualLaunchApp(text: string): string | null {
 
   // Telugu suffix patterns: <app> open chey / open cheyi / teeyi / chalu chey
   const teMatch = clean.match(
-    /^(?:hey\s+)?(?:friday[\s,]+)?(.+?)\s+(?:open\s*chey(?:i)?|chalu\s*chey(?:i)?|teeyi|open\s*sey)\s*[,.!?]*$/i
+    /^(?:(?:wait|no|okay|ok|aagu)[, ]+)*(?:first[, ]+)?(?:hey\s+)?(?:friday[\s,]+)?(.+?)\s+(?:open\s*chey(?:i)?|chalu\s*chey(?:i)?|teeyi|open\s*sey)\s*[,.!?]*$/i
   );
   if (teMatch) {
     return teMatch[1].replace(/^the\s+/i, '').replace(/\s+(?:application|app)$/i, '').trim();
@@ -73,7 +75,7 @@ export function extractMultilingualLaunchApp(text: string): string | null {
 
   // Hinglish suffix patterns: <app> kholo / open karo / chalao
   const hiMatch = clean.match(
-    /^(?:hey\s+)?(?:friday[\s,]+)?(.+?)\s+(?:kholo|open\s*karo|chalao)\s*[,.!?]*$/i
+    /^(?:(?:wait|no|okay|ok|ruko)[, ]+)*(?:first[, ]+)?(?:hey\s+)?(?:friday[\s,]+)?(.+?)\s+(?:kholo|open\s*karo|chalao)\s*[,.!?]*$/i
   );
   if (hiMatch) {
     return hiMatch[1].replace(/^the\s+/i, '').replace(/\s+(?:application|app)$/i, '').trim();
@@ -137,6 +139,19 @@ export class FastLocalIntentRouter {
     const lower = clean.toLowerCase();
     const isTelugu = preferredLanguage.startsWith('te') || /\b(chey|cheyi|aapu|undi|entha|cheppu|theedi)\b/i.test(lower);
     const isHindi = preferredLanguage.startsWith('hi') || /\b(karo|kholo|chalao|batao|hai|kitni)\b/i.test(lower);
+
+    // Block accidental desktop execution if command was addressed to another assistant
+    if (isForeignAssistantCommand(clean)) {
+      return {
+        matched: true,
+        intent: 'media',
+        response: isTelugu
+          ? 'ఆ కమాండ్ వేరే అసిస్టెంట్‌కి ఉద్దేశించినది కాబట్టి నేను ఎటువంటి డెస్క్‌టాప్ యాక్షన్ చేయలేదు.'
+          : 'That command was addressed to another assistant (Google/Siri/Alexa). Desktop actions were blocked for security.',
+        toolCalls: [],
+        executionMs: Date.now() - start,
+      };
+    }
 
     // 1. Time query
     if (
@@ -385,9 +400,9 @@ Add-Type -TypeDefinition @"
       const launchResult = await toolRegistry.executeTool('launch_allowed_app', { appId: launchAppQuery });
 
       if (launchResult?.success) {
-        let response = `${appName} is ready.`;
-        if (isTelugu) response = `${appName} open chesa.`;
-        else if (isHindi) response = `${appName} open kar diya.`;
+        let response = `Opening ${appName}.`;
+        if (isTelugu) response = `${appName} open chestunna.`;
+        else if (isHindi) response = `${appName} open kar raha hoon.`;
 
         return {
           matched: true,

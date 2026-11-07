@@ -28,8 +28,8 @@ describe('Gemini model fallback', () => {
   });
 
   it('falls back to a default when nothing is configured', () => {
-    expect(buildModelCandidates(undefined)[0]).toBe('gemini-3.1-flash-lite');
-    expect(buildModelCandidates('   ')[0]).toBe('gemini-3.1-flash-lite');
+    expect(buildModelCandidates(undefined)[0]).toBe('gemini-3.5-flash-lite');
+    expect(buildModelCandidates('   ')[0]).toBe('gemini-3.5-flash-lite');
   });
 
   it('recognises a missing-model error', () => {

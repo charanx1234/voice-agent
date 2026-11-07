@@ -2,7 +2,8 @@
   "appId": "com.friday.ai.companion",
   "productName": "FRIDAY",
   "directories": {
-    "output": "dist-release"
+    "output": "dist-release",
+    "buildResources": "build"
   },
   "files": [
     "dist-electron/**/*",
@@ -10,16 +11,20 @@
     "package.json"
   ],
   "win": {
-    "signAndEditExecutable": false,
-    "target": ["nsis", "dir"]
+    "signAndEditExecutable": true,
+    "target": ["nsis", "dir"],
+    "icon": "src/renderer/public/assets/friday.ico",
+    "legalTrademarks": "FRIDAY — Multilingual Desktop AI Companion",
+    "publisherName": "Friday AI Companion Team"
   },
   "nsis": {
     "oneClick": false,
     "perMachine": false,
-    "allowToChangeInstallationDirectory": true,
+    "allowToChangeInstallationDirectory": false,
     "createDesktopShortcut": true,
     "createStartMenuShortcut": true,
     "shortcutName": "FRIDAY",
-    "deleteAppDataOnUninstall": false
+    "deleteAppDataOnUninstall": false,
+    "include": "build/installer.nsh"
   }
 }

@@ -13,16 +13,55 @@ export type RobotState =
 /** Formal voice session lifecycle state machine. */
 export type VoiceSessionState =
   | 'STANDBY'
+  | 'IDLE'
   | 'WAKE_DETECTED'
+  | 'WAKE_WORD_DETECTED'
   | 'LISTENING'
+  | 'SPEECH_DETECTED'
   | 'PROCESSING'
+  | 'PROCESSING_AUDIO'
+  | 'TRANSCRIBING'
+  | 'TRANSCRIPT_RECEIVED'
+  | 'THINKING'
   | 'SPEAKING'
   | 'INTERRUPTED'
+  | 'ERROR'
   | 'PERMISSION_REQUIRED'
   | 'MICROPHONE_ERROR'
   | 'NETWORK_ERROR'
   | 'PROVIDER_ERROR'
   | 'TASK_UNSUPPORTED';
+
+/** Detailed real-time diagnostics data for development and troubleshooting */
+export interface VoiceDiagnosticsData {
+  selectedMicDevice: string;
+  micPermissionStatus: string;
+  streamStatus: 'active' | 'inactive' | 'closed' | 'error';
+  trackStatus: {
+    label: string;
+    readyState: string;
+    enabled: boolean;
+    muted: boolean;
+  };
+  audioFormat: string;
+  sampleRate: number;
+  liveLevel: number;
+  peakLevel: number;
+  ambientNoiseFloor: number;
+  isSpeechDetected: boolean;
+  capturedDurationMs: number;
+  audioBufferSizeKb: number;
+  sessionState: VoiceSessionState;
+  sttStatus: 'idle' | 'requesting' | 'completed' | 'error' | 'timeout';
+  sttModel: string;
+  sttLatencyMs?: number;
+  sttTranscript: string;
+  geminiStatus: 'idle' | 'requesting' | 'streaming' | 'completed' | 'error';
+  geminiLatencyMs?: number;
+  ttsStatus: 'idle' | 'synthesizing' | 'speaking' | 'interrupted' | 'error';
+  lastError: string | null;
+  lastErrorTimestamp?: number;
+}
 
 export interface EnrolledSpeakerProfile {
   enrolledAt: number;

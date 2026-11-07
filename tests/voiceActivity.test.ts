@@ -59,4 +59,29 @@ describe('Voice activity detection', () => {
     expect(vad.isSpeaking).toBe(false);
     expect(vad.finish(600)).toBeNull();
   });
+
+  it('caps utterance duration at maxUtteranceMs', () => {
+    const vad = new VoiceActivityDetector({
+      startThreshold: 0.2,
+      speechStartMs: 100,
+      endThreshold: 0.05,
+      speechEndMs: 1000,
+      maxUtteranceMs: 5000,
+    });
+    vad.update(0.3, 0);
+    expect(vad.update(0.3, 150)).toEqual({ type: 'start' });
+    expect(vad.update(0.3, 2000)).toBeNull();
+    const event = vad.update(0.3, 5200);
+    expect(event).toEqual({ type: 'end', durationMs: 5200, peakLevel: 0.3 });
+    expect(vad.isSpeaking).toBe(false);
+  });
+
+  it('reset() clears active speech state', () => {
+    const vad = new VoiceActivityDetector({ startThreshold: 0.2, speechStartMs: 100 });
+    vad.update(0.3, 0);
+    vad.update(0.3, 150);
+    expect(vad.isSpeaking).toBe(true);
+    vad.reset();
+    expect(vad.isSpeaking).toBe(false);
+  });
 });

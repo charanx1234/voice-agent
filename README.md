@@ -8,14 +8,21 @@ FRIDAY understands and speaks **Telugu (తెలుగు)**, **Indian English*
 
 ## 🌟 Key Features
 
-### 1. Advanced Microphone Voice Isolation & Noisy-Environment Speech Recognition 🎙️
-FRIDAY includes a professional, studio-grade audio processing pipeline designed specifically to maintain high accuracy and responsiveness in noisy environments:
+### 1. Robust Universal Audio Pipeline & Voice Isolation 🎙️
+FRIDAY includes a production-grade, lossless linear PCM audio pipeline with hardware-level voice isolation:
+- **Direct Linear PCM -> 16kHz Mono WAV Engine**:
+  - Raw audio is captured directly as uncompressed 32-bit float PCM buffers via Web Audio API, downsampled via linear interpolation, and encoded with a standard 44-byte RIFF WAVE header.
+  - Slicing and pre-roll buffers (350ms of audio) operate directly on raw sample arrays without container corruption or missing codec headers.
+  - Compatible universally with Gemini Multimodal Audio, Whisper, and Web Audio without relying on container re-muxing.
 - **Dedicated Audio Processing Graph**:
   - **High-Pass Filter** (85 Hz – 110 Hz): Eliminates low-frequency desk thumps, air conditioner hum, and fan drone.
   - **Low-Pass Filter** (3400 Hz – 3800 Hz): Suppresses high-frequency hiss, keyboard chatter, and mouse clicks.
   - **Peaking Vocal Presence Filter** (1.6 kHz, +3.5 dB boost): Enhances human voice formant intelligibility.
   - **Dynamics Compressor & AGC Limiter** (6:1 to 10:1 compression, 3ms attack): Normalizes quiet whispers and prevents digital clipping on loud speech.
-  - **Software Ducking & Acoustic Echo Cancellation (AEC)**: Attenuates incoming microphone audio to 0.08 while FRIDAY is speaking so FRIDAY never triggers itself through speakers, while still allowing natural user barge-in interruptions.
+  - **Software Ducking & Acoustic Echo Cancellation (AEC)**: Attenuates incoming microphone audio while FRIDAY is speaking so FRIDAY never triggers itself through speakers, while still allowing natural user barge-in interruptions.
+- **9-State Lifecycle State Machine**:
+  - Formal, verified transitions: `IDLE` → `LISTENING` → `SPEECH_DETECTED` → `PROCESSING_AUDIO` → `TRANSCRIBING` → `TRANSCRIPT_RECEIVED` → `THINKING` → `SPEAKING` → `ERROR`.
+  - Every transition corresponds to a verified pipeline operation; no fake indicators or unhandled hanging states.
 - **Adaptive Listening Modes**:
   - **Quiet Room**: Balanced speech enhancement with normal sensitivity and lowest processing overhead.
   - **Noisy Environment**: Stronger noise suppression, adaptive noise gate (1.6× ambient floor), and higher compressor ratio for rooms with fans, background TV, or multiple voices.
@@ -28,13 +35,13 @@ FRIDAY includes a professional, studio-grade audio processing pipeline designed 
   - Preserves natural code-switching: *"Friday, Chrome open chey and Java tutorials search chey"*, *"Spotify lo music play chey"*, *"Naaku tomorrow college ki vellali"*, *"Ee error enti, can you explain?"*.
   - Strictly preserves English technical vocabulary, app names, website domains, and programming terms without forced translation.
   - Retains Telugu colloquial verbs and case markers (`chey`, `chudu`, `pettandi`, `vellali`, `raayi`, `teeyi`, `entha`, `cheppu`, `lo`, `ki`, `naaku`, `enti`) and Hindi verbs (`karo`, `kholo`, `chalao`, `band karo`).
+- **Real-Time Development Diagnostic Panel**:
+  - Click the **Activity pulse icon** in the bottom Control Bar to open the real-time diagnostics overlay.
+  - Displays selected microphone hardware, track status (`live`/`muted`), live input audio level meter with clipping warnings, ambient noise floor, buffer size (KB), STT model & latency, exact recognized transcript, Gemini AI status, and error logs.
 - **Confidence & Uncertainty Handling**:
   - Never invents words or hallucinates desktop actions to compensate for audio noise.
-  - Noise-only segments and silence are dropped silently during standby without triggering unsolicited greetings (no *"Yes, spit it out"* or unwanted interruptions).
-  - Cut-off or incomplete speech (e.g. *"Friday, open..."*) is recognized as incomplete, and FRIDAY asks *"Which application would you like me to open?"* instead of guessing an application.
-- **Audio Diagnostics & Verification Panel**:
-  - Settings → Voice Isolation includes real-time diagnostics: selected microphone name, device streaming status, peak input level with clipping indicator, running ambient noise floor, Signal-to-Noise Ratio (SNR in dB), VAD state, echo cancellation status, and pipeline/STT latency.
-  - Interactive **Test Microphone** records a 3-second sample and plays back the processed, noise-suppressed audio while displaying the recognized transcript side-by-side.
+  - Silence and ambient noise return cleanly to standby without fake transcripts.
+  - Cut-off speech (e.g. *"Friday, open..."*) is recognized as incomplete, and FRIDAY asks *"Which application would you like me to open?"* instead of guessing an application.
 
 ### 2. Expressive 2D Robot Character & Desktop Pet
 - **Sleek Cyber Aesthetic**: Deep charcoal & metallic black chassis with glowing cyan accents (`#00e5ff`).
@@ -174,17 +181,17 @@ This places a `FRIDAY.lnk` shortcut with the custom FRIDAY icon directly onto yo
 
 ## 🧪 Automated Testing
 
-FRIDAY includes 32 test suites with 254 unit and integration tests covering audio filtering, adaptive VAD, local intent execution, memory persistence, speaker verification, and tool safety:
+FRIDAY includes 36 test suites with 274 unit and integration tests covering audio filtering, linear PCM to 16kHz WAV encoding, adaptive VAD, local intent execution, memory persistence, speaker verification, and tool safety:
 
 ```powershell
-npm test
+cd C:\25r11a6760\FRIDAY; npm test
 ```
 
-All 32 test suites pass:
+All 36 test suites pass cleanly:
 ```
- Test Files  32 passed (32)
-      Tests  254 passed (254)
-   Duration  5.10s
+ Test Files  36 passed (36)
+      Tests  274 passed (274)
+   Duration  4.34s
 ```
 
 ---

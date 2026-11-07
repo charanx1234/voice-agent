@@ -23,6 +23,8 @@ export interface VadOptions {
    * Default 1.0 (no additional gate).
    */
   noiseGateMultiplier?: number;
+  /** Maximum utterance duration (ms) before forcing turn completion. Default 30,000ms. */
+  maxUtteranceMs?: number;
 }
 
 export const DEFAULT_VAD_OPTIONS: VadOptions = {
@@ -31,15 +33,17 @@ export const DEFAULT_VAD_OPTIONS: VadOptions = {
   speechStartMs: 100,
   speechEndMs: 1200,
   noiseGateMultiplier: 1.0,
+  maxUtteranceMs: 30000,
 };
 
 /** Barge-in during TTS playback: stricter, so speaker echo does not trigger it. */
 export const BARGE_IN_VAD_OPTIONS: VadOptions = {
-  startThreshold: 0.18,
-  endThreshold: 0.075,
-  speechStartMs: 120,
+  startThreshold: 0.24,
+  endThreshold: 0.09,
+  speechStartMs: 160,
   speechEndMs: 600,
-  noiseGateMultiplier: 1.0,
+  noiseGateMultiplier: 1.4,
+  maxUtteranceMs: 30000,
 };
 
 export type VadEvent =
@@ -105,6 +109,14 @@ export class VoiceActivityDetector {
       return null;
     }
 
+    // speaking: check maximum utterance duration timeout first
+    if (this.options.maxUtteranceMs && nowMs - this.startedAt >= this.options.maxUtteranceMs) {
+      const durationMs = nowMs - this.startedAt;
+      const peakLevel = this.peak;
+      this.reset();
+      return { type: 'end', durationMs, peakLevel };
+    }
+
     // speaking: wait for sustained quiet to close the utterance
     if (level < this.effectiveEndThreshold) {
       this.quietSince ??= nowMs;
@@ -128,7 +140,7 @@ export class VoiceActivityDetector {
     return { type: 'end', durationMs: durationMs, peakLevel: peakLevel };
   }
 
-  private reset(): void {
+  public reset(): void {
     this.speaking = false;
     this.loudSince = null;
     this.quietSince = null;

@@ -207,16 +207,18 @@ function createWindow(): void {
   // Only the microphone is ever granted; every other permission request is denied.
   mainWindow.webContents.session.setPermissionRequestHandler(
     (_webContents, permission, callback, details) => {
-      const mediaDetails = details as Electron.MediaAccessPermissionRequest;
-      const audioOnly =
-        permission === 'media' &&
-        (!mediaDetails.mediaTypes ||
-          (mediaDetails.mediaTypes.includes('audio') && !mediaDetails.mediaTypes.includes('video')));
-      callback(audioOnly);
+      const mediaDetails = (details || {}) as Electron.MediaAccessPermissionRequest;
+      const isMic =
+        (permission as string) === 'microphone' ||
+        (permission === 'media' &&
+          (!mediaDetails.mediaTypes ||
+            (mediaDetails.mediaTypes.includes('audio') && !mediaDetails.mediaTypes.includes('video'))));
+      console.log(`[FRIDAY Main] Permission request: permission=${permission}, granted=${isMic}`);
+      callback(isMic);
     }
   );
   mainWindow.webContents.session.setPermissionCheckHandler((_webContents, permission, _origin, details) => {
-    return permission === 'media' && details.mediaType !== 'video';
+    return (permission as string) === 'microphone' || (permission === 'media' && details?.mediaType !== 'video');
   });
 
   // Open external links safely in system browser, not inside the Electron companion window
@@ -265,6 +267,11 @@ function createWindow(): void {
   mainWindow.on('closed', () => {
     console.log('[FRIDAY] Window closed.');
     mainWindow = null;
+  });
+
+  // Forward renderer console messages to terminal so errors are immediately visible
+  mainWindow.webContents.on('console-message', (_event, level, message, line, sourceId) => {
+    console.log(`[Renderer Console] [level=${level}] ${message} (${sourceId}:${line})`);
   });
 
   // Lifecycle diagnostics: these make silent renderer deaths visible in logs.

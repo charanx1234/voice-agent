@@ -102,11 +102,13 @@ export class VoiceCoordinator {
     // Map VoiceSessionState to RobotState
     switch (sessionState) {
       case 'STANDBY':
+      case 'IDLE':
         this.robotState = 'idle';
         this.isSpeaking = false;
         if (!updates?.expression) this.expression = 'smile';
         break;
       case 'WAKE_DETECTED':
+      case 'WAKE_WORD_DETECTED':
         this.robotState = 'listening';
         this.isSpeaking = false;
         this.expression = 'excited';
@@ -116,7 +118,16 @@ export class VoiceCoordinator {
         this.isSpeaking = false;
         if (!updates?.expression) this.expression = 'smile';
         break;
+      case 'SPEECH_DETECTED':
+        this.robotState = 'listening';
+        this.isSpeaking = false;
+        if (!updates?.expression) this.expression = 'curious';
+        break;
       case 'PROCESSING':
+      case 'PROCESSING_AUDIO':
+      case 'TRANSCRIBING':
+      case 'TRANSCRIPT_RECEIVED':
+      case 'THINKING':
         this.robotState = 'thinking';
         this.isSpeaking = false;
         this.expression = 'thinking';
@@ -130,6 +141,7 @@ export class VoiceCoordinator {
         this.isSpeaking = false;
         this.expression = 'surprised';
         break;
+      case 'ERROR':
       case 'PERMISSION_REQUIRED':
       case 'MICROPHONE_ERROR':
       case 'NETWORK_ERROR':

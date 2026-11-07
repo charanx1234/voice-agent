@@ -31,7 +31,7 @@ export interface ProviderGenerateResult {
   mood?: ConversationMood;
   safetyOverride?: boolean;
   modelUsed?: string;
-  providerUsed?: AiProviderId;
+  providerUsed?: AiProviderId | 'local_fast';
   error?: string;
   cancelled?: boolean;
 }
