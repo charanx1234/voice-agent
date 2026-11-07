@@ -164,9 +164,19 @@ export function bestAppMatch(query: string, candidates: string[]): string | null
   return best;
 }
 
-// ---- Start Menu + App Paths resolution ------------------------------------
+// ---- Desktop, Start Menu, User Programs & App Paths resolution -----------
 
-const START_MENU_DIRS = [
+const APP_SCAN_DIRS = [
+  // User Desktop (standard and OneDrive sync on Windows 11)
+  path.join(os.homedir(), 'Desktop'),
+  path.join(os.homedir(), 'OneDrive', 'Desktop'),
+  path.join(process.env.PUBLIC || 'C:\\Users\\Public', 'Desktop'),
+
+  // User Local Programs (where VS Code, Antigravity, Discord, etc. live)
+  path.join(os.homedir(), 'AppData', 'Local', 'Programs'),
+  path.join(process.env.LOCALAPPDATA || '', 'Microsoft', 'WindowsApps'),
+
+  // Start Menu Programs
   path.join(
     process.env.PROGRAMDATA || 'C:\\ProgramData',
     'Microsoft',
@@ -185,10 +195,11 @@ interface ShortcutEntry {
 }
 
 let shortcutCache: { entries: ShortcutEntry[]; scannedAt: number } | null = null;
-const SHORTCUT_CACHE_MS = 10 * 60 * 1000;
+const SHORTCUT_CACHE_MS = 5 * 60 * 1000;
 
 function scanShortcuts(dir: string, out: ShortcutEntry[], depth: number): void {
   if (depth > 4) return;
+  if (!fs.existsSync(dir)) return;
 
   let files: fs.Dirent[];
   try {
@@ -200,9 +211,20 @@ function scanShortcuts(dir: string, out: ShortcutEntry[], depth: number): void {
   for (const entry of files) {
     const full = path.join(dir, entry.name);
     if (entry.isDirectory()) {
-      scanShortcuts(full, out, depth + 1);
-    } else if (entry.isFile() && entry.name.toLowerCase().endsWith('.lnk')) {
-      out.push({ name: entry.name.replace(/\.lnk$/i, ''), lnkPath: full });
+      if (!['node_modules', '.git', 'Common', 'resources'].includes(entry.name)) {
+        scanShortcuts(full, out, depth + 1);
+      }
+    } else if (entry.isFile()) {
+      const lower = entry.name.toLowerCase();
+      if (lower.endsWith('.lnk') || lower.endsWith('.url')) {
+        const cleanName = entry.name.replace(/\.(lnk|url)$/i, '');
+        out.push({ name: cleanName, lnkPath: full });
+      } else if (lower.endsWith('.exe')) {
+        const cleanName = entry.name.replace(/\.exe$/i, '');
+        if (!/(uninstall|unins\d*|setup|update|helper|crashpad|installer)/i.test(cleanName)) {
+          out.push({ name: cleanName, lnkPath: full });
+        }
+      }
     }
   }
 }
@@ -213,7 +235,7 @@ export function getStartMenuShortcuts(): ShortcutEntry[] {
   }
 
   const entries: ShortcutEntry[] = [];
-  for (const dir of START_MENU_DIRS) {
+  for (const dir of APP_SCAN_DIRS) {
     scanShortcuts(dir, entries, 0);
   }
 
@@ -316,12 +338,15 @@ export async function executeAppShortcutsTool(
       : { success: false, error: `Could not open ${builtin.name}: ${result.error}` };
   }
 
-  // 2. Start Menu shortcuts — covers everything the user has installed.
+  // 2. Desktop & Start Menu shortcuts, and user-installed programs
   const shortcuts = getStartMenuShortcuts();
   const bestShortcut = bestAppMatch(query, shortcuts.map((s) => s.name));
   if (bestShortcut) {
     const entry = shortcuts.find((s) => s.name === bestShortcut)!;
-    const result = await launchCommand('explorer.exe', [entry.lnkPath]);
+    const isExe = entry.lnkPath.toLowerCase().endsWith('.exe');
+    const result = isExe
+      ? await launchCommand(entry.lnkPath)
+      : await launchCommand('explorer.exe', [entry.lnkPath]);
     return result.success
       ? { success: true, message: `Opened ${entry.name}.`, app: entry.name }
       : { success: false, error: `Could not open ${entry.name}: ${result.error}` };
@@ -362,6 +387,6 @@ export async function executeAppShortcutsTool(
 
   return {
     success: false,
-    error: `I couldn't find that application on your computer.`,
+    error: `I checked your computer and could not find "${query}" installed on your PC.`,
   };
 }

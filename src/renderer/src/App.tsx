@@ -208,11 +208,19 @@ export const App: React.FC = () => {
   // has been selected. Speaking keeps the selected conversational expression
   // until playback ends, then returns smoothly to neutral.
   useEffect(() => {
-    if (robotState === 'idle') setFaceExpression('neutral');
-    else if (robotState === 'listening') setFaceExpression('curious');
-    else if (robotState === 'interrupted') setFaceExpression('surprised');
-    else if (robotState === 'error') setFaceExpression('sad');
-  }, [robotState]);
+    if (robotState === 'idle') {
+      setFaceExpression('neutral');
+      if (voiceSessionState === 'SPEAKING' || voiceSessionState === 'PROCESSING_AUDIO') {
+        setVoiceSessionState('STANDBY');
+      }
+    } else if (robotState === 'listening') {
+      setFaceExpression('curious');
+    } else if (robotState === 'interrupted') {
+      setFaceExpression('surprised');
+    } else if (robotState === 'error') {
+      setFaceExpression('sad');
+    }
+  }, [robotState, voiceSessionState]);
 
   // Sync state with floating desktop pet
   useEffect(() => {
@@ -259,8 +267,19 @@ export const App: React.FC = () => {
         interrupt();
       } else if (robotStateRef.current === 'listening') {
         handsFreeRef.current.goStandby();
+        setRobotState('idle');
+        setVoiceSessionState('STANDBY');
       } else {
         handsFreeRef.current.wake();
+        setRobotState('listening');
+        setVoiceSessionState('LISTENING');
+        setFaceExpression('excited');
+        playWakeChime();
+        window.fridayAPI?.updatePetState?.({
+          voiceSessionState: 'LISTENING',
+          robotState: 'listening',
+          expression: 'excited',
+        });
       }
     });
   }, [interrupt]);

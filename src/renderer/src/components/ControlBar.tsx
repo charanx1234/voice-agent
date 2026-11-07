@@ -107,7 +107,7 @@ export const ControlBar: React.FC<ControlBarProps> = ({
     if (state === 'error' || voiceSessionState === 'ERROR' || voiceSessionState === 'MICROPHONE_ERROR' || voiceSessionState === 'TASK_UNSUPPORTED') {
       return { label: 'Service Error', color: 'var(--danger)', bg: 'color-mix(in srgb, var(--danger) 15%, transparent)' };
     }
-    if (state === 'speaking' || voiceSessionState === 'SPEAKING') {
+    if (state === 'speaking') {
       return { label: 'Speaking', color: 'var(--success)', bg: 'color-mix(in srgb, var(--success) 15%, transparent)' };
     }
     if (state === 'interrupted' || voiceSessionState === 'INTERRUPTED') {

@@ -56,13 +56,29 @@ export function extractMultilingualLaunchApp(text: string): string | null {
     return null;
   }
 
-  // English prefix patterns: open / launch / start / run <app>
-  // Supports conversational prefixes: "wait, first open YouTube", "first open Chrome", etc.
+  // English prefix patterns: open / launch / start / run / check <app>
   const enMatch = clean.match(
-    /^(?:(?:wait|no|okay|ok|actually)[, ]+)*(?:first[, ]+)?(?:hey\s+)?(?:friday[\s,]+)?(?:please\s+)?(?:open|launch|start|run)\s+(.+?)\s*[,.!?]*$/i
+    /^(?:(?:wait|no|okay|ok|actually|hey|please|first|can you|could you)[, ]+)*(?:first[, ]+)?(?:friday[\s,]+)?(?:please\s+)?(?:open|launch|start|run|check(?:\s+for|\s+if|\s+out)?)\s+(.+?)\s*[,.!?]*$/i
   );
   if (enMatch) {
-    return enMatch[1].replace(/^the\s+/i, '').replace(/\s+(?:application|app)$/i, '').trim();
+    let candidate = enMatch[1].replace(/^the\s+/i, '').replace(/\s+(?:application|app)$/i, '').trim();
+    candidate = candidate.replace(/\s+(?:is|there)?\s*(?:on\s+(?:my\s+)?(?:desktop|pc|computer))(?:\s*,\s*check(?:\s+once)?)?$/i, '').trim();
+    candidate = candidate.replace(/\s+(?:is|there)$/i, '').trim();
+    if (candidate && !/\b(weather|news|meaning|definition)\b/i.test(candidate)) {
+      return candidate;
+    }
+  }
+
+  // Desktop check patterns: e.g. "I mean not anti-gravity, I just mean anti-gravity on my desktop, check once"
+  const desktopMatch = clean.match(
+    /(?:(?:mean|check|find|look for|open)\s+)?(?:the\s+)?([a-zA-Z0-9_\-\.\+ ]+?)\s+on\s+my\s+(?:desktop|pc|computer)(?:[,\s]+check(?:\s+once)?)?/i
+  );
+  if (desktopMatch) {
+    let candidate = desktopMatch[1].trim();
+    candidate = candidate.replace(/^(?:i\s+)?(?:just\s+)?(?:mean\s+)?(?:the\s+)?/i, '').trim();
+    if (candidate && candidate.length > 1 && !/\b(weather|news|time|date)\b/i.test(candidate)) {
+      return candidate;
+    }
   }
 
   // Telugu suffix patterns: <app> open chey / open cheyi / teeyi / chalu chey

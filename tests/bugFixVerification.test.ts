@@ -395,4 +395,32 @@ describe('FRIDAY Bug Fix Verification Suite', () => {
       expect(recent.some((m) => m.text === assistantText)).toBe(true);
     });
   });
+
+  describe('5. Desktop App Launching vs. Chrome Enforcement & Idle State Reset', () => {
+    it('extracts desktop app queries from conversational desktop check phrasing', async () => {
+      const { extractMultilingualLaunchApp } = await import('../src/services/agent/fastLocalIntent');
+      const query1 = extractMultilingualLaunchApp('I mean not anti-gravity, I just mean anti-gravity on my desktop, check once');
+      expect(query1?.toLowerCase()).toContain('anti-gravity');
+
+      const query2 = extractMultilingualLaunchApp('open anti-gravity on my desktop');
+      expect(query2?.toLowerCase()).toBe('anti-gravity');
+
+      const query3 = extractMultilingualLaunchApp('check if vscode is on my pc');
+      expect(query3?.toLowerCase()).toBe('vscode');
+    });
+
+    it('matches "anti-gravity" against desktop shortcut candidates like "Antigravity"', async () => {
+      const { bestAppMatch } = await import('../src/services/agent/appShortcutsTool');
+      const candidates = ['Google Chrome', 'Antigravity', 'Microsoft Edge', 'Notepad'];
+      const matched = bestAppMatch('anti-gravity', candidates);
+      expect(matched).toBe('Antigravity');
+    });
+
+    it('returns a clear error indicating the app is not installed when not found on PC', async () => {
+      const { executeAppShortcutsTool } = await import('../src/services/agent/appShortcutsTool');
+      const result = await executeAppShortcutsTool('launch_allowed_app', { appId: 'nonexistent_test_app_xyz_123' });
+      expect(result.success).toBe(false);
+      expect(result.error).toContain('I checked your computer and could not find');
+    });
+  });
 });

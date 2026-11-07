@@ -29,7 +29,7 @@ export const chromeBrowserToolDefinitions = [
   {
     name: 'search_in_chrome',
     description:
-      'Opens Google Chrome installed on the computer, performs a web search for the query, and presents the results. Use whenever the user asks to search the web, find news, look up information, or browse in Chrome.',
+      'Opens Google Chrome installed on the computer to perform a web search for queries the user explicitly asked to search or look up online. NEVER use this tool to open or search for local applications, desktop software, or PC programs — use "launch_allowed_app" for desktop applications.',
     parameters: {
       type: 'OBJECT',
       properties: {
@@ -44,7 +44,7 @@ export const chromeBrowserToolDefinitions = [
   {
     name: 'open_url_in_chrome',
     description:
-      'Opens a specific website or URL (like YouTube, GitHub, Reddit, Wikipedia) in Google Chrome on the desktop.',
+      'Opens a specific website or URL (like YouTube for requested videos/music, GitHub, Reddit) in Google Chrome. ONLY use when the user asks to open a specific website, watch a video, or browse a web URL. NEVER use for local PC apps.',
     parameters: {
       type: 'OBJECT',
       properties: {

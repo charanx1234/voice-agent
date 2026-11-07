@@ -358,6 +358,9 @@ export function useHandsFree(options: HandsFreeOptions) {
 
     const tick = () => {
       if (disposed || !analyser) return;
+      if (audioCtx && audioCtx.state === 'suspended') {
+        void audioCtx.resume();
+      }
       const now = Date.now();
 
       // 1. Microphone Mute Check
