@@ -765,9 +765,7 @@ export const DesktopPet: React.FC = () => {
   };
 
   const handleDoubleClick = () => {
-    if (window.fridayAPI?.petToggleMain) {
-      window.fridayAPI.petToggleMain();
-    }
+    toggleExpanded(!isExpanded);
   };
 
   const handleContextMenu = (e: React.MouseEvent) => {
