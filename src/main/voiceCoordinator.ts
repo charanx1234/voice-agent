@@ -205,10 +205,18 @@ export class VoiceCoordinator {
    */
   public handleTriggerMic(): void {
     const mainWin = this.getMainWindow();
-    if (!mainWin || mainWin.isDestroyed()) return;
+    const petWin = this.getPetWindow();
 
-    // Send command to the designated Audio Host (MainWindow)
-    mainWin.webContents.send(IPC_CHANNELS.VOICE_TRIGGER_MIC);
+    // If main window is visible, delegate to main window audio host
+    if (mainWin && !mainWin.isDestroyed() && mainWin.isVisible()) {
+      mainWin.webContents.send(IPC_CHANNELS.VOICE_TRIGGER_MIC);
+      return;
+    }
+
+    // Otherwise (dashboard closed/hidden), delegate to desktop pet audio host
+    if (petWin && !petWin.isDestroyed()) {
+      petWin.webContents.send(IPC_CHANNELS.VOICE_TRIGGER_MIC);
+    }
   }
 
   /**
@@ -216,10 +224,7 @@ export class VoiceCoordinator {
    */
   public handleInterrupt(): void {
     this.setState('INTERRUPTED');
-    const mainWin = this.getMainWindow();
-    if (mainWin && !mainWin.isDestroyed()) {
-      mainWin.webContents.send(IPC_CHANNELS.VOICE_INTERRUPT);
-    }
+    this.broadcast(IPC_CHANNELS.VOICE_INTERRUPT);
   }
 
   /**

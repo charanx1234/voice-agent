@@ -1,4 +1,5 @@
-import { app, BrowserWindow, shell, screen, Tray, Menu, nativeImage } from 'electron';
+import { app, BrowserWindow, shell, screen, Tray, Menu, nativeImage, session } from 'electron';
+import { IPC_CHANNELS } from './security';
 import path from 'path';
 import { registerIpcHandlers } from './ipc';
 import { initLogger } from './backend/logger';
@@ -269,10 +270,23 @@ function createWindow(): void {
     mainWindow.loadFile(indexPath);
   }
 
+  mainWindow.on('show', () => {
+    if (petWindow && !petWindow.isDestroyed()) {
+      petWindow.webContents.send(IPC_CHANNELS.MAIN_VISIBILITY_CHANGED, true);
+    }
+  });
+
+  mainWindow.on('hide', () => {
+    if (petWindow && !petWindow.isDestroyed()) {
+      petWindow.webContents.send(IPC_CHANNELS.MAIN_VISIBILITY_CHANGED, false);
+    }
+  });
+
   mainWindow.on('close', (event) => {
     if (!isQuitting && petWindow && !petWindow.isDestroyed()) {
       event.preventDefault();
       mainWindow?.hide();
+      petWindow.webContents.send(IPC_CHANNELS.MAIN_VISIBILITY_CHANGED, false);
       return;
     }
     console.log('[FRIDAY] Window close requested, cancelling active requests and synthesis...');
@@ -337,6 +351,20 @@ if (!hasSingleInstanceLock) {
   app.whenReady().then(() => {
     // Required for Windows toast notifications and grouping.
     app.setAppUserModelId('com.friday.ai.companion');
+
+    // Global microphone permissions across both MainWindow and PetWindow
+    session.defaultSession.setPermissionRequestHandler((_webContents, permission, callback, details) => {
+      const mediaDetails = (details || {}) as Electron.MediaAccessPermissionRequest;
+      const isMic =
+        (permission as string) === 'microphone' ||
+        (permission === 'media' &&
+          (!mediaDetails.mediaTypes ||
+            (mediaDetails.mediaTypes.includes('audio') && !mediaDetails.mediaTypes.includes('video'))));
+      callback(isMic);
+    });
+    session.defaultSession.setPermissionCheckHandler((_webContents, permission, _origin, details) => {
+      return (permission as string) === 'microphone' || (permission === 'media' && details?.mediaType !== 'video');
+    });
 
     createWindow();
     createPetWindow();

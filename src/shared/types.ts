@@ -650,6 +650,8 @@ export interface FridayApiBridge {
   // Window Controls
   minimizeWindow: () => void;
   closeWindow: () => void;
+  getMainVisibility?: () => Promise<boolean>;
+  onMainVisibilityChanged?: (callback: (visible: boolean) => void) => () => void;
 }
 
 export type WebsiteElementType =

@@ -94,6 +94,8 @@ export const IPC_CHANNELS = {
   VOICE_SPEAKER_ENROLL: 'friday:voice-speaker-enroll',
   VOICE_SPEAKER_CLEAR: 'friday:voice-speaker-clear',
   VOICE_TEST_MIC: 'friday:voice-test-mic',
+  MAIN_VISIBILITY_CHANGED: 'friday:main-visibility-changed',
+  GET_MAIN_VISIBILITY: 'friday:get-main-visibility',
 } as const;
 
 export function sanitizePath(inputPath: string): string {

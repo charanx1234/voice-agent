@@ -65,6 +65,8 @@ export function registerIpcHandlers(
     return new Promise<boolean>((resolve) => {
       pendingConfirmations.set(payload.id, resolve);
       safeSend(getMainWindow(), IPC_CHANNELS.TOOL_CONFIRM_REQUEST, payload);
+      const petWin = getPetWindow ? getPetWindow() : null;
+      safeSend(petWin, IPC_CHANNELS.TOOL_CONFIRM_REQUEST, payload);
 
       // Auto-cancel if user doesn't respond within 60 seconds
       setTimeout(() => {
@@ -497,6 +499,12 @@ export function registerIpcHandlers(
     if (win && !win.isDestroyed()) {
       win.close();
     }
+  });
+
+  // Main Window Visibility Check
+  ipcMain.handle(IPC_CHANNELS.GET_MAIN_VISIBILITY, () => {
+    const win = getMainWindow();
+    return Boolean(win && !win.isDestroyed() && win.isVisible() && !win.isMinimized());
   });
 
   // Floating Desktop Pet Companion Handlers

@@ -250,6 +250,13 @@ const apiBridge: FridayApiBridge = {
 
   minimizeWindow: () => ipcRenderer.send(IPC_CHANNELS.MINIMIZE_WINDOW),
   closeWindow: () => ipcRenderer.send(IPC_CHANNELS.CLOSE_WINDOW),
+  getMainVisibility: (): Promise<boolean> =>
+    ipcRenderer.invoke(IPC_CHANNELS.GET_MAIN_VISIBILITY),
+  onMainVisibilityChanged: (callback: (visible: boolean) => void) => {
+    const handler = (_event: any, visible: boolean) => callback(visible);
+    ipcRenderer.on(IPC_CHANNELS.MAIN_VISIBILITY_CHANGED, handler);
+    return () => ipcRenderer.removeListener(IPC_CHANNELS.MAIN_VISIBILITY_CHANGED, handler);
+  },
 };
 
 contextBridge.exposeInMainWorld('fridayAPI', apiBridge);
