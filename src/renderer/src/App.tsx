@@ -85,7 +85,7 @@ export const App: React.FC = () => {
   const [streamingResponse, setStreamingResponse] = useState('');
   const [artifacts, setArtifacts] = useState<DashboardArtifact[]>([]);
   const [activeArtifactId, setActiveArtifactId] = useState<string | null>(null);
-  const [dashboardOpen, setDashboardOpen] = useState(false);
+  const [dashboardOpen, setDashboardOpen] = useState(true);
   const [reminders, setReminders] = useState<ReminderItem[]>([]);
   const [pendingConfirmation, setPendingConfirmation] =
     useState<ToolConfirmationPayload | null>(null);
@@ -1344,40 +1344,30 @@ export const App: React.FC = () => {
           </span>
         </div>
 
-        {/* Window controls (Minimize, Close) */}
+        {/* Action Controls */}
         <div
           className="app-no-drag"
           style={{
             display: 'flex',
             alignItems: 'center',
-            gap: '6px',
+            gap: '8px',
           }}
         >
           <button
-            onClick={() => window.fridayAPI?.minimizeWindow()}
+            onClick={handleToggleDashboard}
             style={{
               background: 'none',
-              border: 'none',
-              color: 'var(--muted)',
+              border: '1px solid color-mix(in srgb, var(--accent) 30%, transparent)',
+              color: 'var(--accent)',
               cursor: 'pointer',
-              padding: '4px',
-              borderRadius: '4px',
+              padding: '3px 8px',
+              borderRadius: '6px',
+              fontSize: '0.72rem',
+              fontWeight: 600,
             }}
+            title="Toggle full dashboard split-view"
           >
-            <Minus size={14} />
-          </button>
-          <button
-            onClick={() => window.fridayAPI?.closeWindow()}
-            style={{
-              background: 'none',
-              border: 'none',
-              color: 'var(--muted)',
-              cursor: 'pointer',
-              padding: '4px',
-              borderRadius: '4px',
-            }}
-          >
-            <X size={14} />
+            {dashboardOpen ? 'Split View' : 'Open Dashboard'}
           </button>
         </div>
       </div>
@@ -1386,11 +1376,12 @@ export const App: React.FC = () => {
         {/* Companion column: voice keeps running here while the dashboard updates */}
         <div
           style={{
-            flex: dashboardOpen ? '0 0 460px' : '1 1 auto',
-            width: dashboardOpen ? 460 : '100%',
+            flex: dashboardOpen ? '0 0 420px' : '1 1 auto',
+            width: dashboardOpen ? 420 : '100%',
             display: 'flex',
             flexDirection: 'column',
             minHeight: 0,
+            borderRight: dashboardOpen ? '1px solid color-mix(in srgb, var(--text) 8%, transparent)' : 'none',
           }}
         >
           {/* Missing API Key Banner */}

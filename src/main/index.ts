@@ -181,21 +181,20 @@ function createPetWindow(): void {
 
 function createWindow(): void {
   mainWindow = new BrowserWindow({
-    width: 460,
-    height: 740,
-    minWidth: 400,
-    minHeight: 640,
+    width: 1100,
+    height: 750,
+    minWidth: 800,
+    minHeight: 600,
     title: 'FRIDAY — AI Assistant',
     backgroundColor: '#0a0d14',
-    frame: false, // Sleek modern frameless desktop companion
-    titleBarStyle: 'hidden',
+    frame: true, // Native Windows app frame
+    autoHideMenuBar: true,
     show: false,
+    icon: path.join(__dirname, '../../src/renderer/public/assets/friday.ico'),
     webPreferences: {
       preload: path.join(__dirname, '../preload/index.js'),
       contextIsolation: true,
       nodeIntegration: false,
-      // The preload script requires the shared IPC channel module, which a fully
-      // sandboxed preload cannot load; isolation is still enforced by contextIsolation.
       sandbox: false,
       backgroundThrottling: false,
     },
@@ -203,27 +202,17 @@ function createWindow(): void {
 
   registerIpcHandlers(getMainWindow, getPetWindow);
 
-  // PET-FIRST: By default, FRIDAY runs the Desktop Pet as the primary interface.
-  // The main window runs silently in the background hosting audio and background tasks.
-  const startWithDashboard =
-    process.argv.includes('--dashboard') ||
-    settingsStore.getSettings().desktopPetEnabled === false;
-
   mainWindow.once('ready-to-show', () => {
-    if (startWithDashboard) {
-      mainWindow?.show();
-    }
+    mainWindow?.show();
+    mainWindow?.focus();
   });
 
-  // Guarantee window is visible only if dashboard mode is requested
-  if (startWithDashboard) {
-    setTimeout(() => {
-      if (mainWindow && !mainWindow.isDestroyed() && !mainWindow.isVisible()) {
-        mainWindow.show();
-        mainWindow.focus();
-      }
-    }, 1200);
-  }
+  setTimeout(() => {
+    if (mainWindow && !mainWindow.isDestroyed() && !mainWindow.isVisible()) {
+      mainWindow.show();
+      mainWindow.focus();
+    }
+  }, 1000);
 
   // Only the microphone is ever granted; every other permission request is denied.
   mainWindow.webContents.session.setPermissionRequestHandler(
