@@ -1,8 +1,8 @@
 # FRIDAY — Personal AI Assistant 🤖
 
-**FRIDAY** is an intelligent personal AI desktop companion for Windows, powered by **Google Gemini** with a **Pet-First Architecture**, native multilingual Indian voice conversation capabilities, hardware-level voice isolation for noisy environments, and an interactive 2D animated desktop character.
+**FRIDAY** is an intelligent personal AI desktop companion for Windows, powered by **Google Gemini** with a **Pet-First Architecture**, native multilingual Indian voice conversation capabilities, hardware-level voice isolation for noisy environments, an interactive 2D animated desktop character, and an **ultra-lightweight energy-efficient performance engine**.
 
-In FRIDAY, **the Desktop Pet IS FRIDAY** — the primary, everyday face and interaction point. The Desktop Pet is 100% self-sufficient: it captures microphone input, listens for hands-free wake words, performs desktop tasks, and speaks responses with live lip-sync animation even when the main Dashboard window is completely closed.
+In FRIDAY, **the Desktop Pet IS FRIDAY** — the primary, everyday face and interaction point. The Desktop Pet is 100% self-sufficient: it captures microphone input, listens for hands-free wake words ("Hey Friday"), performs desktop tasks, and speaks responses with live lip-sync animation even when the main Dashboard window is completely closed.
 
 ---
 
@@ -23,7 +23,26 @@ In FRIDAY, **the Desktop Pet IS FRIDAY** — the primary, everyday face and inte
 
 ---
 
-### 2. Robust Universal Audio Pipeline & Voice Isolation 🎙️
+### 2. Ultra-Lightweight & Energy-Efficient Performance Engine ⚡
+FRIDAY is engineered to run seamlessly on modern laptops (such as Intel Core Ultra / Intel Arc) without causing laptop heating, excessive fan noise, or battery drain:
+- **DirectComposition & Intel Arc GPU Hardware Acceleration**:
+  - Replaces software CPU rasterization with DirectComposition zero-copy GPU acceleration (`enable-gpu-rasterization`, `enable-zero-copy`). CSS drop-shadows and SVG transforms are rendered natively in GPU shaders at 0% CPU cost.
+- **Zero-Subprocess Native System Monitoring**:
+  - Built exclusively on native Node.js C++ `os` APIs. Completely eliminates continuous background `wmic.exe` and `powershell.exe` child process spawning. Polling automatically pauses when no active UI listener is registered.
+- **Silence-Gated Audio & Wake-Word Pipeline**:
+  - Precalculated DSP frequency bin boundaries (`binVocalStart`, `binFricativeStart`) and energy-gated analysis skip cadence processing during silence.
+  - Microphone input level IPC broadcasts are throttled during quiet room conditions, preventing unnecessary background React re-renders.
+- **Throttled Lip-Sync & Visuals**:
+  - Audio analyser frame loop is capped at 30 FPS.
+  - DOM visualizer rendering is automatically suspended when the dashboard is hidden or minimized.
+- **Standby Resource Targets**:
+  - Idle CPU usage: **< 1.5%**
+  - Standby RAM: **< 300–350 MB**
+  - Background Python processes: **0** (Pure Electron / Node.js architecture)
+
+---
+
+### 3. Robust Universal Audio Pipeline & Voice Isolation 🎙️
 FRIDAY includes a production-grade, lossless linear PCM audio pipeline with hardware-level voice isolation:
 - **Direct Linear PCM -> 16kHz Mono WAV Engine**:
   - Raw audio is captured directly as uncompressed 32-bit float PCM buffers via Web Audio API, downsampled via linear interpolation, and encoded with a standard 44-byte RIFF WAVE header.
@@ -45,12 +64,18 @@ FRIDAY includes a production-grade, lossless linear PCM audio pipeline with hard
 - **Multilingual Telugu-English-Hinglish Recognition**:
   - Preserves natural conversational code-switching: *"Friday, Chrome open chey and Java tutorials search chey"*, *"Spotify lo music play chey"*, *"Naaku tomorrow college ki vellali"*, *"Ee error enti, can you explain?"*.
   - Retains Telugu colloquial verbs and case markers (`chey`, `chudu`, `pettandi`, `vellali`, `raayi`, `teeyi`, `entha`, `cheppu`, `lo`, `ki`, `naaku`, `enti`) and Hindi verbs (`karo`, `kholo`, `chalao`, `band karo`).
-- **Real-Time Diagnostics Panel**:
-  - Click the **Activity pulse icon** in the bottom Control Bar of the dashboard to view hardware state, track status (`live`/`muted`), live input levels, ambient noise floor, buffer size (KB), STT model & latency, exact recognized transcript, and error logs.
 
 ---
 
-### 3. Expressive 2D Robot Character & Desktop Pet
+### 4. Real-Time Resource & Voice Diagnostics Panel 📊
+Click the **Activity Pulse icon** in the bottom Control Bar of the dashboard to open the diagnostic suite:
+- **Resource Performance**: Total CPU %, RAM footprint (MB), process count, and per-process breakdown (Main, Renderer, GPU, Utility) sampled via kernel metrics (`app.getAppMetrics()`) with 0 subprocesses.
+- **Hardware Status**: Confirms Intel Arc DirectComposition GPU acceleration, 0 Python processes, and low-power local wake-word engine.
+- **Audio Pipeline Metrics**: Microphone device label, permission state, track state (`live`/`muted`), live input levels, ambient noise floor, buffer size (KB), STT model & latency, exact recognized transcript, and error logs.
+
+---
+
+### 5. Expressive 2D Robot Character & Desktop Pet
 - **Sleek Cyber Aesthetic**: Deep charcoal & metallic black chassis with glowing cyan accents (`#00e5ff`).
 - **Reactive Eyes & Blinking**: Expressive rounded eyes that spontaneously blink, widen when attentive, scan when thinking, and show gentle alerts in error states.
 - **Audio-Driven Lip-Sync**: LED mouth bars dynamically oscillate and stretch in real-time according to the actual audio frequency amplitude (`AudioAnalyser` Web Audio API) during speech playback.
@@ -59,7 +84,7 @@ FRIDAY includes a production-grade, lossless linear PCM audio pipeline with hard
 
 ---
 
-### 4. Multilingual Indian Voice Assistant
+### 6. Multilingual Indian Voice Assistant
 - **Supported Languages**:
   - **Telugu (తెలుగు)**: `te-IN` (Native script, natural conversational phrasing, and Telugu-English code-switching)
   - **English (India)**: `en-IN` (Friendly, clear Indian English conversational responses)
@@ -74,7 +99,7 @@ FRIDAY includes a production-grade, lossless linear PCM audio pipeline with hard
 
 ---
 
-### 5. Controlled Agent Capabilities (Useful Work)
+### 7. Controlled Agent Capabilities (Useful Work)
 FRIDAY distinguishes between answering questions and executing actions, and verifies task completion:
 - **Tool A — Notes**:
   - Create notes via voice or text (e.g., *"Save a note called Grocery with milk and eggs"*).
@@ -91,7 +116,7 @@ FRIDAY distinguishes between answering questions and executing actions, and veri
 
 ---
 
-### 6. Long-Term Memory (SQLite + Semantic Search)
+### 8. Long-Term Memory (SQLite + Semantic Search)
 - **Curated memories**: After each exchange, Gemini extracts at most three durable details — name, city, preferences, standing instructions, and ongoing projects. Small talk and credentials are never stored.
 - **Local SQLite database**: Memories live in `friday_memory.db` in your AppData directory with atomic writes and automatic recovery.
 - **Semantic retrieval**: Every memory is embedded with `gemini-embedding-001` and retrieved via cosine similarity and keyword matching.
@@ -99,7 +124,7 @@ FRIDAY distinguishes between answering questions and executing actions, and veri
 
 ---
 
-### 7. Privacy & Security
+### 9. Privacy & Security
 - **Strict IPC Isolation**: Electron runs with `contextIsolation: true` and `nodeIntegration: false`. The renderer communicates strictly through a sandboxed, type-safe IPC bridge (`window.fridayAPI`).
 - **Zero API Key Leakage**: Keys are never hardcoded or tracked in Git. The API key is stored safely in your local Windows AppData directory or loaded from `.env`, and is always masked (`AIza...9xQ`) in the UI and logs.
 - **User Confirmation Required**: Sensitive actions prompt you for approval with an Allow/Deny modal.
@@ -110,9 +135,9 @@ FRIDAY distinguishes between answering questions and executing actions, and veri
 
 | Layer | Technology |
 |---|---|
-| **Desktop Application** | Electron 34 |
+| **Desktop Application** | Electron 34 (Hardware-accelerated DirectComposition) |
 | **Frontend UI** | React 19 + TypeScript + Vite |
-| **Icons & Design** | Lucide React + Custom CSS Animations + SVG |
+| **Icons & Design** | Lucide React + Custom CSS GPU-Promoted Animations + SVG |
 | **AI Providers** | Google Gemini API (`gemini-3.1-pro-preview` / `gemini-2.5-flash`), Anthropic Claude, OpenAI-compatible |
 | **Speech-to-Text (STT)** | Groq Whisper + Gemini Multimodal Audio |
 | **Text-to-Speech (TTS)** | Microsoft Edge Neural TTS + ElevenLabs + Gemini TTS |
@@ -126,6 +151,7 @@ FRIDAY distinguishes between answering questions and executing actions, and veri
 ## 📋 System Requirements
 
 - **Operating System**: Windows 10 or Windows 11 (64-bit)
+- **Processor**: Intel Core Ultra / Intel Core / AMD Ryzen (Hardware GPU acceleration supported)
 - **Node.js**: Version 18, 20, 22, or 24+ installed ([Download Node.js](https://nodejs.org/))
 - **Microphone**: Built-in, headset, or USB microphone
 - **Google Gemini API Key**: Free key from [Google AI Studio](https://aistudio.google.com/app/apikey)
@@ -165,11 +191,12 @@ To run in development mode with live hot-reloading:
 npm run dev:electron
 ```
 
-### Step 5: Create a Desktop Shortcut
-Generate a native Windows desktop shortcut anytime:
+### Step 5: Create Windows Desktop & Search Shortcuts
+Generate native Windows desktop and Start Menu search shortcuts anytime:
 ```powershell
-powershell -ExecutionPolicy Bypass -File scripts\create_shortcut.ps1
+powershell -ExecutionPolicy Bypass -File .\create-shortcuts.ps1
 ```
+*After running, press the **Windows key**, type **`FRIDAY`**, and hit Enter to launch.*
 
 ---
 
@@ -194,7 +221,7 @@ powershell -ExecutionPolicy Bypass -File scripts\create_shortcut.ps1
 
 ## 🧪 Automated Testing
 
-FRIDAY includes 38 comprehensive test suites with 296 unit and integration tests covering the Pet-First architecture, audio pipeline, linear PCM to 16kHz WAV encoding, adaptive VAD, local intent execution, memory persistence, and tool safety:
+FRIDAY includes 38 comprehensive test suites with **303 unit and integration tests** covering the Pet-First architecture, performance optimizations, audio pipeline, linear PCM to 16kHz WAV encoding, adaptive VAD, local intent execution, memory persistence, and tool safety:
 
 ```powershell
 npm test
@@ -203,7 +230,7 @@ npm test
 All 38 test suites pass cleanly:
 ```
  Test Files  38 passed (38)
-      Tests  296 passed (296)
+      Tests  303 passed (303)
 ```
 
 ---
