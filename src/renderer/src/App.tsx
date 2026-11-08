@@ -972,11 +972,8 @@ export const App: React.FC = () => {
           }
         }
         setRobotState('idle');
-        setVoiceSessionState('STANDBY');
-        console.info('[VoiceCoordinator] Returned to wake-word standby');
-        console.info('[WakeWord] Standby listening locally');
-        console.info('[WakeWord] No conversation recording active');
-        console.info('[WakeWord] No cloud audio transmission');
+        setVoiceSessionState(handsFreeEnabled ? 'LISTENING' : 'STANDBY');
+        console.info('[VoiceCoordinator] Turn completed. Continuous listening active');
 
         // The model called enter_standby ("go offline"): go quiet after the farewell.
         if (standbyPendingRef.current) {
@@ -1001,7 +998,7 @@ export const App: React.FC = () => {
           setRobotState((prev) => (prev === 'error' || prev === 'thinking' ? 'idle' : prev));
           setVoiceSessionState((prev) =>
             prev === 'ERROR' || prev === 'THINKING' || prev === 'PROCESSING_AUDIO' || prev === 'TRANSCRIBING'
-              ? 'STANDBY'
+              ? (handsFreeEnabled ? 'LISTENING' : 'STANDBY')
               : prev
           );
         }, 2000);
@@ -1270,7 +1267,7 @@ export const App: React.FC = () => {
     const next = handsFreeRef.current.mode === 'off';
     setHandsFreeEnabled(next);
     if (next) {
-      handsFreeRef.current.goStandby();
+      handsFreeRef.current.wake();
     }
     void handleSaveSettings({ handsFreeEnabled: next });
     try {

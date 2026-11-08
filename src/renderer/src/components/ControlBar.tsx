@@ -138,8 +138,17 @@ export const ControlBar: React.FC<ControlBarProps> = ({
         bg: 'color-mix(in srgb, var(--accent) 15%, transparent)',
       };
     }
+    if (handsFreeMode === 'active') {
+      return {
+        label: isRecording
+          ? `Listening (MIC ACTIVE - ${formatRecordingDuration(recordingSeconds)})`
+          : 'Listening (Always Ready)',
+        color: 'var(--accent)',
+        bg: 'color-mix(in srgb, var(--accent) 15%, transparent)',
+      };
+    }
     if (handsFreeMode === 'standby' || voiceSessionState === 'STANDBY') {
-      return { label: 'Ready (Say "Hey Friday")', color: 'var(--muted)', bg: 'color-mix(in srgb, var(--muted) 10%, transparent)' };
+      return { label: 'Ready (Say "Hey Friday")', color: 'var(--accent)', bg: 'color-mix(in srgb, var(--accent) 15%, transparent)' };
     }
     return { label: 'Idle', color: 'var(--muted)', bg: 'color-mix(in srgb, var(--muted) 10%, transparent)' };
   };
@@ -205,12 +214,12 @@ export const ControlBar: React.FC<ControlBarProps> = ({
             <span
               style={{
                 fontSize: '0.66rem',
-                color: isListening ? 'var(--accent)' : 'var(--muted-dim)',
-                fontWeight: isListening ? 600 : 400,
+                color: isListening || handsFreeMode === 'active' ? 'var(--accent)' : 'var(--muted-dim)',
+                fontWeight: isListening || handsFreeMode === 'active' ? 600 : 400,
               }}
               title="Microphone state"
             >
-              {isListening ? 'MIC ACTIVE' : 'MIC READY (STANDBY)'} · {currentMood}
+              {isListening || handsFreeMode === 'active' ? 'MIC ACTIVE (LISTENING)' : 'MIC READY'} · {currentMood}
             </span>
           ) : null}
         </div>
@@ -447,7 +456,7 @@ export const ControlBar: React.FC<ControlBarProps> = ({
               cursor: 'pointer',
             }}
           >
-            {handsFreeMode === 'off' ? 'Hands-free: off' : handsFreeMode === 'standby' ? 'Hands-free: standby' : 'Hands-free: on'}
+            {handsFreeMode === 'off' ? 'Hands-free: off' : 'Hands-free: on (Always listening)'}
           </button>
         </div>
       )}
@@ -458,10 +467,8 @@ export const ControlBar: React.FC<ControlBarProps> = ({
           onClick={onToggleMic}
           title={
             state === 'listening' || isListening || handsFreeMode === 'active'
-              ? 'Listening (click to send immediately)'
-              : handsFreeMode === 'standby'
-                ? 'Standby (Say "Hey Friday" or click to speak)'
-                : 'Start speaking to FRIDAY'
+              ? 'Listening continuously (Say "Hey Friday" or speak directly)'
+              : 'Start speaking to FRIDAY'
           }
           style={{
             position: 'relative',

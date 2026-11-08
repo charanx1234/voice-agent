@@ -27,10 +27,10 @@ export class LocalWakeWordDetector {
   private frameHistory: { time: number; metrics: AcousticFrameMetrics }[] = [];
   private lastWakeTime = 0;
   private suppressedUntil = 0;
-  private readonly WAKE_COOLDOWN_MS = 2500;
+  private readonly WAKE_COOLDOWN_MS = 1200;
 
   constructor(options: WakeDetectorOptions = {}) {
-    this.sensitivity = options.sensitivity ?? 0.70;
+    this.sensitivity = options.sensitivity ?? 0.85;
     this.onWakeCallback = options.onWake;
   }
 
@@ -45,7 +45,7 @@ export class LocalWakeWordDetector {
   /**
    * Temporarily suppresses wake-word detection (e.g. during TTS audio playback or barge-in cooldown).
    */
-  public suppress(durationMs = 800): void {
+  public suppress(durationMs = 400): void {
     this.suppressedUntil = Math.max(this.suppressedUntil, Date.now() + durationMs);
   }
 

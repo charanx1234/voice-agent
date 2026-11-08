@@ -183,7 +183,7 @@ export const DesktopPet: React.FC = () => {
 
         const cleanup = () => {
           stopSpeechPlayback();
-          setPetState((p) => ({ ...p, robotState: 'idle', voiceSessionState: 'STANDBY', isSpeaking: false }));
+          setPetState((p) => ({ ...p, robotState: 'idle', voiceSessionState: 'LISTENING', isSpeaking: false }));
           resolve();
         };
 
@@ -260,17 +260,17 @@ export const DesktopPet: React.FC = () => {
               if (synth && synth.audioBase64) {
                 await playAudioOutput(synth.audioBase64, synth.mimeType || 'audio/mpeg');
               } else {
-                setPetState((p) => ({ ...p, robotState: 'idle', voiceSessionState: 'STANDBY', isSpeaking: false }));
+                setPetState((p) => ({ ...p, robotState: 'idle', voiceSessionState: 'LISTENING', isSpeaking: false }));
               }
             } catch (synthErr) {
               console.warn('[DesktopPet] Speech synthesis error:', synthErr);
-              setPetState((p) => ({ ...p, robotState: 'idle', voiceSessionState: 'STANDBY', isSpeaking: false }));
+              setPetState((p) => ({ ...p, robotState: 'idle', voiceSessionState: 'LISTENING', isSpeaking: false }));
             }
           } else {
-            setPetState((p) => ({ ...p, robotState: 'idle', voiceSessionState: 'STANDBY', isSpeaking: false }));
+            setPetState((p) => ({ ...p, robotState: 'idle', voiceSessionState: 'LISTENING', isSpeaking: false }));
           }
         } else {
-          setPetState((p) => ({ ...p, robotState: 'idle', voiceSessionState: 'STANDBY' }));
+          setPetState((p) => ({ ...p, robotState: 'idle', voiceSessionState: 'LISTENING' }));
         }
       } catch (err: any) {
         console.error('[FRIDAY Pet] Send message error:', err);
@@ -309,7 +309,7 @@ export const DesktopPet: React.FC = () => {
 
         if (!spokenText || spokenText.toUpperCase() === 'SILENCE') {
           console.log('[DesktopPet] Ambient silence detected.');
-          setPetState((p) => ({ ...p, robotState: 'idle', voiceSessionState: 'STANDBY' }));
+          setPetState((p) => ({ ...p, robotState: 'idle', voiceSessionState: 'LISTENING' }));
           return;
         }
 
@@ -415,7 +415,7 @@ export const DesktopPet: React.FC = () => {
         if (recordedBlob.size > 200) {
           await processRecordedVoice(recordedBlob);
         } else {
-          setPetState((p) => ({ ...p, robotState: 'idle', voiceSessionState: 'STANDBY' }));
+          setPetState((p) => ({ ...p, robotState: 'idle', voiceSessionState: 'LISTENING' }));
         }
       };
 

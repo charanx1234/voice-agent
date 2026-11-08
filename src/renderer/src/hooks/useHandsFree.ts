@@ -107,7 +107,7 @@ function getVadOptions(
  * standard 16kHz Mono WAV payloads.
  */
 export function useHandsFree(options: HandsFreeOptions) {
-  const [mode, setModeState] = useState<HandsFreeMode>(options.enabled ? 'standby' : 'off');
+  const [mode, setModeState] = useState<HandsFreeMode>(options.enabled ? 'active' : 'off');
   const modeRef = useRef<HandsFreeMode>(mode);
   const optionsRef = useRef(options);
   optionsRef.current = options;
@@ -126,9 +126,8 @@ export function useHandsFree(options: HandsFreeOptions) {
   }, []);
 
   const goStandby = useCallback(() => {
-    if (modeRef.current !== 'off') {
-      stopActiveCaptureRef.current();
-      setMode('standby');
+    if (modeRef.current === 'off' && optionsRef.current.enabled) {
+      setMode('active');
     }
   }, [setMode]);
 
@@ -145,10 +144,7 @@ export function useHandsFree(options: HandsFreeOptions) {
 
   const cancelActiveUtterance = useCallback(() => {
     stopActiveCaptureRef.current();
-    if (modeRef.current === 'active') {
-      setMode('standby');
-    }
-  }, [setMode]);
+  }, []);
 
   useEffect(() => {
     if (!options.enabled) {
@@ -235,7 +231,6 @@ export function useHandsFree(options: HandsFreeOptions) {
     const finalizeAndSubmitUtterance = () => {
       if (!isCapturingUtterance && activeUtterancePcmBuffers.length === 0) {
         stopRecordingSession();
-        setMode('standby');
         return;
       }
 
@@ -248,7 +243,6 @@ export function useHandsFree(options: HandsFreeOptions) {
 
       if (totalSamples === 0) {
         stopRecordingSession();
-        setMode('standby');
         return;
       }
 
@@ -263,14 +257,10 @@ export function useHandsFree(options: HandsFreeOptions) {
       const { peak: peakLevel, rms } = measurePcmLevels(mergedPcm);
       console.log(`[AudioPipeline] Finalizing utterance: duration=${durationMs}ms, peak=${peakLevel.toFixed(3)}, rms=${rms.toFixed(3)}, samples=${totalSamples}`);
 
-      // Stop capture & return to standby immediately
+      // Stop capture and keep continuous listening active
       stopRecordingSession();
-      setMode('standby');
       wakeAnnounced = false;
-      console.info('[VoiceCoordinator] Returned to wake-word standby');
-      console.info('[WakeWord] Standby listening locally');
-      console.info('[WakeWord] No conversation recording active');
-      console.info('[WakeWord] No cloud audio transmission');
+      console.info('[VoiceCoordinator] Utterance finalized. Continuous listening active');
 
       // Audio Quality Gate: Reject noise bursts, clicks, or quiet background drift
       if (durationMs < MIN_UTTERANCE_MS || peakLevel < MIN_PEAK_LEVEL) {
@@ -347,13 +337,16 @@ export function useHandsFree(options: HandsFreeOptions) {
     finalizeUtteranceRef.current = finalizeAndSubmitUtterance;
 
     const handleWakeTrigger = (command: string) => {
-      if (modeRef.current !== 'standby' || wakeAnnounced) return;
+      if (wakeAnnounced) return;
       console.info('[WakeWord] Hey Friday detected');
       console.info('[VoiceCoordinator] Conversation capture started');
       wakeAnnounced = true;
       setMode('active');
       startRecordingSession();
       optionsRef.current.onWake(command);
+      setTimeout(() => {
+        wakeAnnounced = false;
+      }, 1500);
     };
 
     const tick = () => {
@@ -382,7 +375,7 @@ export function useHandsFree(options: HandsFreeOptions) {
           if (!t.enabled) t.enabled = true;
         });
         if (modeRef.current === 'off' && optionsRef.current.enabled) {
-          setMode('standby');
+          setMode('active');
         }
       }
 
@@ -434,11 +427,11 @@ export function useHandsFree(options: HandsFreeOptions) {
         duckingGain.gain.setTargetAtTime(targetGain, audioCtx.currentTime, 0.03);
       }
       if (speaking || inEchoCooldown) {
-        localWakeWordDetector.suppress(800);
+        localWakeWordDetector.suppress(400);
       }
 
-      // Standby Local Wake-Word Evaluation
-      if (currentMode === 'standby' && !speaking && !busy && !inEchoCooldown && !optionsRef.current.isTextModeActive) {
+      // Continuous Local Wake-Word Evaluation
+      if (currentMode !== 'off' && !speaking && !busy && !inEchoCooldown && !optionsRef.current.isTextModeActive) {
         const wakeDetected = localWakeWordDetector.processFrequencyData(
           freqData,
           audioCtx?.sampleRate || 44100
@@ -529,10 +522,8 @@ export function useHandsFree(options: HandsFreeOptions) {
         !isCapturingUtterance &&
         now - lastActivityRef.current > timeout
       ) {
-        console.log('[AudioPipeline] Active silence timeout elapsed. Returning to standby.');
         wakeAnnounced = false;
         stopRecordingSession();
-        setMode('standby');
       }
     };
 
@@ -571,7 +562,7 @@ export function useHandsFree(options: HandsFreeOptions) {
           setTimeout(() => {
             if (!disposed && optionsRef.current.enabled && modeRef.current === 'off') {
               console.log('[AudioPipeline] Retrying microphone connection...');
-              setMode('standby');
+              setMode('active');
             }
           }, 2000);
         }
@@ -682,10 +673,8 @@ export function useHandsFree(options: HandsFreeOptions) {
       }
 
       console.info('[WakeWord] Local detector initialized');
-      console.info('[WakeWord] Standby listening locally');
-      console.info('[WakeWord] No conversation recording active');
-      console.info('[WakeWord] No cloud audio transmission');
-      setMode('standby');
+      console.info('[WakeWord] Continuous listening active');
+      setMode('active');
       timer = setInterval(tick, TICK_MS);
       emitDiagnosticsSnapshot();
     })();
