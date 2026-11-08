@@ -31,7 +31,7 @@ export const DEFAULT_VAD_OPTIONS: VadOptions = {
   startThreshold: 0.12,
   endThreshold: 0.055,
   speechStartMs: 100,
-  speechEndMs: 1200,
+  speechEndMs: 700,
   noiseGateMultiplier: 1.0,
   maxUtteranceMs: 30000,
 };

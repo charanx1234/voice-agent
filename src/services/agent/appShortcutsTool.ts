@@ -40,6 +40,48 @@ export const ALLOWED_APPLICATIONS: AllowedApp[] = [
     description: 'Windows Command Prompt terminal',
     command: 'cmd.exe',
   },
+  {
+    id: 'chrome',
+    name: 'Google Chrome',
+    description: 'Google Chrome web browser',
+    command: 'chrome',
+  },
+  {
+    id: 'edge',
+    name: 'Microsoft Edge',
+    description: 'Microsoft Edge web browser',
+    command: 'msedge',
+  },
+  {
+    id: 'spotify',
+    name: 'Spotify',
+    description: 'Spotify Music player',
+    command: 'spotify',
+  },
+  {
+    id: 'code',
+    name: 'Visual Studio Code',
+    description: 'Visual Studio Code editor',
+    command: 'code',
+  },
+  {
+    id: 'terminal',
+    name: 'Windows Terminal',
+    description: 'Windows Terminal app',
+    command: 'wt.exe',
+  },
+  {
+    id: 'taskmgr',
+    name: 'Task Manager',
+    description: 'Windows Task Manager',
+    command: 'taskmgr.exe',
+  },
+  {
+    id: 'settings',
+    name: 'Windows Settings',
+    description: 'Windows Settings',
+    command: 'ms-settings:',
+  },
 ];
 
 export const appShortcutsToolDefinition = {
@@ -86,8 +128,9 @@ export function extractDirectLaunchApp(text: string): string | null {
 }
 
 export function displayNameForAppQuery(query: string): string {
+  const norm = normalizeAppName(query);
   const builtin = ALLOWED_APPLICATIONS.find(
-    (app) => app.id === query.toLowerCase() || normalizeAppName(app.name) === normalizeAppName(query)
+    (app) => app.id === query.toLowerCase() || normalizeAppName(app.name) === norm || normalizeAppName(app.id) === norm
   );
   return builtin?.name || query.trim();
 }
@@ -298,22 +341,50 @@ function launchCommand(
 ): Promise<{ success: boolean; error?: string }> {
   return new Promise((resolve) => {
     try {
-      const child = spawn(command, args, {
-        detached: true,
-        stdio: 'ignore',
-        shell: false, // strict: never route through a shell interpreter
-      });
-      let settled = false;
-      const finish = (result: { success: boolean; error?: string }) => {
-        if (settled) return;
-        settled = true;
-        resolve(result);
-      };
-      child.once('spawn', () => finish({ success: true }));
-      child.once('error', (err: any) => finish({ success: false, error: err?.message || 'launch failed' }));
-      child.unref();
+      // 1. If electron shell is available, use shell.openPath for files/shortcuts
+      if (command.endsWith('.lnk') || command.endsWith('.url') || path.isAbsolute(command)) {
+        try {
+          const { shell } = require('electron');
+          if (shell && typeof shell.openPath === 'function') {
+            shell.openPath(command).then((openErr: string) => {
+              if (!openErr) {
+                resolve({ success: true });
+                return;
+              }
+              launchViaCmd(command, args, resolve);
+            }).catch(() => launchViaCmd(command, args, resolve));
+            return;
+          }
+        } catch {}
+      }
+
+      launchViaCmd(command, args, resolve);
     } catch (err: any) {
       resolve({ success: false, error: err?.message || 'launch failed' });
+    }
+  });
+}
+
+function launchViaCmd(
+  command: string,
+  args: string[],
+  resolve: (res: { success: boolean; error?: string }) => void
+) {
+  execFile('cmd.exe', ['/c', 'start', '', command, ...args], { windowsHide: true }, (err) => {
+    if (err) {
+      // Direct binary fallback
+      try {
+        const child = spawn(command, args, { detached: true, stdio: 'ignore', shell: false });
+        child.once('error', (spawnErr) => resolve({ success: false, error: spawnErr?.message || 'launch failed' }));
+        child.once('spawn', () => {
+          child.unref();
+          resolve({ success: true });
+        });
+      } catch (spawnEx: any) {
+        resolve({ success: false, error: spawnEx?.message || 'launch failed' });
+      }
+    } else {
+      resolve({ success: true });
     }
   });
 }
@@ -327,9 +398,10 @@ export async function executeAppShortcutsTool(
     return { success: false, error: 'Which application should I open?' };
   }
 
-  // 1. Built-in quick list (direct system binaries).
+  // 1. Built-in quick list (direct system binaries & standard apps).
+  const norm = normalizeAppName(query);
   const builtin = ALLOWED_APPLICATIONS.find(
-    (a) => a.id === query.toLowerCase() || normalizeAppName(a.name) === normalizeAppName(query)
+    (a) => a.id === query.toLowerCase() || normalizeAppName(a.name) === norm || normalizeAppName(a.id) === norm
   );
   if (builtin) {
     const result = await launchCommand(builtin.command);

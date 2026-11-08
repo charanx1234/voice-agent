@@ -76,7 +76,7 @@ function getVadOptions(
         startThreshold: 0.065,
         endThreshold: 0.035,
         speechStartMs: 80,
-        speechEndMs: 1200,
+        speechEndMs: 600,
         noiseGateMultiplier: 1.0,
         maxUtteranceMs: 30000,
       };
@@ -85,7 +85,7 @@ function getVadOptions(
         startThreshold: 0.22,
         endThreshold: 0.10,
         speechStartMs: 140,
-        speechEndMs: 1600,
+        speechEndMs: 1100,
         noiseGateMultiplier: 1.0,
         maxUtteranceMs: 30000,
       };
@@ -94,7 +94,7 @@ function getVadOptions(
       return {
         ...DEFAULT_VAD_OPTIONS,
         speechStartMs: 90,
-        speechEndMs: 1400,
+        speechEndMs: 700,
         maxUtteranceMs: 30000,
       };
   }

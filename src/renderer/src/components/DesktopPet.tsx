@@ -143,18 +143,28 @@ export const DesktopPet: React.FC = () => {
             analyser.connect(ctx.destination);
 
             const dataArray = new Uint8Array(analyser.frequencyBinCount);
+            let smoothedOpen = 0;
+            let lastMouthDispatch = 0;
             const updateMouth = () => {
               if (!playbackAudioRef.current || playbackAudioRef.current.paused || playbackAudioRef.current.ended) {
                 setMouthOpenness(0);
+                setLiveAmplitude(0);
                 return;
               }
               analyser.getByteFrequencyData(dataArray);
               let sum = 0;
               for (let i = 0; i < dataArray.length; i++) sum += dataArray[i];
               const avg = sum / dataArray.length;
-              const open = Math.min(1, (avg / 90) * 1.25);
-              setMouthOpenness(open);
-              setLiveAmplitude(open);
+              const rawOpen = Math.min(1, (avg / 85) * 1.25);
+              smoothedOpen = smoothedOpen * 0.65 + rawOpen * 0.35;
+
+              const now = performance.now();
+              if (now - lastMouthDispatch >= 32) {
+                lastMouthDispatch = now;
+                const rounded = Math.round(smoothedOpen * 100) / 100;
+                setMouthOpenness(rounded);
+                setLiveAmplitude(rounded);
+              }
               animFrameRef.current = requestAnimationFrame(updateMouth);
             };
 
@@ -340,6 +350,8 @@ export const DesktopPet: React.FC = () => {
           source.connect(analyser);
 
           const dataArray = new Uint8Array(analyser.frequencyBinCount);
+          let consecutiveSilenceFrames = 0;
+          let hadSpeech = false;
           const updateMeter = () => {
             if (!mediaRecorderRef.current || mediaRecorderRef.current.state !== 'recording') return;
             analyser.getByteFrequencyData(dataArray);
@@ -349,6 +361,25 @@ export const DesktopPet: React.FC = () => {
             const norm = Math.min(1, (avg / 120) * 1.4);
             setMicLevel(norm);
             setLiveAmplitude(norm);
+
+            // Auto-stop after user speaks and pauses (~650ms of silence)
+            if (norm > 0.12) {
+              hadSpeech = true;
+              consecutiveSilenceFrames = 0;
+            } else if (hadSpeech) {
+              consecutiveSilenceFrames++;
+              if (consecutiveSilenceFrames > 40) {
+                setIsRecording(false);
+                setMicLevel(0);
+                setLiveAmplitude(0);
+                if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
+                  setPetState((p) => ({ ...p, robotState: 'thinking', voiceSessionState: 'THINKING' }));
+                  mediaRecorderRef.current.stop();
+                }
+                return;
+              }
+            }
+
             requestAnimationFrame(updateMeter);
           };
           requestAnimationFrame(updateMeter);
@@ -526,10 +557,19 @@ export const DesktopPet: React.FC = () => {
 
     // Centralized Mouth / Lip-Sync broadcast subscription
     if (window.fridayAPI?.onVoiceMouthUpdate) {
+      let lastMouthTime = 0;
+      let smoothedCentralMouth = 0;
       const cleanupMouth = window.fridayAPI.onVoiceMouthUpdate((data) => {
         if (!unmount && data && !playbackAudioRef.current) {
-          setMouthOpenness(data.mouthOpenness || 0);
-          setLiveAmplitude(data.amplitude || 0);
+          const raw = data.mouthOpenness || 0;
+          smoothedCentralMouth = smoothedCentralMouth * 0.65 + raw * 0.35;
+          const now = performance.now();
+          if (now - lastMouthTime >= 32 || raw === 0) {
+            lastMouthTime = now;
+            const val = raw === 0 ? 0 : Math.round(smoothedCentralMouth * 100) / 100;
+            setMouthOpenness(val);
+            setLiveAmplitude(val);
+          }
         }
       });
       cleanups.push(cleanupMouth);
@@ -886,14 +926,19 @@ export const DesktopPet: React.FC = () => {
           )}
 
           {/* Audio-Reactive Speaking Mouth Opening */}
-          {isSpeaking && mouthHeight > 1 && (
+          {isSpeaking && (
             <ellipse
               className="pet-speaking-mouth"
               cx={MOUTH.cx}
               cy={MOUTH.cy}
-              rx={mouthWidth}
-              ry={mouthHeight}
-              fill="#111827"
+              rx={Math.max(5, mouthWidth)}
+              ry={Math.max(1.5, mouthHeight)}
+              fill="#0e1014"
+              opacity={mouthHeight > 1.2 ? 0.95 : 0}
+              style={{
+                transition: 'rx 0.08s ease-out, ry 0.08s ease-out, opacity 0.08s ease-out',
+                pointerEvents: 'none',
+              }}
             />
           )}
         </svg>
