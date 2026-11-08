@@ -339,12 +339,9 @@ if (!hasSingleInstanceLock) {
   app.quit();
 } else {
   app.on('second-instance', () => {
-    if (!mainWindow || mainWindow.isDestroyed()) {
-      createWindow();
-    } else {
-      if (mainWindow.isMinimized()) mainWindow.restore();
-      mainWindow.show();
-      mainWindow.focus();
+    if (petWindow && !petWindow.isDestroyed()) {
+      if (!petWindow.isVisible()) petWindow.show();
+      petWindow.focus();
     }
   });
 
