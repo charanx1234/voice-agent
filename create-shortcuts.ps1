@@ -24,9 +24,9 @@ foreach ($dest in $destinations) {
   $s.Arguments = $appPath
   $s.WorkingDirectory = $workDir
   $s.IconLocation = "$iconPath,0"
-  $s.Description = "FRIDAY — Multilingual AI Companion"
+  $s.Description = "FRIDAY - Multilingual AI Companion"
   $s.Save()
   Write-Host "Created shortcut: $dest"
 }
 
-Write-Host "`nFRIDAY is now accessible on your Desktop and in Windows Search!"
+Write-Host "FRIDAY is now accessible on your Desktop and in Windows Search!"
