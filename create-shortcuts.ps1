@@ -1,6 +1,6 @@
 # FRIDAY - Windows Desktop & Start Menu Search Shortcut Installer
 $exePath = "C:\25r11a6760\FRIDAY\node_modules\electron\dist\electron.exe"
-$appPath = "dist-electron/main/index.js"
+$appPath = "."
 $workDir = "C:\25r11a6760\FRIDAY"
 $iconPath = "C:\25r11a6760\FRIDAY\src\renderer\public\assets\friday.ico"
 
