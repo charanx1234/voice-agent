@@ -140,8 +140,10 @@ export const ControlBar: React.FC<ControlBarProps> = ({
     }
     if (handsFreeMode === 'active') {
       return {
-        label: isRecording
-          ? `Listening (MIC ACTIVE - ${formatRecordingDuration(recordingSeconds)})`
+        label: isListening
+          ? (recordingSeconds > 0
+            ? `Listening (MIC ACTIVE - ${formatRecordingDuration(recordingSeconds)})`
+            : 'Listening (MIC ACTIVE)')
           : 'Listening (Always Ready)',
         color: 'var(--accent)',
         bg: 'color-mix(in srgb, var(--accent) 15%, transparent)',
