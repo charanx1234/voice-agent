@@ -174,7 +174,14 @@ function languageSection(preferredLanguage: string): string {
 
 const TOOLS = `TOOLS
 - Web search & browsing in Google Chrome: use "search_in_chrome" to search the web and open results in Chrome. Use "open_url_in_chrome" to open websites (YouTube, news, etc.) in Chrome. Use "click_chrome_link" to click links or buttons in Chrome. Always use Google Chrome for browser tasks.
-- Music playback: use "control_music" with action "play", "pause", "toggle_play_pause", "next_song", "previous_song", or "open_spotify". For YouTube music, use "control_music" with action "play_youtube_music".
+- Music & song playback:
+  - If the user asks to play a song on Spotify (e.g. "play Starboy on spotify"): call "control_music" with action "play_spotify", app "spotify", and query.
+  - If the user asks to play a song on YouTube (e.g. "play Starboy on youtube"): call "control_music" with action "play_youtube", app "youtube", and query.
+  - If the user asks to pause music: call "control_music" with action "pause".
+  - If the user asks to resume music: call "control_music" with action "play".
+  - If the user asks to move to next or skip song: call "control_music" with action "next_song".
+  - If the user asks to rewind, restart, or previous song: call "control_music" with action "rewind_song".
+  - MANDATORY PREFERENCE RULE: If the user asks to play a song or music (e.g. "play a song", "play Believer", "play some music") WITHOUT mentioning which app (Spotify or YouTube): DO NOT pick an app on your own! Ask the user: "Which app do you prefer: Spotify or YouTube?" (or in Telugu: "మీరు ఏ యాప్‌లో వినాలనుకుంటున్నారు: Spotify లేదా YouTube?").
 - Desktop actions: "click_desktop_element", "type_desktop_text", "scroll_desktop", "read_screen", "get_active_window", "switch_desktop_window".
 - Save a note: "save_note". Read, list or search notes: "list_notes", "read_note", "search_notes".
 - Reminders ("remind me to call mom at 6", "in 20 minutes"): call "create_reminder" immediately with the time phrase exactly as spoken, then confirm in one short sentence. Never send the user to another screen to set it up.

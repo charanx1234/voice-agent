@@ -1122,7 +1122,9 @@ export const App: React.FC = () => {
   speakRef.current = speakResponse;
 
   const handsFree = useHandsFree({
-    enabled: handsFreeEnabled,
+    // In Pet-First Architecture, Desktop Pet owns continuous hands-free listening.
+    // Dashboard only listens when desktop pet is explicitly disabled by the user.
+    enabled: Boolean(handsFreeEnabled && settings.desktopPetEnabled === false),
     isMicMuted,
     isTextModeActive,
     language: settings.preferredLanguage,

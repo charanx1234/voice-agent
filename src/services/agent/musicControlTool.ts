@@ -4,6 +4,20 @@ import path from 'path';
 import { getChromeExecutablePath } from './chromeBrowserTool';
 import { desktopControlService } from '../desktop/desktopControlService';
 
+let pendingMusicQuery = '';
+
+export function setPendingMusicQuery(query: string): void {
+  pendingMusicQuery = (query || '').trim();
+}
+
+export function getPendingMusicQuery(): string {
+  return pendingMusicQuery;
+}
+
+export function clearPendingMusicQuery(): void {
+  pendingMusicQuery = '';
+}
+
 /**
  * Checks whether Spotify is installed on this Windows computer.
  */
@@ -12,15 +26,15 @@ export function getSpotifyExecutablePath(): string | null {
   const localAppData = process.env.LOCALAPPDATA || '';
 
   const candidates = [
-    path.join(appData, 'Spotify', 'Spotify.exe'),
     path.join(localAppData, 'Microsoft', 'WindowsApps', 'Spotify.exe'),
+    path.join(appData, 'Spotify', 'Spotify.exe'),
     path.join(localAppData, 'Spotify', 'Spotify.exe'),
   ];
 
   for (const p of candidates) {
     if (fs.existsSync(p)) return p;
   }
-  return null;
+  return 'Spotify.exe';
 }
 
 /**
@@ -81,7 +95,7 @@ export const musicControlToolDefinitions = [
   {
     name: 'control_music',
     description:
-      'Controls music playback on Windows (Spotify, YouTube Music, or media player). Actions: "play", "pause", "toggle_play_pause", "next_song", "previous_song", "open_spotify", "play_youtube_music".',
+      'Controls music playback on Windows (Spotify or YouTube). Actions: "play", "pause", "toggle_play_pause", "next_song", "previous_song", "rewind_song", "play_spotify", "open_spotify", "play_youtube", "play_youtube_music", "ask_music_platform". Use ask_music_platform when the user wants to play a song/music but did not specify Spotify or YouTube.',
     parameters: {
       type: 'OBJECT',
       properties: {
@@ -93,18 +107,25 @@ export const musicControlToolDefinitions = [
             'toggle_play_pause',
             'next_song',
             'previous_song',
+            'rewind_song',
+            'play_spotify',
             'open_spotify',
+            'play_youtube',
             'play_youtube_music',
+            'ask_music_platform',
           ],
           description: 'Music control action to perform.',
         },
         app: {
           type: 'STRING',
-          description: 'Optional target music application: "spotify", "youtube", "media_player". Defaults to "spotify" if user mentions Spotify.',
+          enum: ['spotify', 'youtube', 'auto'],
+          description:
+            'Target music app: "spotify" or "youtube". If not mentioned by the user, specify "auto" or use action "ask_music_platform".',
         },
         query: {
           type: 'STRING',
-          description: 'Optional song, artist, or playlist name to search/play (e.g. "classic rock", "lo-fi beats").',
+          description:
+            'Song name, artist, or playlist to search and play (e.g. "Believer", "Starboy", "lo-fi beats").',
         },
       },
       required: ['action'],
@@ -116,100 +137,118 @@ export async function executeMusicControlTool(
   toolName: string,
   args: Record<string, any>
 ): Promise<any> {
-  const action = String(args.action || 'play').toLowerCase();
-  const app = String(args.app || '').toLowerCase();
+  const rawAction = String(args.action || 'play').toLowerCase().trim();
+  const rawApp = String(args.app || '').toLowerCase().trim();
   const query = String(args.query || '').trim();
 
-  // 1. YouTube Music handling
-  if (action === 'play_youtube_music' || app === 'youtube' || app === 'youtube music') {
-    const chromePath = getChromeExecutablePath();
-    if (!chromePath) {
-      return { success: false, error: "Google Chrome is needed to play music on YouTube, but couldn't be found." };
+  // 1. If user asks to play a song but did not specify an app:
+  if (
+    rawAction === 'ask_music_platform' ||
+    ((rawAction === 'play' || rawAction === 'play_song') &&
+      (!rawApp || rawApp === 'auto') &&
+      !query.toLowerCase().includes('spotify') &&
+      !query.toLowerCase().includes('youtube'))
+  ) {
+    if (query) {
+      setPendingMusicQuery(query);
     }
+    return {
+      success: true,
+      action: 'ask_music_platform',
+      needsPlatformChoice: true,
+      query,
+      message: 'Which app do you prefer: Spotify or YouTube?',
+    };
+  }
+
+  // 2. YouTube & YouTube Music handling
+  if (
+    rawAction === 'play_youtube' ||
+    rawAction === 'play_youtube_music' ||
+    rawApp === 'youtube' ||
+    rawApp === 'youtube music' ||
+    rawApp === 'yt'
+  ) {
+    clearPendingMusicQuery();
+    const chromePath = getChromeExecutablePath();
     const targetUrl = query
       ? `https://www.youtube.com/results?search_query=${encodeURIComponent(query)}`
       : 'https://music.youtube.com';
 
-    spawn(chromePath, [targetUrl], { detached: true, stdio: 'ignore' }).unref();
+    if (chromePath) {
+      spawn(chromePath, [targetUrl], { detached: true, stdio: 'ignore' }).unref();
+    } else {
+      spawn('cmd.exe', ['/c', 'start', '""', targetUrl], { detached: true, stdio: 'ignore' }).unref();
+    }
     return {
       success: true,
-      action,
+      action: 'play_youtube',
       app: 'YouTube',
-      message: query ? `Opened YouTube to play "${query}".` : 'Opened YouTube Music in Google Chrome.',
+      query,
+      message: query ? `Searching and playing "${query}" on YouTube.` : 'Opened YouTube Music.',
     };
   }
 
-  // 2. Open Spotify
-  if (action === 'open_spotify' || (action === 'play' && app === 'spotify')) {
+  // 3. Spotify handling
+  if (
+    rawAction === 'play_spotify' ||
+    rawAction === 'open_spotify' ||
+    rawApp === 'spotify' ||
+    (rawAction === 'play' && query)
+  ) {
+    clearPendingMusicQuery();
+    const cleanQuery = query || getPendingMusicQuery();
+    const spotifyUri = cleanQuery ? `spotify:search:${encodeURIComponent(cleanQuery)}` : 'spotify:';
     const isRunning = await isProcessRunning('spotify');
-    if (!isRunning) {
-      // Launch Spotify via protocol or executable
-      const spotifyExe = getSpotifyExecutablePath();
-      try {
-        if (spotifyExe) {
-          spawn(spotifyExe, [], { detached: true, stdio: 'ignore' }).unref();
-        } else {
-          spawn('cmd.exe', ['/c', 'start', 'spotify:'], { detached: true, stdio: 'ignore' }).unref();
-        }
-      } catch (err: any) {
-        return { success: false, error: "I couldn't open Spotify." };
-      }
 
-      // Verify that Spotify process actually launched
-      let verified = false;
-      for (let attempt = 0; attempt < 6; attempt++) {
-        await new Promise((r) => setTimeout(r, 500));
-        if (await isProcessRunning('spotify')) {
-          verified = true;
-          break;
-        }
+    const spotifyExe = getSpotifyExecutablePath() || 'Spotify.exe';
+    try {
+      if (fs.existsSync(spotifyExe) || spotifyExe === 'Spotify.exe') {
+        spawn(spotifyExe, [`--uri=${spotifyUri}`], { detached: true, stdio: 'ignore' }).unref();
+      } else {
+        spawn('cmd.exe', ['/c', 'start', '""', spotifyUri], { detached: true, stdio: 'ignore' }).unref();
       }
+    } catch {
+      spawn('cmd.exe', ['/c', 'start', '""', spotifyUri], { detached: true, stdio: 'ignore' }).unref();
+    }
 
-      if (!verified) {
-        return { success: false, error: "I couldn't find or open Spotify on your computer." };
-      }
-    } else {
-      // Bring existing Spotify to foreground
+    if (isRunning) {
       await desktopControlService.switchWindow('spotify');
     }
 
-    if (action === 'play') {
-      await new Promise((r) => setTimeout(r, 600));
-      // Dispatch VK_MEDIA_PLAY_PAUSE (0xB3 = 179)
-      await sendMediaKeyEvent(179);
-      return {
-        success: true,
-        action: 'play',
-        app: 'Spotify',
-        message: 'Spotify is open and playing your music.',
-      };
-    }
+    // Trigger media play key shortly after launching search
+    setTimeout(async () => {
+      await sendMediaKeyEvent(179); // VK_MEDIA_PLAY_PAUSE
+    }, 1500);
 
     return {
       success: true,
-      action: 'open_spotify',
+      action: 'play_spotify',
       app: 'Spotify',
-      message: 'Spotify is open and ready.',
+      query: cleanQuery,
+      message: cleanQuery
+        ? `Searching and playing "${cleanQuery}" on Spotify.`
+        : 'Spotify is open and playing your music.',
     };
   }
 
-  // 3. Playback controls via Windows Virtual Media Keys
-  // 179 = VK_MEDIA_PLAY_PAUSE, 176 = VK_MEDIA_NEXT_TRACK, 177 = VK_MEDIA_PREV_TRACK, 178 = VK_MEDIA_STOP
-  switch (action) {
+  // 4. Playback controls via Windows Virtual Media Keys
+  // 179 = VK_MEDIA_PLAY_PAUSE, 176 = VK_MEDIA_NEXT_TRACK, 177 = VK_MEDIA_PREV_TRACK
+  switch (rawAction) {
     case 'play':
     case 'toggle_play_pause': {
       const ok = await sendMediaKeyEvent(179);
       return {
         success: ok,
-        action,
-        message: 'Resumed playback on your active music player.',
+        action: 'play',
+        message: 'Resumed music playback.',
       };
     }
     case 'pause': {
       const ok = await sendMediaKeyEvent(179);
       return {
         success: ok,
-        action,
+        action: 'pause',
         message: 'Paused your music.',
       };
     }
@@ -217,22 +256,23 @@ export async function executeMusicControlTool(
       const ok = await sendMediaKeyEvent(176);
       return {
         success: ok,
-        action,
+        action: 'next_song',
         message: 'Skipped to the next track.',
       };
     }
-    case 'previous_song': {
+    case 'previous_song':
+    case 'rewind_song': {
       const ok = await sendMediaKeyEvent(177);
       return {
         success: ok,
-        action,
-        message: 'Returned to the previous track.',
+        action: 'rewind_song',
+        message: 'Rewound song / playing previous track.',
       };
     }
     default:
       return {
         success: false,
-        error: `Unsupported music action "${action}".`,
+        error: `Unsupported music action "${rawAction}".`,
       };
   }
 }
