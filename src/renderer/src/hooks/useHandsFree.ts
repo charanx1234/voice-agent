@@ -55,7 +55,7 @@ export interface HandsFreeOptions {
   onDiagnostics?: (diag: Partial<VoiceDiagnosticsData>) => void;
 }
 
-const TICK_MS = 50;
+const TICK_MS = 65;
 const MIN_UTTERANCE_MS = 250;
 const MIN_PEAK_LEVEL = 0.012;
 const MAX_UTTERANCE_MS = 30000;
@@ -126,10 +126,8 @@ export function useHandsFree(options: HandsFreeOptions) {
   }, []);
 
   const goStandby = useCallback(() => {
-    if (modeRef.current === 'off' && optionsRef.current.enabled) {
-      setMode('active');
-    }
-  }, [setMode]);
+    stopActiveCaptureRef.current();
+  }, []);
 
   const wake = useCallback(() => {
     if (modeRef.current !== 'off') {
@@ -177,6 +175,8 @@ export function useHandsFree(options: HandsFreeOptions) {
     let preRollPcmBuffers: Float32Array[] = [];
     let activeUtterancePcmBuffers: Float32Array[] = [];
     let isCapturingUtterance = false;
+    let isAwake = false;
+    let awakeUntil = 0;
     let turnInProgress = false;
     let utteranceStartedAt = 0;
     let turnCounter = 0;
@@ -185,6 +185,7 @@ export function useHandsFree(options: HandsFreeOptions) {
     let ambientNoiseFloor = 0.02;
     let wasSpeaking = false;
     let ttsFinishedAt = 0;
+    let lastReportedLevel = 0;
 
     const emitDiagnosticsSnapshot = (extra: Partial<VoiceDiagnosticsData> = {}) => {
       const audioTrack = stream?.getAudioTracks()[0];
@@ -215,7 +216,10 @@ export function useHandsFree(options: HandsFreeOptions) {
     const startRecordingSession = () => {
       if (disposed || modeRef.current !== 'active') return;
       console.info('[AudioPipeline] Audio capture started. Listening for user command...');
-      activeUtterancePcmBuffers = [];
+      isAwake = true;
+      awakeUntil = Date.now() + 15000;
+      activeUtterancePcmBuffers = [...preRollPcmBuffers];
+      preRollPcmBuffers = [];
       isCapturingUtterance = true;
       turnInProgress = false;
       utteranceStartedAt = Date.now();
@@ -223,6 +227,7 @@ export function useHandsFree(options: HandsFreeOptions) {
 
     const stopRecordingSession = () => {
       isCapturingUtterance = false;
+      isAwake = false;
       activeUtterancePcmBuffers = [];
       preRollPcmBuffers = [];
       turnInProgress = false;
@@ -258,8 +263,9 @@ export function useHandsFree(options: HandsFreeOptions) {
       console.log(`[AudioPipeline] Finalizing utterance: duration=${durationMs}ms, peak=${peakLevel.toFixed(3)}, rms=${rms.toFixed(3)}, samples=${totalSamples}`);
 
       // Stop capture and keep continuous listening active
-      stopRecordingSession();
+      isCapturingUtterance = false;
       wakeAnnounced = false;
+      awakeUntil = Date.now() + 20000;
       console.info('[VoiceCoordinator] Utterance finalized. Continuous listening active');
 
       // Audio Quality Gate: Reject noise bursts, clicks, or quiet background drift
@@ -400,9 +406,13 @@ export function useHandsFree(options: HandsFreeOptions) {
         ambientNoiseFloor = ambientNoiseFloor * 0.97 + rms * 0.03;
       }
 
-      // Report live input level for UI meters & diagnostics
-      optionsRef.current.onLevel?.(level);
-      emitDiagnosticsSnapshot({ liveLevel: level });
+      // Report live input level for UI meters & diagnostics only on significant delta or when active
+      const levelDiff = Math.abs(level - lastReportedLevel);
+      if (level > 0.06 || (lastReportedLevel > 0 && level <= 0.06) || levelDiff >= 0.04) {
+        lastReportedLevel = level <= 0.04 ? 0 : level;
+        optionsRef.current.onLevel?.(lastReportedLevel);
+        emitDiagnosticsSnapshot({ liveLevel: lastReportedLevel });
+      }
 
       const speaking = optionsRef.current.isSpeaking();
       const busy = optionsRef.current.isBusy();
@@ -415,6 +425,7 @@ export function useHandsFree(options: HandsFreeOptions) {
           localWakeWordDetector.suppress(1200);
           preRollPcmBuffers = [];
           activeUtterancePcmBuffers = [];
+          awakeUntil = now + 10000;
         }
         wasSpeaking = speaking;
       }
@@ -472,14 +483,17 @@ export function useHandsFree(options: HandsFreeOptions) {
       if (speaking || busy || vad.isSpeaking) lastActivityRef.current = now;
 
       if (event?.type === 'start') {
-        if (currentMode === 'active' || speaking) {
+        const canCapture = isAwake || (now < awakeUntil) || speaking;
+        if (canCapture) {
           if (speaking) {
             // Intentional Barge-in during speech playback
             console.log('[AudioPipeline] Barge-in speech detected during assistant playback! Interrupting...');
             turnInProgress = false;
+            isAwake = true;
+            awakeUntil = now + 15000;
             isCapturingUtterance = true;
             utteranceStartedAt = now;
-            activeUtterancePcmBuffers = [];
+            activeUtterancePcmBuffers = [...preRollPcmBuffers];
             preRollPcmBuffers = [];
             optionsRef.current.onBargeIn();
             activeSpeechReported = true;
@@ -494,7 +508,8 @@ export function useHandsFree(options: HandsFreeOptions) {
             console.info('[VoiceCoordinator] Speech detected');
             isCapturingUtterance = true;
             utteranceStartedAt = now;
-            activeUtterancePcmBuffers = [];
+            activeUtterancePcmBuffers = [...preRollPcmBuffers];
+            preRollPcmBuffers = [];
             if (!activeSpeechReported) {
               activeSpeechReported = true;
               optionsRef.current.onSpeechActivity(true);
@@ -513,17 +528,17 @@ export function useHandsFree(options: HandsFreeOptions) {
         }
       }
 
-      const timeout = optionsRef.current.silenceTimeoutMs || ACTIVE_SILENCE_TIMEOUT_MS;
       if (
-        currentMode === 'active' &&
+        isAwake &&
         !speaking &&
         !busy &&
         !vad.isSpeaking &&
         !isCapturingUtterance &&
-        now - lastActivityRef.current > timeout
+        now > awakeUntil
       ) {
+        isAwake = false;
         wakeAnnounced = false;
-        stopRecordingSession();
+        console.info('[VoiceCoordinator] Conversational window expired. Ready for "Hey Friday"');
       }
     };
 
@@ -633,18 +648,22 @@ export function useHandsFree(options: HandsFreeOptions) {
         processorNode = audioCtx.createScriptProcessor(2048, 1, 1);
         processorNode.onaudioprocess = (event: AudioProcessingEvent) => {
           if (disposed) return;
-          // STATE A (Standby): Zero audio recording or PCM buffering
-          if (modeRef.current !== 'active' || !isCapturingUtterance) {
+          const inputChannel = event.inputBuffer.getChannelData(0);
+          const copy = new Float32Array(inputChannel.length);
+          copy.set(inputChannel);
+
+          // Rolling circular buffer of raw PCM frames (keeps ~350ms of audio before speech onset)
+          if (!isCapturingUtterance) {
+            preRollPcmBuffers.push(copy);
+            if (preRollPcmBuffers.length > MAX_PRE_ROLL_BLOCKS) {
+              preRollPcmBuffers.shift();
+            }
             const outputChannel = event.outputBuffer.getChannelData(0);
             outputChannel.fill(0);
             return;
           }
 
-          const inputChannel = event.inputBuffer.getChannelData(0);
-          const copy = new Float32Array(inputChannel.length);
-          copy.set(inputChannel);
-
-          // STATE B (Active Conversation): Accumulate command audio
+          // Accumulate command audio
           activeUtterancePcmBuffers.push(copy);
 
           // Silence the output so the processor never feeds back into speakers

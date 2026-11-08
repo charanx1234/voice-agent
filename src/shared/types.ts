@@ -473,6 +473,27 @@ export interface ToolConfirmationPayload {
   details: Record<string, any>;
 }
 
+
+export interface FridayProcessMetric {
+  pid: number;
+  type: string;
+  cpuPercent: number;
+  ramMb: number;
+}
+
+export interface FridayResourceMetrics {
+  totalCpuPercent: number;
+  totalRamMb: number;
+  processCount: number;
+  processes: FridayProcessMetric[];
+  pythonProcesses: number;
+  pythonStatus: string;
+  wakeWordStatus: string;
+  operatingState: 'idle' | 'listening' | 'thinking' | 'speaking' | 'standby';
+  gpuStatus: string;
+  timestamp: string;
+}
+
 export interface FridayApiBridge {
   // Settings & Status
   getSettings: () => Promise<FridaySettings>;
@@ -561,6 +582,7 @@ export interface FridayApiBridge {
   // Diagnostics
   openLogsFolder: () => Promise<boolean>;
   readLogs: (limit?: number) => Promise<string[]>;
+  getResourceUsage: () => Promise<FridayResourceMetrics>;
 
   // Hands-free standby / wake word
   transcribeUtterance: (audioBase64: string, audioMimeType?: string) => Promise<{ success: boolean; reply?: string; error?: string }>;

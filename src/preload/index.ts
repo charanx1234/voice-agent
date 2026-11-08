@@ -126,6 +126,7 @@ const apiBridge: FridayApiBridge = {
   // Diagnostics
   openLogsFolder: () => ipcRenderer.invoke(IPC_CHANNELS.LOGS_OPEN_FOLDER),
   readLogs: (limit?: number) => ipcRenderer.invoke(IPC_CHANNELS.LOGS_READ, limit),
+  getResourceUsage: () => ipcRenderer.invoke(IPC_CHANNELS.RESOURCE_USAGE_GET),
 
   // Hands-free standby / wake word
   transcribeUtterance: (audioBase64: string, audioMimeType?: string) =>

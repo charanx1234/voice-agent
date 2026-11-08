@@ -39,6 +39,7 @@ export const IPC_CHANNELS = {
   TASKS_CHANGED: 'friday:tasks-changed',
   SYSTEM_HEALTH_GET: 'friday:system-health-get',
   SYSTEM_HEALTH_UPDATE: 'friday:system-health-update',
+  RESOURCE_USAGE_GET: 'friday:resource-usage-get',
   TRANSCRIBE_UTTERANCE: 'friday:transcribe-utterance',
   TRANSCRIBE_SPEECH: 'friday:transcribe-speech',
   APP_EXIT: 'friday:app-exit',

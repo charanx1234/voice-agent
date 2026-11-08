@@ -38,6 +38,8 @@ body.pet-mode #root {
   display: flex;
   align-items: center;
   justify-content: center;
+  will-change: transform;
+  transform: translateZ(0);
   filter: drop-shadow(0 14px 22px rgba(0, 0, 0, 0.42))
           drop-shadow(0 4px 8px rgba(0, 0, 0, 0.28));
   transition: transform 0.25s cubic-bezier(0.34, 1.56, 0.64, 1), filter 0.3s ease;

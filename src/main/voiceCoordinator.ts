@@ -207,8 +207,8 @@ export class VoiceCoordinator {
     const mainWin = this.getMainWindow();
     const petWin = this.getPetWindow();
 
-    // If main window is visible, delegate to main window audio host
-    if (mainWin && !mainWin.isDestroyed() && mainWin.isVisible()) {
+    // MainWindow is the central background audio host for both Dashboard and Pet
+    if (mainWin && !mainWin.isDestroyed()) {
       mainWin.webContents.send(IPC_CHANNELS.VOICE_TRIGGER_MIC);
       return;
     }

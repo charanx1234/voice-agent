@@ -93,6 +93,17 @@ export const App: React.FC = () => {
   const [faceExpression, setFaceExpression] = useState<FaceExpression>('neutral');
   const [streamCopyStatus, setStreamCopyStatus] = useState<'idle' | 'copied' | 'error'>('idle');
   const [isMicMuted, setIsMicMuted] = useState(false);
+  const [isWindowVisible, setIsWindowVisible] = useState(true);
+
+  useEffect(() => {
+    if (window.fridayAPI?.getMainVisibility) {
+      window.fridayAPI.getMainVisibility().then((v) => setIsWindowVisible(v)).catch(() => {});
+    }
+    if (window.fridayAPI?.onMainVisibilityChanged) {
+      return window.fridayAPI.onMainVisibilityChanged((v) => setIsWindowVisible(v));
+    }
+    return undefined;
+  }, []);
   const [isTextModeActive, setIsTextModeActive] = useState(false);
   const [voiceSessionState, setVoiceSessionState] = useState<VoiceSessionState>('STANDBY');
   const voiceSessionStateRef = useRef<VoiceSessionState>('STANDBY');
@@ -266,9 +277,7 @@ export const App: React.FC = () => {
       if (robotStateRef.current === 'speaking') {
         interrupt();
       } else if (robotStateRef.current === 'listening') {
-        handsFreeRef.current.goStandby();
-        setRobotState('idle');
-        setVoiceSessionState('STANDBY');
+        handsFreeRef.current.finalizeCurrentUtterance();
       } else {
         handsFreeRef.current.wake();
         setRobotState('listening');
@@ -1031,14 +1040,14 @@ export const App: React.FC = () => {
     // Hands-free owns the persistent microphone session. A mic click wakes it
     // instead of creating a second competing MediaStream.
     if (handsFreeEnabled) {
-      if (handsFreeRef.current.mode === 'standby' || handsFreeRef.current.mode === 'off') {
+      if (robotState === 'listening' || isListening || voiceSessionState === 'LISTENING') {
+        handsFreeRef.current.finalizeCurrentUtterance();
+      } else {
         handsFreeRef.current.wake();
         setRobotState('listening');
         setVoiceSessionState('LISTENING');
-        setFaceExpression('curious');
-      } else {
-        // User clicked mic while listening/speaking: finalize and submit utterance immediately
-        handsFreeRef.current.finalizeCurrentUtterance();
+        setFaceExpression('excited');
+        playWakeChime();
       }
       return;
     }
@@ -1124,7 +1133,7 @@ export const App: React.FC = () => {
   const handsFree = useHandsFree({
     // In Pet-First Architecture, Desktop Pet owns continuous hands-free listening.
     // Dashboard only listens when desktop pet is explicitly disabled by the user.
-    enabled: Boolean(handsFreeEnabled && settings.desktopPetEnabled === false),
+    enabled: Boolean(handsFreeEnabled && !isMicMuted),
     isMicMuted,
     isTextModeActive,
     language: settings.preferredLanguage,
@@ -1434,11 +1443,11 @@ export const App: React.FC = () => {
           >
             {/* Animated Robot Character */}
             <RobotCharacter
-              state={handsFree.mode === 'standby' ? 'sleeping' : robotState}
+              state={robotState}
               amplitude={amplitude}
               frequencies={frequencies}
               mood={currentMood}
-              expression={handsFree.mode === 'standby' ? 'sleepy' : faceExpression}
+              expression={faceExpression}
               onClick={() => {
                 requestIdRef.current += 1;
                 window.fridayAPI?.cancelResponse(activeStreamIdRef.current || undefined);

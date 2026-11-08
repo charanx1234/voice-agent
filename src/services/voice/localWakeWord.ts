@@ -81,6 +81,13 @@ export class LocalWakeWordDetector {
     const cutoff = now - 1500;
     this.frameHistory = this.frameHistory.filter((item) => item.time >= cutoff);
 
+    // Fast exit if history is below speech energy threshold
+    const minWakeThreshold = 0.05 * (1.2 - this.sensitivity * 0.5);
+    const maxRms = Math.max(...this.frameHistory.map((h) => h.metrics.rms));
+    if (maxRms < minWakeThreshold) {
+      return false;
+    }
+
     // Evaluate temporal acoustic pattern
     const detected = this.evaluateWakePattern(this.frameHistory);
     if (detected) {
@@ -270,20 +277,24 @@ export class LocalWakeWordDetector {
     const nyquist = sampleRate / 2;
     const hzPerBin = nyquist / bins;
 
+    // Precalculate frequency bin indices upfront to eliminate inner-loop floating-point multiplication
+    const binVocalStart = Math.floor(250 / hzPerBin);
+    const binVocalEnd = Math.min(bins - 1, Math.ceil(3000 / hzPerBin));
+    const binFricativeStart = Math.floor(3200 / hzPerBin);
+    const binFricativeEnd = Math.min(bins - 1, Math.ceil(7500 / hzPerBin));
+
     let totalSum = 0;
     let vocalSum = 0;
     let fricativeSum = 0;
 
     for (let i = 0; i < bins; i++) {
       const val = typeof freqData[i] === 'number' ? Number(freqData[i]) : 0;
-      // Normalize to 0-1
       const normalized = val > 1 ? val / 255 : val;
-      const freq = i * hzPerBin;
 
       totalSum += normalized;
-      if (freq >= 250 && freq <= 3000) {
+      if (i >= binVocalStart && i <= binVocalEnd) {
         vocalSum += normalized;
-      } else if (freq > 3200 && freq <= 7500) {
+      } else if (i >= binFricativeStart && i <= binFricativeEnd) {
         fricativeSum += normalized;
       }
     }

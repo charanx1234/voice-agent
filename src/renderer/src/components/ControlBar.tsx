@@ -468,9 +468,9 @@ export const ControlBar: React.FC<ControlBarProps> = ({
         <button
           onClick={onToggleMic}
           title={
-            state === 'listening' || isListening || handsFreeMode === 'active'
-              ? 'Listening continuously (Say "Hey Friday" or speak directly)'
-              : 'Start speaking to FRIDAY'
+            state === 'listening' || isListening
+              ? 'Listening (Click to submit or speak to FRIDAY)'
+              : 'Microphone active (Say "Hey Friday" or click to talk)'
           }
           style={{
             position: 'relative',
@@ -492,7 +492,7 @@ export const ControlBar: React.FC<ControlBarProps> = ({
             transition: 'all 0.25s cubic-bezier(0.16, 1, 0.3, 1)',
           }}
         >
-          {state === 'listening' || isListening || handsFreeMode === 'active' ? <MicOff size={28} /> : <Mic size={28} />}
+          {state === 'listening' || isListening ? <MicOff size={28} /> : <Mic size={28} />}
         </button>
       </div>
 

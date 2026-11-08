@@ -107,30 +107,43 @@ export class AudioAnalyser {
   }
 
   private startLoop(): void {
+    let lastFrameTime = 0;
+    const targetIntervalMs = 33; // 30 FPS throttle
+    let lastSentAmp = 0;
+
     const loop = () => {
       if (!this.analyser || !this.dataArray || !this.timeDomainArray) return;
 
-      this.analyser.getByteFrequencyData(this.dataArray as any);
-      this.analyser.getByteTimeDomainData(this.timeDomainArray as any);
+      const now = typeof performance !== 'undefined' ? performance.now() : Date.now();
+      if (now - lastFrameTime >= targetIntervalMs) {
+        lastFrameTime = now;
 
-      let rmsSum = 0;
-      const sliceCount = 8;
-      const freqSample: number[] = [];
+        this.analyser.getByteFrequencyData(this.dataArray as any);
+        this.analyser.getByteTimeDomainData(this.timeDomainArray as any);
 
-      for (let i = 0; i < sliceCount; i++) {
-        const val = this.dataArray[i] / 255;
-        freqSample.push(val);
-      }
+        let rmsSum = 0;
+        const sliceCount = 8;
+        const freqSample: number[] = [];
 
-      for (const sample of this.timeDomainArray) {
-        const normalized = (sample - 128) / 128;
-        rmsSum += normalized * normalized;
-      }
-      const rmsAmplitude = Math.sqrt(rmsSum / this.timeDomainArray.length);
-      const avgAmplitude = Math.max(0, Math.min(1, rmsAmplitude * 2.6));
+        for (let i = 0; i < sliceCount; i++) {
+          const val = this.dataArray[i] / 255;
+          freqSample.push(val);
+        }
 
-      if (this.onAmplitudeCallback) {
-        this.onAmplitudeCallback(avgAmplitude, freqSample);
+        for (const sample of this.timeDomainArray) {
+          const normalized = (sample - 128) / 128;
+          rmsSum += normalized * normalized;
+        }
+        const rmsAmplitude = Math.sqrt(rmsSum / this.timeDomainArray.length);
+        const avgAmplitude = Math.max(0, Math.min(1, rmsAmplitude * 2.6));
+
+        // Skip sending callbacks if silence persists to save IPC & render cycles
+        if (avgAmplitude > 0.03 || lastSentAmp > 0) {
+          lastSentAmp = avgAmplitude <= 0.03 ? 0 : avgAmplitude;
+          if (this.onAmplitudeCallback) {
+            this.onAmplitudeCallback(lastSentAmp, freqSample);
+          }
+        }
       }
 
       this.animationFrameId = requestAnimationFrame(loop);

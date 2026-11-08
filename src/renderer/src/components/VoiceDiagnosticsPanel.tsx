@@ -1,6 +1,6 @@
-import React from 'react';
-import { X, Activity, Mic, Volume2, Cpu, AlertTriangle, CheckCircle, Radio } from 'lucide-react';
-import { VoiceDiagnosticsData } from '@/shared/types';
+import React, { useEffect, useState } from 'react';
+import { X, Activity, Mic, Volume2, Cpu, Radio, Shield, Gauge } from 'lucide-react';
+import { VoiceDiagnosticsData, FridayResourceMetrics } from '@/shared/types';
 
 interface VoiceDiagnosticsPanelProps {
   isOpen: boolean;
@@ -13,11 +13,29 @@ export const VoiceDiagnosticsPanel: React.FC<VoiceDiagnosticsPanelProps> = ({
   onClose,
   diagnostics,
 }) => {
+  const [resources, setResources] = useState<FridayResourceMetrics | null>(null);
+
+  useEffect(() => {
+    if (!isOpen) return;
+
+    const fetchResources = async () => {
+      try {
+        if (window.fridayAPI?.getResourceUsage) {
+          const usage = await window.fridayAPI.getResourceUsage();
+          setResources(usage);
+        }
+      } catch {}
+    };
+
+    void fetchResources();
+    const timer = setInterval(fetchResources, 1500);
+    return () => clearInterval(timer);
+  }, [isOpen]);
+
   if (!isOpen) return null;
 
   const isLive = diagnostics.streamStatus === 'active';
   const levelPct = Math.min(100, Math.round(diagnostics.liveLevel * 100));
-  const peakPct = Math.min(100, Math.round(diagnostics.peakLevel * 100));
 
   return (
     <div
@@ -36,8 +54,8 @@ export const VoiceDiagnosticsPanel: React.FC<VoiceDiagnosticsPanelProps> = ({
       <div
         style={{
           width: '100%',
-          maxWidth: '680px',
-          maxHeight: '85vh',
+          maxWidth: '720px',
+          maxHeight: '88vh',
           backgroundColor: '#0f172a',
           border: '1px solid #334155',
           borderRadius: '12px',
@@ -63,7 +81,7 @@ export const VoiceDiagnosticsPanel: React.FC<VoiceDiagnosticsPanelProps> = ({
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
             <Activity size={18} color="#38bdf8" />
             <span style={{ fontWeight: 600, fontSize: '0.95rem' }}>
-              FRIDAY Voice Pipeline Real-time Diagnostics
+              FRIDAY System Diagnostics & Voice Pipeline
             </span>
             <span
               style={{
@@ -106,7 +124,80 @@ export const VoiceDiagnosticsPanel: React.FC<VoiceDiagnosticsPanelProps> = ({
             fontSize: '0.82rem',
           }}
         >
-          {/* Section 1: Microphone & Audio Stream */}
+          {/* Section 1: System Performance & Resource Usage */}
+          <div
+            style={{
+              backgroundColor: '#1e293b',
+              borderRadius: '8px',
+              padding: '12px',
+              border: '1px solid #334155',
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontWeight: 600, color: '#38bdf8', marginBottom: '8px' }}>
+              <Gauge size={15} />
+              <span>1. Resource Efficiency & Process Performance (Native OS Metrics)</span>
+            </div>
+            {resources ? (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '10px' }}>
+                  <div style={{ backgroundColor: '#0f172a', padding: '8px', borderRadius: '6px', border: '1px solid #1e293b' }}>
+                    <div style={{ color: '#94a3b8', fontSize: '0.72rem' }}>Total CPU Usage</div>
+                    <div style={{ fontSize: '1.15rem', fontWeight: 700, color: resources.totalCpuPercent < 5 ? '#4ade80' : resources.totalCpuPercent < 15 ? '#facc15' : '#f87171' }}>
+                      {resources.totalCpuPercent}%
+                    </div>
+                  </div>
+                  <div style={{ backgroundColor: '#0f172a', padding: '8px', borderRadius: '6px', border: '1px solid #1e293b' }}>
+                    <div style={{ color: '#94a3b8', fontSize: '0.72rem' }}>FRIDAY Memory (RAM)</div>
+                    <div style={{ fontSize: '1.15rem', fontWeight: 700, color: resources.totalRamMb < 400 ? '#4ade80' : '#facc15' }}>
+                      {resources.totalRamMb} MB
+                    </div>
+                  </div>
+                  <div style={{ backgroundColor: '#0f172a', padding: '8px', borderRadius: '6px', border: '1px solid #1e293b' }}>
+                    <div style={{ color: '#94a3b8', fontSize: '0.72rem' }}>Operating State</div>
+                    <div style={{ fontSize: '1rem', fontWeight: 700, color: '#38bdf8', textTransform: 'capitalize' }}>
+                      {resources.operatingState}
+                    </div>
+                  </div>
+                </div>
+
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '8px', marginTop: '4px' }}>
+                  <div>
+                    <span style={{ color: '#94a3b8' }}>Python Backend: </span>
+                    <span style={{ color: '#4ade80', fontWeight: 600 }}>{resources.pythonStatus}</span>
+                  </div>
+                  <div>
+                    <span style={{ color: '#94a3b8' }}>Wake-Word Service: </span>
+                    <span style={{ color: '#4ade80', fontWeight: 600 }}>{resources.wakeWordStatus}</span>
+                  </div>
+                  <div>
+                    <span style={{ color: '#94a3b8' }}>GPU Acceleration: </span>
+                    <span style={{ color: '#4ade80', fontWeight: 600 }}>{resources.gpuStatus}</span>
+                  </div>
+                  <div>
+                    <span style={{ color: '#94a3b8' }}>Total Process Count: </span>
+                    <span style={{ fontWeight: 600 }}>{resources.processCount} Electron Processes</span>
+                  </div>
+                </div>
+
+                {resources.processes.length > 0 && (
+                  <div style={{ marginTop: '6px', backgroundColor: '#0f172a', padding: '8px 10px', borderRadius: '6px', border: '1px solid #334155' }}>
+                    <div style={{ color: '#94a3b8', fontSize: '0.72rem', marginBottom: '4px' }}>Process Breakdown:</div>
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
+                      {resources.processes.map((p, idx) => (
+                        <div key={idx} style={{ fontSize: '0.74rem', backgroundColor: '#1e293b', padding: '2px 8px', borderRadius: '4px' }}>
+                          <span style={{ color: '#38bdf8', fontWeight: 600 }}>{p.type}:</span> {p.cpuPercent}% CPU · {p.ramMb} MB
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            ) : (
+              <div style={{ color: '#94a3b8', fontStyle: 'italic' }}>Measuring native process performance...</div>
+            )}
+          </div>
+
+          {/* Section 2: Microphone & Audio Stream */}
           <div
             style={{
               backgroundColor: '#1e293b',
@@ -117,7 +208,7 @@ export const VoiceDiagnosticsPanel: React.FC<VoiceDiagnosticsPanelProps> = ({
           >
             <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontWeight: 600, color: '#38bdf8', marginBottom: '8px' }}>
               <Mic size={15} />
-              <span>1. Microphone & Stream Acquisition</span>
+              <span>2. Microphone & Stream Acquisition</span>
             </div>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '8px' }}>
               <div>
@@ -141,7 +232,7 @@ export const VoiceDiagnosticsPanel: React.FC<VoiceDiagnosticsPanelProps> = ({
             </div>
           </div>
 
-          {/* Section 2: Real-time Audio Level & VAD */}
+          {/* Section 3: Real-time Audio Level & VAD */}
           <div
             style={{
               backgroundColor: '#1e293b',
@@ -152,7 +243,7 @@ export const VoiceDiagnosticsPanel: React.FC<VoiceDiagnosticsPanelProps> = ({
           >
             <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontWeight: 600, color: '#38bdf8', marginBottom: '8px' }}>
               <Radio size={15} />
-              <span>2. Audio Capture & Voice Activity Detection (VAD)</span>
+              <span>3. Audio Capture & Voice Activity Detection (VAD)</span>
             </div>
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
@@ -201,7 +292,7 @@ export const VoiceDiagnosticsPanel: React.FC<VoiceDiagnosticsPanelProps> = ({
             </div>
           </div>
 
-          {/* Section 3: Speech-to-Text & AI Status */}
+          {/* Section 4: Speech-to-Text & AI Status */}
           <div
             style={{
               backgroundColor: '#1e293b',
@@ -212,7 +303,7 @@ export const VoiceDiagnosticsPanel: React.FC<VoiceDiagnosticsPanelProps> = ({
           >
             <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontWeight: 600, color: '#38bdf8', marginBottom: '8px' }}>
               <Cpu size={15} />
-              <span>3. Speech-to-Text (STT) & Gemini AI Pipeline</span>
+              <span>4. Speech-to-Text (STT) & Gemini AI Pipeline</span>
             </div>
 
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '8px' }}>
@@ -269,7 +360,7 @@ export const VoiceDiagnosticsPanel: React.FC<VoiceDiagnosticsPanelProps> = ({
             </div>
           </div>
 
-          {/* Section 4: Text-to-Speech & Errors */}
+          {/* Section 5: Text-to-Speech & Errors */}
           <div
             style={{
               backgroundColor: '#1e293b',
@@ -280,7 +371,7 @@ export const VoiceDiagnosticsPanel: React.FC<VoiceDiagnosticsPanelProps> = ({
           >
             <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontWeight: 600, color: '#38bdf8', marginBottom: '8px' }}>
               <Volume2 size={15} />
-              <span>4. Speech Synthesis (TTS) & Error Monitor</span>
+              <span>5. Speech Synthesis (TTS) & Error Monitor</span>
             </div>
 
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '8px' }}>
@@ -313,7 +404,7 @@ export const VoiceDiagnosticsPanel: React.FC<VoiceDiagnosticsPanelProps> = ({
             color: '#94a3b8',
           }}
         >
-          <span>Real-time voice stream sampling at 16kHz Mono.</span>
+          <span>Real-time voice stream sampling at 16kHz Mono. DirectComposition Enabled.</span>
           <button
             onClick={onClose}
             style={{

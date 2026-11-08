@@ -67,7 +67,8 @@ export const DesktopPet: React.FC = () => {
   // Centralized Audio / Mouth reactive state
   const [liveAmplitude, setLiveAmplitude] = useState<number>(0);
   const [mouthOpenness, setMouthOpenness] = useState<number>(0);
-  const [micLevel, setMicLevel] = useState<number>(0);
+  // micLevel state removed to prevent idle 20 FPS re-renders
+  const setMicLevel = (_v: number) => {};
 
   // Self-sufficient Voice Recording & Playback State
   const [isRecording, setIsRecording] = useState(false);
@@ -442,12 +443,20 @@ export const DesktopPet: React.FC = () => {
   }, []);
 
   const toggleRecording = useCallback(() => {
+    if (window.fridayAPI?.voiceTriggerMic) {
+      if (petState.isSpeaking || petState.robotState === 'speaking') {
+        window.fridayAPI.voiceInterrupt?.();
+      } else {
+        window.fridayAPI.voiceTriggerMic();
+      }
+      return;
+    }
     if (isRecording) {
       stopRecording();
     } else {
       startRecording();
     }
-  }, [isRecording, startRecording, stopRecording]);
+  }, [isRecording, petState.isSpeaking, petState.robotState, startRecording, stopRecording]);
 
   // 1. Subscribe to Centralized Voice Session Events, Main Window Visibility, & Tool Confirmations
   useEffect(() => {
@@ -575,10 +584,12 @@ export const DesktopPet: React.FC = () => {
       cleanups.push(cleanupMouth);
     }
 
-    // Live microphone input level subscription
+    // Live microphone input level subscription with zero-delta re-render suppression
     if (window.fridayAPI?.onVoiceLevelUpdate) {
       const cleanupLevel = window.fridayAPI.onVoiceLevelUpdate((lvl) => {
-        if (!unmount && !isRecording) setMicLevel(lvl || 0);
+        if (!unmount && !isRecording) {
+          setLiveAmplitude((prev) => (lvl > 0.08 ? lvl : prev > 0 ? 0 : prev));
+        }
       });
       cleanups.push(cleanupLevel);
     }
@@ -645,7 +656,7 @@ export const DesktopPet: React.FC = () => {
   );
 
   useHandsFree({
-    enabled: isHandsFreeEligible,
+    enabled: false,
     isMicMuted: Boolean(settings.soundMuted),
     isTextModeActive: false,
     language: settings.preferredLanguage || 'en-IN',
@@ -659,7 +670,9 @@ export const DesktopPet: React.FC = () => {
     enrolledVoiceProfile: settings.enrolledVoiceProfile,
     deviceId: settings.microphoneDeviceId,
     onLevel: (lvl) => {
-      if (!isRecording) setLiveAmplitude(lvl);
+      if (!isRecording) {
+        setLiveAmplitude((prev) => (lvl > 0.08 ? lvl : prev > 0 ? 0 : prev));
+      }
     },
     isSpeaking: () => petState.isSpeaking || petState.robotState === 'speaking',
     isBusy: () => petState.robotState === 'thinking',
@@ -904,7 +917,7 @@ export const DesktopPet: React.FC = () => {
           )}
 
           {/* Sleeping / Relaxed half-closed eyelids */}
-          {activeRobotState === 'sleeping' && !isBlinking && (
+          {false && !isBlinking && (
             <g className="pet-sleep-eyelids" opacity="0.85">
               <path
                 d={`M ${LEFT_EYE.cx - 28} ${LEFT_EYE.cy} Q ${LEFT_EYE.cx} ${LEFT_EYE.cy + 18} ${LEFT_EYE.cx + 28} ${LEFT_EYE.cy}`}

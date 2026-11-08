@@ -13,10 +13,10 @@ import { settingsStore } from '../services/storage/settingsStore';
 app.setName('friday-ai-companion');
 
 // Prevent black window artifacts on Windows with frameless/transparent windows
-app.commandLine.appendSwitch('disable-gpu-compositing');
+// Performance & GPU Acceleration switches for ultra-lightweight CPU/fan footprint
 app.commandLine.appendSwitch('autoplay-policy', 'no-user-gesture-required');
-app.commandLine.appendSwitch('disable-background-timer-throttling');
-app.commandLine.appendSwitch('disable-renderer-backgrounding');
+app.commandLine.appendSwitch('enable-gpu-rasterization');
+app.commandLine.appendSwitch('enable-zero-copy');
 
 // Production builds write to a log file only; development keeps terminal output.
 initLogger({ keepConsole: !app.isPackaged });
@@ -272,12 +272,14 @@ function createWindow(): void {
 
   mainWindow.on('show', () => {
     if (petWindow && !petWindow.isDestroyed()) {
+    mainWindow?.webContents?.send(IPC_CHANNELS.MAIN_VISIBILITY_CHANGED, true);
       petWindow.webContents.send(IPC_CHANNELS.MAIN_VISIBILITY_CHANGED, true);
     }
   });
 
   mainWindow.on('hide', () => {
     if (petWindow && !petWindow.isDestroyed()) {
+    mainWindow?.webContents?.send(IPC_CHANNELS.MAIN_VISIBILITY_CHANGED, false);
       petWindow.webContents.send(IPC_CHANNELS.MAIN_VISIBILITY_CHANGED, false);
     }
   });
@@ -286,6 +288,7 @@ function createWindow(): void {
     if (!isQuitting && petWindow && !petWindow.isDestroyed()) {
       event.preventDefault();
       mainWindow?.hide();
+    mainWindow?.webContents?.send(IPC_CHANNELS.MAIN_VISIBILITY_CHANGED, false);
       petWindow.webContents.send(IPC_CHANNELS.MAIN_VISIBILITY_CHANGED, false);
       return;
     }
