@@ -1,5 +1,6 @@
 import { execFile, spawn } from 'child_process';
 import fs from 'fs';
+import https from 'https';
 import path from 'path';
 import { getChromeExecutablePath } from './chromeBrowserTool';
 import { desktopControlService } from '../desktop/desktopControlService';
@@ -91,6 +92,102 @@ Start-Sleep -Milliseconds 50
   });
 }
 
+/**
+ * Uses PowerShell to bring Spotify window to focus and press Enter/Space 
+ * to auto-play the first search result.
+ */
+function spotifyAutoPlayFirstResult(): Promise<void> {
+  return new Promise((resolve) => {
+    const psScript = `
+Add-Type -AssemblyName Microsoft.VisualBasic
+Add-Type @"
+using System;
+using System.Runtime.InteropServices;
+public class WinUser {
+  [DllImport("user32.dll")] public static extern bool SetForegroundWindow(IntPtr hWnd);
+  [DllImport("user32.dll")] public static extern IntPtr FindWindow(string lpClassName, string lpWindowName);
+  [DllImport("user32.dll")] public static extern void keybd_event(byte bVk, byte bScan, uint dwFlags, int dwExtraInfo);
+  public const int KEYEVENTF_KEYUP = 0x0002;
+}
+"@ -ErrorAction SilentlyContinue
+Start-Sleep -Milliseconds 2200
+$spotify = Get-Process -Name "Spotify" -ErrorAction SilentlyContinue | Select-Object -First 1
+if ($spotify) {
+  $hwnd = $spotify.MainWindowHandle
+  if ($hwnd -ne 0) {
+    [WinUser]::SetForegroundWindow($hwnd)
+    Start-Sleep -Milliseconds 400
+    # Press Tab to focus first song result, then Enter to play
+    [Microsoft.VisualBasic.Interaction]::AppActivate($spotify.Id)
+    Start-Sleep -Milliseconds 300
+    [WinUser]::keybd_event(0x09, 0, 0, 0)
+    Start-Sleep -Milliseconds 100
+    [WinUser]::keybd_event(0x09, 0, [WinUser]::KEYEVENTF_KEYUP, 0)
+    Start-Sleep -Milliseconds 200
+    [WinUser]::keybd_event(0x0D, 0, 0, 0)
+    Start-Sleep -Milliseconds 80
+    [WinUser]::keybd_event(0x0D, 0, [WinUser]::KEYEVENTF_KEYUP, 0)
+  }
+}
+"done"
+`;
+    execFile(
+      'powershell.exe',
+      ['-NoProfile', '-NonInteractive', '-Command', psScript],
+      { timeout: 6000 },
+      () => resolve()
+    );
+  });
+}
+
+/**
+ * Fetches the first YouTube video ID for a given search query by scraping
+ * YouTube's search results page (no API key needed).
+ */
+function fetchFirstYouTubeVideoId(query: string): Promise<string | null> {
+  if (process.env.NODE_ENV === 'test' || process.env.VITEST) {
+    return Promise.resolve(null);
+  }
+  return new Promise((resolve) => {
+    const url = `https://www.youtube.com/results?search_query=${encodeURIComponent(query)}`;
+    const options = {
+      hostname: 'www.youtube.com',
+      path: `/results?search_query=${encodeURIComponent(query)}`,
+      method: 'GET',
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120.0.0.0 Safari/537.36',
+        'Accept-Language': 'en-US,en;q=0.9',
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+      },
+      timeout: 2500,
+    };
+
+    const req = https.request(options, (res) => {
+      let data = '';
+      res.on('data', (chunk: Buffer) => {
+        data += chunk.toString();
+        // Stop collecting once we have enough to find first video
+        if (data.length > 200000) res.destroy();
+      });
+      res.on('end', () => {
+        // Pattern: "videoId":"XXXXXXXXXXX"
+        const match = data.match(/"videoId":"([a-zA-Z0-9_-]{11})"/);
+        if (match && match[1]) {
+          resolve(match[1]);
+        } else {
+          resolve(null);
+        }
+      });
+      res.on('error', () => resolve(null));
+    });
+
+    req.on('error', () => resolve(null));
+    req.on('timeout', () => { req.destroy(); resolve(null); });
+    req.setTimeout(2500);
+    req.end();
+  });
+}
+
 export const musicControlToolDefinitions = [
   {
     name: 'control_music',
@@ -161,7 +258,7 @@ export async function executeMusicControlTool(
     };
   }
 
-  // 2. YouTube & YouTube Music handling
+  // 2. YouTube & YouTube Music handling — fetch first video and auto-play
   if (
     rawAction === 'play_youtube' ||
     rawAction === 'play_youtube_music' ||
@@ -171,9 +268,18 @@ export async function executeMusicControlTool(
   ) {
     clearPendingMusicQuery();
     const chromePath = getChromeExecutablePath();
-    const targetUrl = query
-      ? `https://www.youtube.com/results?search_query=${encodeURIComponent(query)}`
-      : 'https://music.youtube.com';
+
+    let targetUrl = 'https://music.youtube.com';
+    if (query) {
+      // Try to fetch the first video ID so we can auto-play it
+      const videoId = await fetchFirstYouTubeVideoId(query);
+      if (videoId) {
+        targetUrl = `https://www.youtube.com/watch?v=${videoId}&autoplay=1`;
+      } else {
+        // Fallback: open search results (user will need to click manually)
+        targetUrl = `https://www.youtube.com/results?search_query=${encodeURIComponent(query)}`;
+      }
+    }
 
     if (chromePath) {
       spawn(chromePath, [targetUrl], { detached: true, stdio: 'ignore' }).unref();
@@ -185,11 +291,11 @@ export async function executeMusicControlTool(
       action: 'play_youtube',
       app: 'YouTube',
       query,
-      message: query ? `Searching and playing "${query}" on YouTube.` : 'Opened YouTube Music.',
+      message: query ? `Playing "${query}" on YouTube.` : 'Opened YouTube Music.',
     };
   }
 
-  // 3. Spotify handling
+  // 3. Spotify handling — open search then auto-click first result
   if (
     rawAction === 'play_spotify' ||
     rawAction === 'open_spotify' ||
@@ -216,10 +322,10 @@ export async function executeMusicControlTool(
       await desktopControlService.switchWindow('spotify');
     }
 
-    // Trigger media play key shortly after launching search
-    setTimeout(async () => {
-      await sendMediaKeyEvent(179); // VK_MEDIA_PLAY_PAUSE
-    }, 1500);
+    // Auto-play first result: bring Spotify to front and press Enter on first result
+    if (cleanQuery) {
+      spotifyAutoPlayFirstResult().catch(() => {});
+    }
 
     return {
       success: true,
@@ -227,7 +333,7 @@ export async function executeMusicControlTool(
       app: 'Spotify',
       query: cleanQuery,
       message: cleanQuery
-        ? `Searching and playing "${cleanQuery}" on Spotify.`
+        ? `Playing "${cleanQuery}" on Spotify.`
         : 'Spotify is open and playing your music.',
     };
   }

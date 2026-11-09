@@ -96,6 +96,18 @@ export function registerIpcHandlers(
   ipcMain.handle(IPC_CHANNELS.SAVE_SETTINGS, async (_event, updates) => {
     try {
       settingsStore.saveSettings(updates);
+      // Sync settings changes to pet window so personality mode, mute state, etc. stay in sync
+      const petWin = getPetWindow ? getPetWindow() : null;
+      if (petWin && updates) {
+        const newState: Partial<PetCompanionState> = {};
+        if (updates.soundMuted !== undefined) newState.soundMuted = updates.soundMuted;
+        if (updates.handsFreeEnabled !== undefined) newState.handsFreeEnabled = updates.handsFreeEnabled;
+        if (Object.keys(newState).length > 0) {
+          safeSend(petWin, IPC_CHANNELS.PET_STATE_CHANGED, newState);
+        }
+        // Also broadcast full settings update so pet can re-read them
+        safeSend(petWin, 'friday:settings-updated', updates);
+      }
       return { success: true };
     } catch (err: any) {
       return { success: false, error: err.message };

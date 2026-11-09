@@ -602,6 +602,16 @@ export const DesktopPet: React.FC = () => {
       cleanups.push(cleanupState);
     }
 
+    // Settings sync from main window (personality mode, mute state, etc.)
+    if (window.fridayAPI?.onSettingsUpdated) {
+      const cleanupSettingsSync = window.fridayAPI.onSettingsUpdated((updatedSettings: Partial<FridaySettings>) => {
+        if (!unmount && updatedSettings) {
+          setSettings((prev) => ({ ...prev, ...updatedSettings }));
+        }
+      });
+      cleanups.push(cleanupSettingsSync);
+    }
+
     // Screen understanding status
     if (window.fridayAPI?.onScreenAnalysisState) {
       const cleanupScreen = window.fridayAPI.onScreenAnalysisState((active) => {

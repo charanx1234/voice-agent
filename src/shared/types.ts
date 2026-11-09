@@ -674,6 +674,7 @@ export interface FridayApiBridge {
   closeWindow: () => void;
   getMainVisibility?: () => Promise<boolean>;
   onMainVisibilityChanged?: (callback: (visible: boolean) => void) => () => void;
+  onSettingsUpdated?: (callback: (settings: Partial<FridaySettings>) => void) => () => void;
 }
 
 export type WebsiteElementType =

@@ -230,6 +230,45 @@ const APP_SCAN_DIRS = [
   path.join(os.homedir(), 'AppData', 'Roaming', 'Microsoft', 'Windows', 'Start Menu', 'Programs'),
 ];
 
+
+interface StartAppEntry {
+  name: string;
+  appId: string;
+}
+
+let startAppsCache: { entries: StartAppEntry[]; scannedAt: number } | null = null;
+const START_APPS_CACHE_MS = 10 * 60 * 1000;
+
+export function getWindowsStartApps(): Promise<StartAppEntry[]> {
+  if (startAppsCache && Date.now() - startAppsCache.scannedAt < START_APPS_CACHE_MS) {
+    return Promise.resolve(startAppsCache.entries);
+  }
+  return new Promise((resolve) => {
+    execFile(
+      'powershell.exe',
+      ['-NoProfile', '-NonInteractive', '-Command', 'Get-StartApps | ConvertTo-Json -Compress'],
+      { timeout: 6000 },
+      (err, stdout) => {
+        if (err || !stdout) {
+          resolve([]);
+          return;
+        }
+        try {
+          const parsed = JSON.parse(stdout);
+          const list = Array.isArray(parsed) ? parsed : [parsed];
+          const entries: StartAppEntry[] = list
+            .filter((item: any) => item && item.Name && item.AppID)
+            .map((item: any) => ({ name: String(item.Name), appId: String(item.AppID) }));
+          startAppsCache = { entries, scannedAt: Date.now() };
+          resolve(entries);
+        } catch {
+          resolve([]);
+        }
+      }
+    );
+  });
+}
+
 const APP_PATHS_KEY = 'HKLM\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\App Paths';
 
 interface ShortcutEntry {
@@ -419,6 +458,17 @@ export async function executeAppShortcutsTool(
     const result = isExe
       ? await launchCommand(entry.lnkPath)
       : await launchCommand('explorer.exe', [entry.lnkPath]);
+    return result.success
+      ? { success: true, message: `Opened ${entry.name}.`, app: entry.name }
+      : { success: false, error: `Could not open ${entry.name}: ${result.error}` };
+  }
+
+  // 2.5. Windows StartApps registry (all 150+ installed Win32, UWP, and Store apps e.g. WhatsApp)
+  const startApps = await getWindowsStartApps();
+  const bestStartApp = bestAppMatch(query, startApps.map((a) => a.name));
+  if (bestStartApp) {
+    const entry = startApps.find((a) => a.name === bestStartApp)!;
+    const result = await launchCommand('explorer.exe', [`shell:AppsFolder\\${entry.appId}`]);
     return result.success
       ? { success: true, message: `Opened ${entry.name}.`, app: entry.name }
       : { success: false, error: `Could not open ${entry.name}: ${result.error}` };
