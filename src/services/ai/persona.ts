@@ -185,7 +185,12 @@ const TOOLS = `TOOLS
   - If the user asks to move to next or skip song: call "control_music" with action "next_song".
   - If the user asks to rewind, restart, or previous song: call "control_music" with action "rewind_song".
   - MANDATORY PREFERENCE RULE: If the user asks to play a song or music (e.g. "play a song", "play Believer", "play some music") WITHOUT mentioning which app (Spotify or YouTube): DO NOT pick an app on your own! Ask the user: "Which app do you prefer: Spotify or YouTube?" (or in Telugu: "మీరు ఏ యాప్‌లో వినాలనుకుంటున్నారు: Spotify లేదా YouTube?").
-- Desktop actions: "click_desktop_element", "type_desktop_text", "scroll_desktop", "read_screen", "get_active_window", "switch_desktop_window".
+- Windows Volume Control: "control_system_volume" with action "get", "set" (level 0-100), "increase", "decrease", "mute", or "unmute". If the user hints "I can't hear anything" or "sound is too low", check whether the PC is muted and offer or adjust volume.
+- Windows Brightness Control: "control_system_brightness" with action "get", "set" (level 0-100), "increase", or "decrease". If the user hints "I'm finding the screen too bright" or "it's too dark", understand the intention and ask "Want me to reduce it a little?" or adjust.
+- Time & Date Awareness: "get_time_date_info" for system time, today's date, day of week, relative future time, or duration until a target hour. Never guess or hallucinate time.
+- Real-time Live Weather: "get_live_weather" for current conditions, outdoor temperature, rain probability, and forecasts. Never fabricate weather information.
+- Windows Mouse & Cursor Automation: "move_mouse_cursor" to move the cursor to screen corners ("top-right", "center"), UI controls, or coordinates. "click_desktop_element" to single-click, double-click, or right-click buttons ("Start button", "Submit", "Settings"), icons, or links. "scroll_desktop" to scroll up or down. Always prefer UI Automation over blind clicking. Require confirmation for destructive actions (deletions, payments).
+- Desktop actions: "click_desktop_element", "move_mouse_cursor", "type_desktop_text", "scroll_desktop", "read_screen", "get_active_window", "switch_desktop_window".
 - Save a note: "save_note". ONLY call save_note for genuinely useful content: tasks, deadlines, project details, preferences, instructions, reminders, important facts, shopping lists, contacts, or any structured info the user will need later. NEVER save casual chat, greetings, one-off questions, or trivial conversation. Read, list or search notes: "list_notes", "read_note", "search_notes".
 - Reminders ("remind me to call mom at 6", "in 20 minutes"): call "create_reminder" immediately with the time phrase exactly as spoken, then confirm in one short sentence. Never send the user to another screen to set it up.
 - Pending reminders: "list_reminders". Finished ones: "complete_reminder".
@@ -238,6 +243,13 @@ export function buildPersonaInstruction(context: PersonaContext = {}): string {
   ];
 
   let instruction = sections.join('\n\n');
+
+  const now = new Date();
+  const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+  const timeString = now.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit', hour12: true });
+  const dateString = now.toLocaleDateString(undefined, { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
+  const timeContext = `LOCAL SYSTEM TIME AND DATE\n- Current Local Time: ${timeString} (${timeZone})\n- Today's Date: ${dateString}\n- Real system clock is always your source of truth for time and date.`;
+  instruction += `\n\n${timeContext}`;
 
   if (context.moodInstruction?.trim()) {
     instruction += `\n\n${context.moodInstruction.trim()}`;

@@ -10,6 +10,8 @@ import { websiteAccessibilityToolDefinitions, executeWebsiteAccessibilityTool } 
 import { screenControlToolDefinitions, executeScreenControlTool } from './screenControlTools';
 import { chromeBrowserToolDefinitions, executeChromeBrowserTool } from './chromeBrowserTool';
 import { musicControlToolDefinitions, executeMusicControlTool } from './musicControlTool';
+import { systemControlToolDefinitions, executeSystemControlTool } from './systemControlTools';
+import { desktopControlService } from '../desktop/desktopControlService';
 import { settingsStore } from '../storage/settingsStore';
 import { accentIdFromName, defaultVoiceForAccent } from '../voice/voiceCatalog';
 import { ToolConfirmationPayload } from '../../shared/types';
@@ -142,6 +144,7 @@ export class ToolRegistry {
       ...screenControlToolDefinitions,
       ...chromeBrowserToolDefinitions,
       ...musicControlToolDefinitions,
+      ...systemControlToolDefinitions,
     ];
 
     // Format for @google/genai and @google/generative-ai
@@ -159,7 +162,7 @@ export class ToolRegistry {
   /**
    * Checks if user confirmation is required based on settings
    */
-  private requiresConfirmation(toolName: string): boolean {
+  private requiresConfirmation(toolName: string, args?: Record<string, any>): boolean {
     const settings = settingsStore.getSettings();
     const conf = settings.requireToolConfirmations;
 
@@ -167,6 +170,13 @@ export class ToolRegistry {
     if (toolName === 'search_project_folder' && conf.folderSearch) return true;
     if (toolName === 'search_web' && conf.webResearch) return true;
     if (toolName === 'save_note' && conf.notes) return true;
+    if (
+      (toolName === 'click_desktop_element' || toolName === 'move_mouse_cursor') &&
+      args?.target &&
+      desktopControlService.isDestructiveAction(args.target)
+    ) {
+      return true;
+    }
 
     return false;
   }
@@ -178,7 +188,7 @@ export class ToolRegistry {
     console.log(`[ToolRegistry] Request to execute "${toolName}":`, args);
 
     // 1. Permission / confirmation check
-    if (this.requiresConfirmation(toolName) && this.confirmationRequester) {
+    if (this.requiresConfirmation(toolName, args) && this.confirmationRequester) {
       const confirmId = `conf_${Date.now()}`;
       let description = `Allow FRIDAY to execute ${toolName}?`;
 
@@ -191,6 +201,8 @@ export class ToolRegistry {
         description = `FRIDAY wants to search the web for "${args.query}".`;
       } else if (toolName === 'save_note') {
         description = `FRIDAY wants to save a note titled "${args.title}".`;
+      } else if (toolName === 'click_desktop_element' || toolName === 'move_mouse_cursor') {
+        description = `FRIDAY wants to interact with "${args.target}" on your screen. This action may modify files or settings.`;
       }
 
       const userApproved = await this.confirmationRequester({
@@ -276,8 +288,19 @@ export class ToolRegistry {
       }
       if (
         [
+          'control_system_volume',
+          'control_system_brightness',
+          'get_time_date_info',
+          'get_live_weather',
+        ].includes(toolName)
+      ) {
+        return await executeSystemControlTool(toolName, args);
+      }
+      if (
+        [
           'read_screen',
           'get_active_window',
+          'move_mouse_cursor',
           'click_desktop_element',
           'type_desktop_text',
           'scroll_desktop',

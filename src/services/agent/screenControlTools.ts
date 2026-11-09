@@ -28,19 +28,56 @@ export const screenControlToolDefinitions = [
     },
   },
   {
+    name: 'move_mouse_cursor',
+    description:
+      "Moves the actual Windows mouse cursor to a named screen corner, center of display, UI element, or exact coordinates. Use when user says 'move the mouse to the top-right corner', 'move the cursor to the search box', 'move to close button', etc.",
+    parameters: {
+      type: 'OBJECT',
+      properties: {
+        position: {
+          type: 'STRING',
+          enum: ['top-left', 'top-right', 'bottom-left', 'bottom-right', 'center'],
+          description: 'Named position on the screen display: "top-left", "top-right", "bottom-left", "bottom-right", "center".',
+        },
+        target: {
+          type: 'STRING',
+          description: 'Label or accessible name of the UI element to move the cursor to (e.g. "search box", "close button", "Start").',
+        },
+        role: {
+          type: 'STRING',
+          description: 'Optional control type filter: "Button", "Edit", "Hyperlink", etc.',
+        },
+        x: {
+          type: 'INTEGER',
+          description: 'Optional exact screen X coordinate.',
+        },
+        y: {
+          type: 'INTEGER',
+          description: 'Optional exact screen Y coordinate.',
+        },
+      },
+      required: [],
+    },
+  },
+  {
     name: 'click_desktop_element',
     description:
-      "Clicks an interactive button, link, menu item, or tab on the desktop by its label, name, or coordinates. Use when user says 'click the Save button', 'open the second link', etc.",
+      "Clicks, double-clicks, or right-clicks an interactive button, link, menu item, icon, or screen coordinates. Use when user says 'click the Start button', 'click Submit', 'double-click this icon', 'right-click here', 'click the link named Settings'.",
     parameters: {
       type: 'OBJECT',
       properties: {
         target: {
           type: 'STRING',
-          description: 'Label, text, or identifier of the UI element to click (e.g. "Save", "Submit", "Search").',
+          description: 'Label, text, or identifier of the UI element to click (e.g. "Start button", "Submit", "Settings", "search box"), or omit / set to "here" to click at current cursor position.',
         },
         role: {
           type: 'STRING',
           description: 'Optional control type filter: "Button", "Hyperlink", "MenuItem", "TabItem", etc.',
+        },
+        clickType: {
+          type: 'STRING',
+          enum: ['single', 'double', 'right'],
+          description: 'The type of mouse click: "single" (default left-click), "double" (double left-click), or "right" (right-click context menu).',
         },
         x: {
           type: 'INTEGER',
@@ -168,7 +205,6 @@ export async function executeScreenControlTool(
         screenDimensions: `${capture.width}x${capture.height}`,
         elementCount: capture.elements?.length || 0,
         interactiveElements: elementsSummary,
-        // The base64 image data is provided to vision models
         hasImage: Boolean(capture.imageBase64),
         imageBase64: capture.imageBase64,
         imageMimeType: capture.imageMimeType,
@@ -183,9 +219,32 @@ export async function executeScreenControlTool(
       return { success: true, window: win };
     }
 
-    case 'click_desktop_element': {
-      return await desktopControlService.clickElement({
+    case 'move_mouse_cursor': {
+      return await desktopControlService.executeMouseAction({
+        action: 'move',
+        position: args.position,
         target: args.target,
+        role: args.role,
+        x: args.x !== undefined ? Number(args.x) : undefined,
+        y: args.y !== undefined ? Number(args.y) : undefined,
+      });
+    }
+
+    case 'click_desktop_element': {
+      if (!args.target && args.x === undefined && args.y === undefined) {
+        return {
+          success: false,
+          action: 'click',
+          error: 'Either target element name or coordinates (x, y) must be provided.',
+        };
+      }
+      const clickType = args.clickType || 'single';
+      const action = clickType === 'double' ? 'double_click' : clickType === 'right' ? 'right_click' : 'click';
+      const target = (args.target === 'here' || args.target === 'current position') ? undefined : args.target;
+
+      return await desktopControlService.executeMouseAction({
+        action,
+        target,
         role: args.role,
         x: args.x !== undefined ? Number(args.x) : undefined,
         y: args.y !== undefined ? Number(args.y) : undefined,

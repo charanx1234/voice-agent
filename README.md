@@ -4,7 +4,7 @@
 [![AI Engine](https://img.shields.io/badge/AI%20Engine-Google%20Gemini%20Flash%20%2F%20Pro-4285F4.svg?style=for-the-badge&logo=google)](https://aistudio.google.com)
 [![Desktop Framework](https://img.shields.io/badge/Desktop-Electron%2034%20%2B%20React%2019-61DAFB.svg?style=for-the-badge&logo=react)](https://electronjs.org)
 [![Language](https://img.shields.io/badge/Languages-Telugu%20%7C%20English%20%7C%20Hindi%20%7C%20Tamil%20%7C%20Kannada-green.svg?style=for-the-badge)](https://github.com)
-[![Tests](https://img.shields.io/badge/Tests-38%20Passed%20(303%20Assertions)-success.svg?style=for-the-badge)](https://github.com)
+[![Tests](https://img.shields.io/badge/Tests-45%20Passed%20(355%20Assertions)-success.svg?style=for-the-badge)](https://github.com)
 [![License](https://img.shields.io/badge/License-MIT-orange.svg?style=for-the-badge)](LICENSE)
 
 **FRIDAY** is a modern, ultra-responsive personal AI desktop companion for Windows. Built with a **Pet-First Architecture**, FRIDAY lives directly on your desktop as an interactive floating character that listens, speaks, manages your PC, plays media, takes intelligent notes, and remembers your preferences across restarts.
@@ -14,6 +14,32 @@ FRIDAY is a **true standalone Windows desktop application** — install it once 
 ---
 
 ## 🌟 What's New in FRIDAY
+
+### 🔊 Real Windows System Volume & Mute Control
+- Controls actual Windows master audio using native Windows CoreAudio COM interfaces (`IMMDeviceEnumerator`, `IAudioEndpointVolume`).
+- Set exact percentages (*"Set volume to 50 percent"*), delta adjustments (*"Increase volume by 10"*, *"Reduce volume"*), or instant mute/unmute (*"Mute my laptop"*, *"Unmute"*).
+- Verifies and reads back the resulting master volume. Never simulates in-app audio — modifies actual Windows system audio.
+
+### ☀️ Real Laptop Screen Brightness Control
+- Controls actual laptop display brightness via Windows Management Instrumentation (WMI / ACPI `WmiMonitorBrightness`).
+- Supports exact levels (*"Set brightness to 70 percent"*), incremental adjustments (*"Make my screen dimmer"*, *"Increase brightness"*), and maximum brightness (*"Set brightness to maximum"*).
+- Gracefully handles unsupported external desktop monitors without pretending changes succeeded.
+
+### ⏰ System Time, Date & Countdown Intelligence
+- Instant local clock awareness with 12-hour and 24-hour time support based on your actual local system timezone.
+- Resolves relative future and past time calculations (*"What time will it be in two hours?"*) and countdowns (*"How much time until 6 PM?"*).
+- Deterministic $<1\text{ ms}$ zero-cloud local intent execution for lightning-fast responses without unnecessary AI API calls.
+
+### ⛅ Live Weather Information & Forecasts
+- Real-time weather and forecasts powered by Open-Meteo geocoding and forecast APIs.
+- Queries current conditions, temperature, precipitation probability, humidity, and wind speed (*"Will it rain today?"*, *"What's the weather in Hyderabad?"*, *"Tell me tomorrow's weather"*).
+- Built-in 10-minute caching to eliminate unnecessary network traffic; zero background polling.
+
+### 🖱️ Real Windows Mouse Cursor & Button Automation
+- Native User32 `mouse_event` / `SetCursorPos` + Windows UI Automation (UIA) tree navigation.
+- Move cursor to coordinates, screen anchors (*"Move mouse to top-right corner"*), or accessible buttons and inputs (*"Click the Start button"*).
+- Supports single-click, double-click, right-click (including relative *"Right-click here"* at current cursor position), and vertical wheel scrolling (*"Scroll down"*, *"Scroll up"*).
+- **Safety Guards**: Automatically intercepts and requires user confirmation before executing potentially destructive actions.
 
 ### 👏 Two-Hand Clap Wake Trigger (No Wake Word Required)
 - Wake FRIDAY effortlessly by **clapping your hands twice** (`clap-clap`).
@@ -168,6 +194,11 @@ Engineered specifically for quiet operation on modern laptops (including Intel C
 | Action | How to Trigger | What Happens |
 |---|---|---|
 | **Wake Up** | Clap your hands twice (`clap-clap`) | Wakes FRIDAY silently with a chime & excited expression. Starts 5-minute continuous listening. |
+| **System Volume** | *"Set volume to 50 percent"* / *"Mute my laptop"* | Modifies actual Windows master volume via CoreAudio COM interfaces. |
+| **Display Brightness** | *"Increase brightness"* / *"Make my screen dimmer"* | Adjusts laptop screen brightness via Windows WMI ACPI monitor methods. |
+| **Time & Countdown** | *"What time is it?"* / *"What time in two hours?"* | Returns accurate system time, date, or relative countdowns deterministically. |
+| **Live Weather** | *"What's the weather?"* / *"Will it rain today?"* | Fetches real-time temperature, rain probability, and conditions via Open-Meteo. |
+| **Mouse Automation** | *"Move mouse to top-right"* / *"Click Start button"* | Real Windows cursor control, single/double/right click, and scroll automation. |
 | **Push-to-Talk** | Tap the microphone icon on Pet or Dashboard | Begins instant speech capture. |
 | **Continuous Conversation** | Just speak naturally | FRIDAY listens, executes commands, and responds with audio lip-sync. Timer auto-resets every turn. |
 | **Barge-In / Interrupt** | Start speaking while FRIDAY talks, or tap mic | Immediately halts FRIDAY's voice output and listens to your new instruction. |
@@ -178,15 +209,15 @@ Engineered specifically for quiet operation on modern laptops (including Intel C
 
 ## 🧪 Testing & Quality Assurance
 
-FRIDAY includes comprehensive automated test suites covering all audio pipelines, clap detector logic, memory persistence, local intent execution, and UI state machines:
+FRIDAY includes comprehensive automated test suites covering all audio pipelines, clap detector logic, memory persistence, local intent execution, hardware control, and UI state machines:
 
 ```powershell
 npm test
 ```
 
 ```
-✓ Test Files  38 passed (38)
-✓ Tests       303 passed (303)
+✓ Test Files  45 passed (45)
+✓ Tests       355 passed (355)
 ```
 
 ---

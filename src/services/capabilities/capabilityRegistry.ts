@@ -6,6 +6,11 @@ import { memoryService } from '../memory/memoryService';
 import { websiteAccessibilityService } from '../accessibility/websiteAccessibilityService';
 import { ALLOWED_APPLICATIONS, executeAppShortcutsTool } from '../agent/appShortcutsTool';
 import { settingsStore } from '../storage/settingsStore';
+import { windowsVolumeService } from '../system/windowsVolumeService';
+import { windowsBrightnessService } from '../system/windowsBrightnessService';
+import { timeDateService } from '../system/timeDateService';
+import { weatherService } from '../weather/weatherService';
+import { desktopControlService } from '../desktop/desktopControlService';
 
 export type CapabilityCategory =
   | 'voice'
@@ -156,6 +161,87 @@ export class CapabilityRegistry {
         settingsStore.saveSettings({ personalityMode: mode });
         return { success: true, mode };
       },
+    });
+
+    // 9. Windows Volume Control
+    this.register({
+      id: 'windows_volume',
+      name: 'Windows Volume Control',
+      description: 'Control Windows master volume, set exact percentages, mute and unmute audio.',
+      category: 'desktop',
+      icon: 'Volume2',
+      quickActionPrompt: 'Set volume to 50 percent.',
+      petAccessible: true,
+      dashboardAccessible: true,
+      execute: async ({ action, level, delta }: any = {}) => {
+        if (action === 'set') return windowsVolumeService.setVolume(level);
+        if (action === 'increase') return windowsVolumeService.adjustVolume(delta || 10);
+        if (action === 'decrease') return windowsVolumeService.adjustVolume(-(delta || 10));
+        if (action === 'mute') return windowsVolumeService.setMute(true);
+        if (action === 'unmute') return windowsVolumeService.setMute(false);
+        return windowsVolumeService.getVolume();
+      },
+    });
+
+    // 10. Windows Brightness Control
+    this.register({
+      id: 'windows_brightness',
+      name: 'Windows Brightness Control',
+      description: 'Adjust actual laptop display brightness, set exact levels, or dim the display.',
+      category: 'desktop',
+      icon: 'Sun',
+      quickActionPrompt: 'Set screen brightness to 70 percent.',
+      petAccessible: true,
+      dashboardAccessible: true,
+      execute: async ({ action, level, delta }: any = {}) => {
+        if (action === 'set') return windowsBrightnessService.setBrightness(level);
+        if (action === 'increase') return windowsBrightnessService.adjustBrightness(delta || 10);
+        if (action === 'decrease') return windowsBrightnessService.adjustBrightness(-(delta || 10));
+        return windowsBrightnessService.getBrightness();
+      },
+    });
+
+    // 11. Time & Date Awareness
+    this.register({
+      id: 'time_date',
+      name: 'Time & Date Awareness',
+      description: 'Accurate local system clock, date, timezone, future calculations, and countdowns.',
+      category: 'productivity',
+      icon: 'Clock',
+      quickActionPrompt: 'What time is it right now?',
+      petAccessible: true,
+      dashboardAccessible: true,
+      execute: async ({ queryType, targetTime, hoursOffset, minutesOffset }: any = {}) => {
+        if (queryType === 'future_time') return timeDateService.calculateRelativeTime(hoursOffset, minutesOffset);
+        if (queryType === 'time_until') return timeDateService.calculateTimeUntil(targetTime || '6 PM');
+        return timeDateService.getNow();
+      },
+    });
+
+    // 12. Live Weather Information
+    this.register({
+      id: 'live_weather',
+      name: 'Live Weather & Forecasts',
+      description: 'Real-time temperature, rain probability, humidity, wind, and forecast conditions.',
+      category: 'productivity',
+      icon: 'CloudRain',
+      quickActionPrompt: "What's the weather like today?",
+      petAccessible: true,
+      dashboardAccessible: true,
+      execute: async ({ city, timeframe }: any = {}) => weatherService.getWeather({ city, timeframe }),
+    });
+
+    // 13. Real Mouse & Cursor Control
+    this.register({
+      id: 'mouse_control',
+      name: 'Windows Mouse & Cursor Control',
+      description: 'Move system cursor, click UI buttons, double-click, right-click, and scroll.',
+      category: 'desktop',
+      icon: 'MousePointer',
+      quickActionPrompt: 'Move mouse to center of screen.',
+      petAccessible: true,
+      dashboardAccessible: true,
+      execute: async (opts: any = {}) => desktopControlService.executeMouseAction(opts),
     });
   }
 

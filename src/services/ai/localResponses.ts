@@ -122,5 +122,13 @@ export function getLocalResponse(
     };
   }
 
+  if (/^(what day is today|what day is it|which day is today)\??$/.test(value)) {
+    const day = new Intl.DateTimeFormat(undefined, { weekday: 'long' }).format(new Date());
+    return {
+      text: personalityMode === 'roast' ? `It’s ${day}. Look at a calendar sometime.` : `Today is ${day}.`,
+      detectedLanguage: preferredLanguage,
+    };
+  }
+
   return null;
 }
