@@ -12,7 +12,8 @@ $destinations = @(
   "$env:APPDATA\Microsoft\Windows\Start Menu\Programs\FRIDAY.lnk",
   "$env:APPDATA\Microsoft\Windows\Start Menu\Programs\FRIDAY\FRIDAY.lnk",
   "$([Environment]::GetFolderPath('Desktop'))\FRIDAY.lnk",
-  "$env:USERPROFILE\Desktop\FRIDAY.lnk"
+  "$env:USERPROFILE\Desktop\FRIDAY.lnk",
+  "$env:USERPROFILE\OneDrive\Desktop\FRIDAY.lnk"
 ) | Select-Object -Unique
 
 $wsh = New-Object -ComObject WScript.Shell
