@@ -228,27 +228,18 @@ function createWindow(): void {
 
   registerIpcHandlers(getMainWindow, getPetWindow);
 
-  // PET-FIRST: By default, FRIDAY runs the Desktop Pet as the primary interface.
-  // The main window runs silently in the background hosting audio and background tasks.
-  const startWithDashboard =
-    process.argv.includes('--dashboard') ||
-    settingsStore.getSettings().desktopPetEnabled === false;
-
+  // Show the main dashboard window by default so FRIDAY opens cleanly like any native Windows app
   mainWindow.once('ready-to-show', () => {
-    if (startWithDashboard) {
-      mainWindow?.show();
-    }
+    mainWindow?.show();
+    mainWindow?.focus();
   });
 
-  // Guarantee window is visible only if dashboard mode is requested
-  if (startWithDashboard) {
-    setTimeout(() => {
-      if (mainWindow && !mainWindow.isDestroyed() && !mainWindow.isVisible()) {
-        mainWindow.show();
-        mainWindow.focus();
-      }
-    }, 1200);
-  }
+  setTimeout(() => {
+    if (mainWindow && !mainWindow.isDestroyed() && !mainWindow.isVisible()) {
+      mainWindow.show();
+      mainWindow.focus();
+    }
+  }, 400);
 
   // Only the microphone is ever granted; every other permission request is denied.
   mainWindow.webContents.session.setPermissionRequestHandler(
@@ -367,6 +358,13 @@ if (!hasSingleInstanceLock) {
   app.quit();
 } else {
   app.on('second-instance', () => {
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      if (mainWindow.isMinimized()) mainWindow.restore();
+      mainWindow.show();
+      mainWindow.focus();
+    } else {
+      createWindow();
+    }
     if (petWindow && !petWindow.isDestroyed()) {
       if (!petWindow.isVisible()) petWindow.show();
       petWindow.focus();
