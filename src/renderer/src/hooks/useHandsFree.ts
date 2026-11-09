@@ -448,12 +448,12 @@ export function useHandsFree(options: HandsFreeOptions) {
         localWakeWordDetector.suppress(400);
       }
 
-      // Double Clap Wake Detection (Two hand claps) & Fallback Wake Word
-      if (currentMode !== 'off' && !speaking && !busy && !inEchoCooldown && !optionsRef.current.isTextModeActive) {
+      // Double Clap Wake Detection (Two hand claps) - only active when FRIDAY is asleep in standby
+      if (!isAwake && currentMode !== 'off' && !speaking && !busy && !inEchoCooldown && !optionsRef.current.isTextModeActive) {
         const doubleClap = doubleClapDetector.process(samples, rms, freqData, now);
         if (doubleClap) {
-          console.info('[DoubleClap] Two hand claps detected! Waking FRIDAY and activating 5-minute continuous listening.');
-          handleWakeTrigger('double_clap');
+          console.info('[DoubleClap] Two hand claps confirmed! Waking FRIDAY into 5-minute continuous listening.');
+          handleWakeTrigger('');
           isAwake = true;
           awakeUntil = now + FIVE_MINUTES_MS;
         } else {
@@ -525,6 +525,7 @@ export function useHandsFree(options: HandsFreeOptions) {
             console.info('[VoiceCoordinator] Speech detected');
             isCapturingUtterance = true;
             utteranceStartedAt = now;
+            awakeUntil = now + FIVE_MINUTES_MS;
             activeUtterancePcmBuffers = [...preRollPcmBuffers];
             preRollPcmBuffers = [];
             if (!activeSpeechReported) {
@@ -555,6 +556,7 @@ export function useHandsFree(options: HandsFreeOptions) {
       ) {
         isAwake = false;
         wakeAnnounced = false;
+        setMode('standby');
         console.info('[VoiceCoordinator] 5 minutes of silence elapsed. FRIDAY entering sleep standby. Two hand claps will wake her.');
       }
     };
