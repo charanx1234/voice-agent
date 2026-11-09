@@ -1,3 +1,4 @@
+import fs from 'fs';
 import { app, BrowserWindow, shell, screen, Tray, Menu, nativeImage, session } from 'electron';
 import { IPC_CHANNELS } from './security';
 import path from 'path';
@@ -28,6 +29,30 @@ process.on('unhandledRejection', (reason) => {
   console.error('[FRIDAY] Unhandled rejection:', reason);
 });
 
+
+function getIndexPath(): string {
+  if (app.isPackaged) {
+    return path.join(app.getAppPath(), 'dist-renderer', 'index.html');
+  }
+  return path.join(__dirname, '../../dist-renderer/index.html');
+}
+
+function getPreloadPath(): string {
+  if (app.isPackaged) {
+    return path.join(app.getAppPath(), 'dist-electron', 'preload', 'index.js');
+  }
+  return path.join(__dirname, '../preload/index.js');
+}
+
+function getPetIconPath(): string {
+  if (app.isPackaged) {
+    return path.join(app.getAppPath(), 'dist-renderer', 'assets', 'friday-pet.png');
+  }
+  const devPath = path.join(__dirname, '../../src/renderer/public/assets/friday-pet.png');
+  if (fs.existsSync(devPath)) return devPath;
+  return path.join(__dirname, '../../dist-renderer/assets/friday-pet.png');
+}
+
 let mainWindow: BrowserWindow | null = null;
 const getMainWindow = (): BrowserWindow | null => mainWindow;
 
@@ -39,7 +64,7 @@ let tray: Tray | null = null;
 
 function createTray(): void {
   try {
-    const iconPath = path.join(__dirname, '../../src/renderer/public/assets/friday-pet.png');
+    const iconPath = getPetIconPath();
     let icon = nativeImage.createFromPath(iconPath);
     if (icon.isEmpty()) {
       const altPath = path.join(__dirname, '../renderer/assets/friday-pet.png');
@@ -133,7 +158,7 @@ function createPetWindow(): void {
     backgroundColor: '#00000000',
     show: false,
     webPreferences: {
-      preload: path.join(__dirname, '../preload/index.js'),
+      preload: getPreloadPath(),
       contextIsolation: true,
       nodeIntegration: false,
       sandbox: false,
@@ -164,7 +189,7 @@ function createPetWindow(): void {
     }
   });
 
-  const indexPath = path.join(__dirname, '../../dist-renderer/index.html');
+  const indexPath = getIndexPath();
   if (USE_DEV_SERVER) {
     petWindow.loadURL(`${DEV_SERVER_URL}#pet`).catch((err) => {
       console.error('[FRIDAY] Pet dev server failed, loading file:', err.message);
@@ -191,7 +216,7 @@ function createWindow(): void {
     titleBarStyle: 'hidden',
     show: false,
     webPreferences: {
-      preload: path.join(__dirname, '../preload/index.js'),
+      preload: getPreloadPath(),
       contextIsolation: true,
       nodeIntegration: false,
       // The preload script requires the shared IPC channel module, which a fully
@@ -259,7 +284,7 @@ function createWindow(): void {
     }
   });
 
-  const indexPath = path.join(__dirname, '../../dist-renderer/index.html');
+  const indexPath = getIndexPath();
 
   if (USE_DEV_SERVER) {
     mainWindow.loadURL(DEV_SERVER_URL).catch((err) => {

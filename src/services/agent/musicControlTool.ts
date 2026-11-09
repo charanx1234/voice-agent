@@ -302,10 +302,26 @@ export async function executeMusicControlTool(
       }
     }
 
-    if (chromePath) {
-      spawn(chromePath, [targetUrl], { detached: true, stdio: 'ignore' }).unref();
-    } else {
-      spawn('cmd.exe', ['/c', 'start', '""', targetUrl], { detached: true, stdio: 'ignore' }).unref();
+    try {
+      if (chromePath && fs.existsSync(chromePath)) {
+        spawn(chromePath, [targetUrl], { detached: true, stdio: 'ignore' }).unref();
+      } else {
+        try {
+          const electron = require('electron');
+          if (electron?.shell?.openExternal) {
+            electron.shell.openExternal(targetUrl).catch(() => {});
+          } else {
+            spawn('cmd.exe', ['/c', 'start', '""', targetUrl.replace(/&/g, '^&')], { detached: true, stdio: 'ignore' }).unref();
+          }
+        } catch {
+          spawn('cmd.exe', ['/c', 'start', '""', targetUrl.replace(/&/g, '^&')], { detached: true, stdio: 'ignore' }).unref();
+        }
+      }
+    } catch {
+      try {
+        const electron = require('electron');
+        electron?.shell?.openExternal?.(targetUrl)?.catch?.(() => {});
+      } catch {}
     }
     return {
       success: true,

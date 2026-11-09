@@ -1,14 +1,11 @@
 # FRIDAY - Windows Desktop & Start Menu Search Shortcut Installer
-$packagedExe = "C:\25r11a6760\FRIDAY\dist-release\win-unpacked\FRIDAY.exe"
-$workDir = "C:\25r11a6760\FRIDAY"
-$iconPath = "C:\25r11a6760\FRIDAY\src\renderer\public\assets\friday.ico"
+$exePath = "C:\25r11a6760\FRIDAY\dist-release\win-unpacked\FRIDAY.exe"
+$workDir = "C:\25r11a6760\FRIDAY\dist-release\win-unpacked"
+$iconPath = "C:\25r11a6760\FRIDAY\dist-release\win-unpacked\FRIDAY.exe"
 
-if (Test-Path $packagedExe) {
-    $exePath = $packagedExe
-    $arguments = "--dashboard"
-} else {
-    $exePath = "C:\25r11a6760\FRIDAY\node_modules\electron\dist\electron.exe"
-    $arguments = ". --dashboard"
+if (!(Test-Path $exePath)) {
+    Write-Error "Packaged FRIDAY.exe not found at $exePath"
+    exit 1
 }
 
 $destinations = @(
@@ -27,14 +24,12 @@ foreach ($dest in $destinations) {
   }
   $s = $wsh.CreateShortcut($dest)
   $s.TargetPath = $exePath
-  $s.Arguments = $arguments
+  $s.Arguments = ""
   $s.WorkingDirectory = $workDir
-  if (Test-Path $iconPath) {
-    $s.IconLocation = "$iconPath,0"
-  }
-  $s.Description = "FRIDAY AI Assistant"
+  $s.IconLocation = "$iconPath,0"
+  $s.Description = "FRIDAY AI Desktop Companion"
   $s.Save()
   Write-Host "Created shortcut: $dest"
 }
 
-Write-Host "FRIDAY shortcut successfully registered on Desktop and Start Menu Search."
+Write-Host "FRIDAY shortcut registered on Desktop and Start Menu as a native Windows application."
