@@ -16,10 +16,22 @@ app.setName('friday-ai-companion');
 // Prevent black window artifacts on Windows with frameless/transparent windows
 // Performance & GPU Acceleration switches for ultra-lightweight CPU/fan footprint
 app.commandLine.appendSwitch('autoplay-policy', 'no-user-gesture-required');
-app.commandLine.appendSwitch('enable-gpu-rasterization');
-app.commandLine.appendSwitch('enable-zero-copy');
 
-// Production builds write to a log file only; development keeps terminal output.
+// Dedicated synchronous startup logger
+export function logStartup(msg: string): void {
+  try {
+    const logDir = path.join(app.getPath('userData'), 'logs');
+    if (!fs.existsSync(logDir)) fs.mkdirSync(logDir, { recursive: true });
+    const logFile = path.join(logDir, 'startup.log');
+    const line = `[${new Date().toISOString()}] ${msg}\n`;
+    fs.appendFileSync(logFile, line, 'utf8');
+  } catch {}
+  console.log('[Startup]', msg);
+}
+
+logStartup(`FRIDAY application launch initiated (v${app.getVersion()})`);
+logStartup(`Environment: isPackaged=${app.isPackaged}, appPath=${app.getAppPath()}`);
+
 initLogger({ keepConsole: !app.isPackaged });
 
 process.on('uncaughtException', (err) => {
@@ -46,11 +58,15 @@ function getPreloadPath(): string {
 
 function getPetIconPath(): string {
   if (app.isPackaged) {
-    return path.join(app.getAppPath(), 'dist-renderer', 'assets', 'friday-pet.png');
+    const p1 = path.join(app.getAppPath(), 'dist-renderer', 'assets', 'friday-pet.png');
+    if (fs.existsSync(p1)) return p1;
+    const p2 = path.join(app.getAppPath(), 'dist-renderer', 'assets', 'friday.ico');
+    if (fs.existsSync(p2)) return p2;
+    return path.join(process.resourcesPath, 'app.asar.unpacked', 'dist-renderer', 'assets', 'friday.ico');
   }
-  const devPath = path.join(__dirname, '../../src/renderer/public/assets/friday-pet.png');
+  const devPath = path.join(__dirname, '../../dist-renderer/assets/friday-pet.png');
   if (fs.existsSync(devPath)) return devPath;
-  return path.join(__dirname, '../../dist-renderer/assets/friday-pet.png');
+  return path.join(__dirname, '../../dist-renderer/assets/friday.ico');
 }
 
 let mainWindow: BrowserWindow | null = null;
@@ -64,15 +80,27 @@ let tray: Tray | null = null;
 
 function createTray(): void {
   try {
+    logStartup('createTray: resolving tray icon...');
     const iconPath = getPetIconPath();
-    let icon = nativeImage.createFromPath(iconPath);
+    logStartup(`createTray: iconPath=${iconPath}`);
+    if (!fs.existsSync(iconPath)) {
+      logStartup('createTray: icon file does not exist, skipping Tray creation');
+      return;
+    }
+    const buf = fs.readFileSync(iconPath);
+    let icon = nativeImage.createFromBuffer(buf);
     if (icon.isEmpty()) {
-      const altPath = path.join(__dirname, '../renderer/assets/friday-pet.png');
-      icon = nativeImage.createFromPath(altPath);
+      logStartup('createTray: icon buffer resulted in empty NativeImage, skipping Tray');
+      return;
     }
     const trayIcon = icon.resize({ width: 16, height: 16 });
+    if (trayIcon.isEmpty()) {
+      logStartup('createTray: resized tray icon is empty, skipping Tray');
+      return;
+    }
     tray = new Tray(trayIcon);
     tray.setToolTip('FRIDAY — Desktop AI Assistant');
+    logStartup('createTray: Tray successfully created');
 
     const contextMenu = Menu.buildFromTemplate([
       {
@@ -120,7 +148,7 @@ function createTray(): void {
       }
     });
   } catch (err: any) {
-    console.warn('[FRIDAY] Tray setup warning:', err?.message);
+    logStartup(`createTray warning: ${err?.message}`);
   }
 }
 
@@ -134,6 +162,7 @@ function isAllowedInAppNavigation(url: string): boolean {
 }
 
 function createPetWindow(): void {
+  logStartup('createPetWindow: initializing pet window...');
   const settings = settingsStore.getSettings();
   if (settings.desktopPetEnabled === false) return;
 
@@ -205,6 +234,7 @@ function createPetWindow(): void {
 }
 
 function createWindow(): void {
+  logStartup('createWindow: initializing main window...');
   mainWindow = new BrowserWindow({
     width: 460,
     height: 740,

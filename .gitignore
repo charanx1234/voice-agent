@@ -45,3 +45,5 @@ $RECYCLE.BIN/
 
 # Windows shortcuts (machine-specific)
 *.lnk
+
+.agents/

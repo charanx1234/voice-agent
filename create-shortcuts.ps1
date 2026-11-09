@@ -1,10 +1,10 @@
 # FRIDAY - Windows Desktop & Start Menu Search Shortcut Installer
-$exePath = "C:\25r11a6760\FRIDAY\dist-release\win-unpacked\FRIDAY.exe"
-$workDir = "C:\25r11a6760\FRIDAY\dist-release\win-unpacked"
-$iconPath = "C:\25r11a6760\FRIDAY\dist-release\win-unpacked\FRIDAY.exe"
+$exePath = "$env:LOCALAPPDATA\Programs\FRIDAY\FRIDAY.exe"
+$workDir = "$env:LOCALAPPDATA\Programs\FRIDAY"
+$iconPath = "$env:LOCALAPPDATA\Programs\FRIDAY\friday.ico"
 
 if (!(Test-Path $exePath)) {
-    Write-Error "Packaged FRIDAY.exe not found at $exePath"
+    Write-Error "Installed FRIDAY.exe not found at $exePath"
     exit 1
 }
 
@@ -28,7 +28,7 @@ foreach ($dest in $destinations) {
   $s.Arguments = ""
   $s.WorkingDirectory = $workDir
   $s.IconLocation = "$iconPath,0"
-  $s.Description = "FRIDAY AI Desktop Companion"
+  $s.Description = "FRIDAY - Desktop AI Assistant"
   $s.Save()
   Write-Host "Created shortcut: $dest"
 }

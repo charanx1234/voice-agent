@@ -1,6 +1,7 @@
 {
   "appId": "com.friday.ai.companion",
   "productName": "FRIDAY",
+  "asar": false,
   "directories": {
     "output": "dist-release",
     "buildResources": "build"
