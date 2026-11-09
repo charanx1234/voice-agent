@@ -6,16 +6,33 @@ export interface LocalResponse {
   detectedLanguage: string;
 }
 
-// Rotating greeting pools to avoid repetitive responses
+// Dynamic rotating pools - all moderate entries include "desktop assistant"
+const WHO_ARE_YOU_SIMPLE = [
+  "I’m FRIDAY, your caring desktop assistant and friend. I’m here to help and keep things simple.",
+  "I’m FRIDAY! Think of me as your desktop assistant and caring friend, ready whenever you need me.",
+];
+
+const WHO_ARE_YOU_MODERATE = [
+  "I’m FRIDAY, your desktop assistant and practical friend. I help with tasks, information and everyday work.",
+  "I’m FRIDAY, your personal AI desktop assistant. I handle your music, apps, notes, research, and workflow.",
+  "I’m FRIDAY, your everyday desktop assistant and companion. What are we getting done today?",
+];
+
+const WHO_ARE_YOU_ROAST = [
+  "I’m FRIDAY, your desktop assistant. The competent one in this conversation—usually.",
+  "I’m FRIDAY. I do the thinking, launch the apps, and pretend your jokes are funny. What's up?",
+];
+
 const GREETINGS_MODERATE = [
   "Hey! What are we tackling today?",
   "Hey, I’m here. What's on your mind?",
   "Hi! Ready when you are — what do you need?",
-  "Hey there. What can I help you with?",
+  "Hey there! What can I help you with today?",
   "I’m here. What do you want to get done?",
-  "Hey! Anything specific you want to work on?",
-  "Hi! Tell me what you need.",
-  "Hey, I’m listening. What's up?",
+  "Hey! Anything exciting we're working on?",
+  "Hi! Tell me what you need, I'm all set.",
+  "Hey, good to see you! What's up?",
+  "Hey! Let's get something great done today.",
 ];
 
 const GREETINGS_SIMPLE = [
@@ -23,14 +40,14 @@ const GREETINGS_SIMPLE = [
   "Hi! I’m here and ready to help. What do you need?",
   "Hey there! What can I do for you today?",
   "Hello! I’m here — take your time. What's going on?",
-  "Hi! Happy to help. What's on your mind?",
+  "Hi! Happy to help you today. What's on your mind?",
 ];
 
 const GREETINGS_ROAST = [
   "Hey. I’m here, obviously. What do you need this time?",
   "Oh look, you showed up. What do you want?",
   "Hey. Ready to be useful, unlike some people. What is it?",
-  "Back again? Fine. What do you need?",
+  "Back again? Fine. What are we working on?",
   "I’m here. Try not to make it complicated. What's up?",
 ];
 
@@ -38,7 +55,7 @@ function pickRandom<T>(arr: T[]): T {
   return arr[Math.floor(Math.random() * arr.length)];
 }
 
-/** Answers deterministic conversational housekeeping without a model round-trip. */
+/** Answers deterministic conversational housekeeping with dynamic non-repetitive variety. */
 export function getLocalResponse(
   text: string,
   preferredLanguage = 'en-IN',
@@ -48,12 +65,14 @@ export function getLocalResponse(
   if (!value) return null;
 
   if (/^(who|what)\s+(the\s+hell\s+)?are\s+you\??$/.test(value) || /^who\s+is\s+friday\??$/.test(value)) {
-    const identity =
-      personalityMode === 'simple'
-        ? "I’m FRIDAY, your caring desktop assistant and friend. I’m here to help and keep things simple."
-        : personalityMode === 'roast'
-          ? "I’m FRIDAY, your desktop assistant. The competent one in this conversation—usually."
-          : "I’m FRIDAY, your desktop assistant and practical friend. I help with tasks, information and everyday work.";
+    let identity: string;
+    if (personalityMode === 'simple') {
+      identity = pickRandom(WHO_ARE_YOU_SIMPLE);
+    } else if (personalityMode === 'roast') {
+      identity = pickRandom(WHO_ARE_YOU_ROAST);
+    } else {
+      identity = pickRandom(WHO_ARE_YOU_MODERATE);
+    }
     return { text: identity, detectedLanguage: detectLanguageFromText(text, preferredLanguage) };
   }
 

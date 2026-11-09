@@ -670,7 +670,7 @@ export const DesktopPet: React.FC = () => {
     isMicMuted: Boolean(settings.soundMuted),
     isTextModeActive: false,
     language: settings.preferredLanguage || 'en-IN',
-    silenceTimeoutMs: settings.handsFreeSilenceTimeoutMs || 25000,
+    silenceTimeoutMs: settings.handsFreeSilenceTimeoutMs || 300000, // 5 minutes
     noiseSuppression: settings.noiseSuppression || 'standard',
     echoCancellation: settings.echoCancellation !== false,
     autoGainControl: settings.autoGainControl !== false,

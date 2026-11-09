@@ -48,7 +48,7 @@ const DEFAULT_SETTINGS: FridaySettings = {
   memoryEnabled: true,
   personalityMode: 'moderate',
   handsFreeEnabled: true,
-  handsFreeSilenceTimeoutMs: 25_000,
+  handsFreeSilenceTimeoutMs: 300_000, // 5 minutes
   desktopPetEnabled: true,
   noiseSuppression: 'standard',
   echoCancellation: true,
@@ -160,7 +160,7 @@ export class SettingsStore {
 
         const silenceTimeout = Number(parsed.handsFreeSilenceTimeoutMs);
         const handsFreeSilenceTimeoutMs = Number.isFinite(silenceTimeout)
-          ? Math.min(120_000, Math.max(5_000, Math.round(silenceTimeout)))
+          ? Math.min(600_000, Math.max(5_000, Math.round(silenceTimeout)))
           : DEFAULT_SETTINGS.handsFreeSilenceTimeoutMs;
 
         return {

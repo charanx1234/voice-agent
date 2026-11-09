@@ -134,35 +134,43 @@ export function registerIpcHandlers(
 
   // Chat / Voice message
   ipcMain.handle(IPC_CHANNELS.SEND_MESSAGE, async (_event, payload) => {
-    const rawHistory = Array.isArray(payload?.conversationHistory)
-      ? payload.conversationHistory
-      : Array.isArray(payload?.history)
-      ? payload.history
-      : [];
-    const normalizedPayload = {
-      message: (payload?.message || payload?.prompt || payload?.text || '').trim(),
-      audioBase64: payload?.audioBase64,
-      audioMimeType: payload?.audioMimeType,
-      conversationHistory: rawHistory,
-      language: payload?.language || payload?.languageCode,
-      personalityMode: payload?.personalityMode,
-      prosody: payload?.prosody,
-      requestId: payload?.requestId,
-    };
+    try {
+      const rawHistory = Array.isArray(payload?.conversationHistory)
+        ? payload.conversationHistory
+        : Array.isArray(payload?.history)
+        ? payload.history
+        : [];
+      const normalizedPayload = {
+        message: (payload?.message || payload?.prompt || payload?.text || '').trim(),
+        audioBase64: payload?.audioBase64,
+        audioMimeType: payload?.audioMimeType,
+        conversationHistory: rawHistory,
+        language: payload?.language || payload?.languageCode,
+        personalityMode: payload?.personalityMode,
+        prosody: payload?.prosody,
+        requestId: payload?.requestId,
+      };
 
-    return await providerManager.generate(normalizedPayload, (event) => {
-      if (!normalizedPayload.requestId) return;
-      try {
-        if (_event.sender && !_event.sender.isDestroyed()) {
-          _event.sender.send(IPC_CHANNELS.RESPONSE_STREAM, {
-            ...event,
-            requestId: normalizedPayload.requestId,
-          });
+      return await providerManager.generate(normalizedPayload, (event) => {
+        if (!normalizedPayload.requestId) return;
+        try {
+          if (_event.sender && !_event.sender.isDestroyed()) {
+            _event.sender.send(IPC_CHANNELS.RESPONSE_STREAM, {
+              ...event,
+              requestId: normalizedPayload.requestId,
+            });
+          }
+        } catch {
+          // Window closed or sender destroyed during streaming
         }
-      } catch {
-        // Window closed or sender destroyed during streaming
-      }
-    });
+      });
+    } catch (err: any) {
+      console.error('[IPC] send-message safely handled error:', err);
+      return {
+        text: "I ran into a brief hiccup while processing that. I'm right here though -- what can I do for you?",
+        error: err?.message || 'Processing error',
+      };
+    }
   });
 
   ipcMain.on(IPC_CHANNELS.CANCEL_RESPONSE, (_event, requestId?: string) => {

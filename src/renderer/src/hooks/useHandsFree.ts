@@ -7,6 +7,7 @@ import {
 } from '@/services/voice/voiceActivity';
 import { detectLocalWakePhrase } from '@/services/voice/wakeWord';
 import { localWakeWordDetector } from '@/services/voice/localWakeWord';
+import { doubleClapDetector } from '@/services/voice/clapDetector';
 import { speakerVerificationService } from '@/services/voice/speakerVerification';
 import { describeMicError } from '@/services/voice/micErrors';
 import { getEnvironmentPreset } from '@/services/voice/listeningEnvironment';
@@ -61,6 +62,7 @@ const MIN_PEAK_LEVEL = 0.012;
 const MAX_UTTERANCE_MS = 30000;
 const ECHO_COOLDOWN_MS = 650;
 export const ACTIVE_SILENCE_TIMEOUT_MS = 8000;
+const FIVE_MINUTES_MS = 5 * 60 * 1000; // 5-minute continuous listening before sleeping
 
 function getVadOptions(
   sensitivity?: 'low' | 'medium' | 'high',
@@ -217,7 +219,7 @@ export function useHandsFree(options: HandsFreeOptions) {
       if (disposed || modeRef.current !== 'active') return;
       console.info('[AudioPipeline] Audio capture started. Listening for user command...');
       isAwake = true;
-      awakeUntil = Date.now() + 15000;
+      awakeUntil = Date.now() + FIVE_MINUTES_MS;
       activeUtterancePcmBuffers = [...preRollPcmBuffers];
       preRollPcmBuffers = [];
       isCapturingUtterance = true;
@@ -265,7 +267,8 @@ export function useHandsFree(options: HandsFreeOptions) {
       // Stop capture and keep continuous listening active
       isCapturingUtterance = false;
       wakeAnnounced = false;
-      awakeUntil = Date.now() + 20000;
+      isAwake = true;
+      awakeUntil = Date.now() + FIVE_MINUTES_MS;
       console.info('[VoiceCoordinator] Utterance finalized. Continuous listening active');
 
       // Audio Quality Gate: Reject noise bursts, clicks, or quiet background drift
@@ -348,6 +351,8 @@ export function useHandsFree(options: HandsFreeOptions) {
       console.info('[VoiceCoordinator] Conversation capture started');
       wakeAnnounced = true;
       setMode('active');
+      isAwake = true;
+      awakeUntil = Date.now() + FIVE_MINUTES_MS;
       startRecordingSession();
       optionsRef.current.onWake(command);
       setTimeout(() => {
@@ -425,7 +430,9 @@ export function useHandsFree(options: HandsFreeOptions) {
           localWakeWordDetector.suppress(1200);
           preRollPcmBuffers = [];
           activeUtterancePcmBuffers = [];
-          awakeUntil = now + 10000;
+          isAwake = true;
+          awakeUntil = now + FIVE_MINUTES_MS;
+          doubleClapDetector.suppress(1200);
         }
         wasSpeaking = speaking;
       }
@@ -441,14 +448,24 @@ export function useHandsFree(options: HandsFreeOptions) {
         localWakeWordDetector.suppress(400);
       }
 
-      // Continuous Local Wake-Word Evaluation
+      // Double Clap Wake Detection (Two hand claps) & Fallback Wake Word
       if (currentMode !== 'off' && !speaking && !busy && !inEchoCooldown && !optionsRef.current.isTextModeActive) {
-        const wakeDetected = localWakeWordDetector.processFrequencyData(
-          freqData,
-          audioCtx?.sampleRate || 44100
-        );
-        if (wakeDetected) {
-          handleWakeTrigger('');
+        const doubleClap = doubleClapDetector.process(samples, rms, freqData, now);
+        if (doubleClap) {
+          console.info('[DoubleClap] Two hand claps detected! Waking FRIDAY and activating 5-minute continuous listening.');
+          handleWakeTrigger('double_clap');
+          isAwake = true;
+          awakeUntil = now + FIVE_MINUTES_MS;
+        } else {
+          const wakeDetected = localWakeWordDetector.processFrequencyData(
+            freqData,
+            audioCtx?.sampleRate || 44100
+          );
+          if (wakeDetected) {
+            handleWakeTrigger('');
+            isAwake = true;
+            awakeUntil = now + FIVE_MINUTES_MS;
+          }
         }
       }
 
@@ -538,7 +555,7 @@ export function useHandsFree(options: HandsFreeOptions) {
       ) {
         isAwake = false;
         wakeAnnounced = false;
-        console.info('[VoiceCoordinator] Conversational window expired. Ready for "Hey Friday"');
+        console.info('[VoiceCoordinator] 5 minutes of silence elapsed. FRIDAY entering sleep standby. Two hand claps will wake her.');
       }
     };
 

@@ -149,42 +149,63 @@ function fetchFirstYouTubeVideoId(query: string): Promise<string | null> {
     return Promise.resolve(null);
   }
   return new Promise((resolve) => {
-    const url = `https://www.youtube.com/results?search_query=${encodeURIComponent(query)}`;
-    const options = {
-      hostname: 'www.youtube.com',
-      path: `/results?search_query=${encodeURIComponent(query)}`,
-      method: 'GET',
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120.0.0.0 Safari/537.36',
-        'Accept-Language': 'en-US,en;q=0.9',
-        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-      },
-      timeout: 2500,
+    let resolved = false;
+    const done = (id: string | null) => {
+      if (!resolved) {
+        resolved = true;
+        resolve(id);
+      }
     };
 
-    const req = https.request(options, (res) => {
-      let data = '';
-      res.on('data', (chunk: Buffer) => {
-        data += chunk.toString();
-        // Stop collecting once we have enough to find first video
-        if (data.length > 200000) res.destroy();
-      });
-      res.on('end', () => {
-        // Pattern: "videoId":"XXXXXXXXXXX"
-        const match = data.match(/"videoId":"([a-zA-Z0-9_-]{11})"/);
-        if (match && match[1]) {
-          resolve(match[1]);
-        } else {
-          resolve(null);
-        }
-      });
-      res.on('error', () => resolve(null));
-    });
+    const timer = setTimeout(() => done(null), 3500);
 
-    req.on('error', () => resolve(null));
-    req.on('timeout', () => { req.destroy(); resolve(null); });
-    req.setTimeout(2500);
-    req.end();
+    try {
+      const req = https.get(
+        `https://www.youtube.com/results?search_query=${encodeURIComponent(query)}`,
+        {
+          headers: {
+            'User-Agent':
+              'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120.0.0.0 Safari/537.36',
+            'Accept-Language': 'en-US,en;q=0.9',
+          },
+        },
+        (res) => {
+          let data = '';
+          res.on('data', (chunk: Buffer) => {
+            data += chunk.toString();
+            const match = data.match(/"videoId":"([a-zA-Z0-9_-]{11})"/);
+            if (match && match[1]) {
+              clearTimeout(timer);
+              done(match[1]);
+              try { res.destroy(); } catch (_) {}
+            }
+          });
+          res.on('end', () => {
+            clearTimeout(timer);
+            const match = data.match(/"videoId":"([a-zA-Z0-9_-]{11})"/);
+            done(match ? match[1] : null);
+          });
+          res.on('error', () => {
+            clearTimeout(timer);
+            done(null);
+          });
+        }
+      );
+
+      req.on('error', () => {
+        clearTimeout(timer);
+        done(null);
+      });
+      req.on('timeout', () => {
+        clearTimeout(timer);
+        try { req.destroy(); } catch (_) {}
+        done(null);
+      });
+      req.setTimeout(3500);
+    } catch {
+      clearTimeout(timer);
+      done(null);
+    }
   });
 }
 
