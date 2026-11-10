@@ -13,6 +13,7 @@ import {
   LayoutDashboard,
   Globe,
   Activity,
+  Zap,
 } from 'lucide-react';
 import { RobotState, VoiceSessionState } from '@/shared/types';
 import { formatRecordingDuration } from '@/services/voice/micErrors';
@@ -41,6 +42,7 @@ interface ControlBarProps {
   onToggleTranscript: () => void;
   onOpenSettings: () => void;
   onOpenShortcuts: () => void;
+  onOpenQuickTools?: () => void;
   onOpenMemory: () => void;
   dashboardOpen?: boolean;
   dashboardCount?: number;
@@ -76,6 +78,7 @@ export const ControlBar: React.FC<ControlBarProps> = ({
   onToggleTranscript,
   onOpenSettings,
   onOpenShortcuts,
+  onOpenQuickTools,
   onOpenMemory,
   dashboardOpen = false,
   dashboardCount = 0,
@@ -313,6 +316,30 @@ export const ControlBar: React.FC<ControlBarProps> = ({
             <Wrench size={14} />
             <span>Tools</span>
           </button>
+
+          {/* QuickTools Productivity Suite */}
+          {onOpenQuickTools && (
+            <button
+              onClick={onOpenQuickTools}
+              title="FRIDAY QuickTools (Actions, Clipboard, Snippets)"
+              style={{
+                background: 'color-mix(in srgb, var(--accent) 10%, transparent)',
+                border: '1px solid color-mix(in srgb, var(--accent) 30%, transparent)',
+                borderRadius: '10px',
+                padding: '6px 8px',
+                color: 'var(--accent)',
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '4px',
+                fontSize: '0.75rem',
+                fontWeight: 500,
+              }}
+            >
+              <Zap size={14} />
+              <span>QuickTools</span>
+            </button>
+          )}
 
           {/* Memory Button */}
           <button

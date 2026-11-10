@@ -263,6 +263,24 @@ const apiBridge: FridayApiBridge = {
     ipcRenderer.on(IPC_CHANNELS.MAIN_VISIBILITY_CHANGED, handler);
     return () => ipcRenderer.removeListener(IPC_CHANNELS.MAIN_VISIBILITY_CHANGED, handler);
   },
+
+  // QuickTools Phase 1
+  quickToolsGetDesktopPreview: () => ipcRenderer.invoke(IPC_CHANNELS.QUICKTOOLS_GET_DESKTOP_PREVIEW),
+  quickToolsGetDownloadsPreview: () => ipcRenderer.invoke(IPC_CHANNELS.QUICKTOOLS_GET_DOWNLOADS_PREVIEW),
+  quickToolsGetFolderPreview: (folderPath: string) => ipcRenderer.invoke(IPC_CHANNELS.QUICKTOOLS_GET_FOLDER_PREVIEW, folderPath),
+  quickToolsExecuteOrganize: (preview: any) => ipcRenderer.invoke(IPC_CHANNELS.QUICKTOOLS_EXECUTE_ORGANIZE, preview),
+  quickToolsUndoLastOrganize: () => ipcRenderer.invoke(IPC_CHANNELS.QUICKTOOLS_UNDO_ORGANIZE),
+  quickToolsFindDuplicates: (folderPath?: string) => ipcRenderer.invoke(IPC_CHANNELS.QUICKTOOLS_FIND_DUPLICATES, folderPath),
+  quickToolsGetClipboardHistory: () => ipcRenderer.invoke(IPC_CHANNELS.QUICKTOOLS_CLIPBOARD_LIST),
+  quickToolsTogglePinClipboard: (id: string) => ipcRenderer.invoke(IPC_CHANNELS.QUICKTOOLS_CLIPBOARD_TOGGLE_PIN, id),
+  quickToolsDeleteClipboard: (id: string) => ipcRenderer.invoke(IPC_CHANNELS.QUICKTOOLS_CLIPBOARD_DELETE, id),
+  quickToolsClearClipboard: () => ipcRenderer.invoke(IPC_CHANNELS.QUICKTOOLS_CLIPBOARD_CLEAR),
+  quickToolsCopyClipboardItem: (text: string) => ipcRenderer.invoke(IPC_CHANNELS.QUICKTOOLS_CLIPBOARD_WRITE, text),
+  quickToolsGetSnippets: () => ipcRenderer.invoke(IPC_CHANNELS.QUICKTOOLS_SNIPPETS_LIST),
+  quickToolsSaveSnippet: (snippet: any) => ipcRenderer.invoke(IPC_CHANNELS.QUICKTOOLS_SNIPPETS_SAVE, snippet),
+  quickToolsDeleteSnippet: (id: string) => ipcRenderer.invoke(IPC_CHANNELS.QUICKTOOLS_SNIPPETS_DELETE, id),
+  quickToolsExpandSnippet: (shortcutOrId: string, placeholders?: any) =>
+    ipcRenderer.invoke(IPC_CHANNELS.QUICKTOOLS_SNIPPETS_EXPAND, { shortcutOrId, placeholders }),
 };
 
 contextBridge.exposeInMainWorld('fridayAPI', apiBridge);

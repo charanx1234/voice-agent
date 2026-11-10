@@ -675,6 +675,23 @@ export interface FridayApiBridge {
   getMainVisibility?: () => Promise<boolean>;
   onMainVisibilityChanged?: (callback: (visible: boolean) => void) => () => void;
   onSettingsUpdated?: (callback: (settings: Partial<FridaySettings>) => void) => () => void;
+
+  // QuickTools Phase 1
+  quickToolsGetDesktopPreview: () => Promise<QuickActionPreview>;
+  quickToolsGetDownloadsPreview: () => Promise<QuickActionPreview>;
+  quickToolsGetFolderPreview: (folderPath: string) => Promise<QuickActionPreview>;
+  quickToolsExecuteOrganize: (preview: QuickActionPreview) => Promise<QuickActionBatchResult>;
+  quickToolsUndoLastOrganize: () => Promise<{ success: boolean; restoredCount: number; message: string }>;
+  quickToolsFindDuplicates: (folderPath?: string) => Promise<DuplicateScanResult>;
+  quickToolsGetClipboardHistory: () => Promise<ClipboardHistoryItem[]>;
+  quickToolsTogglePinClipboard: (id: string) => Promise<ClipboardHistoryItem[]>;
+  quickToolsDeleteClipboard: (id: string) => Promise<ClipboardHistoryItem[]>;
+  quickToolsClearClipboard: () => Promise<void>;
+  quickToolsCopyClipboardItem: (text: string) => Promise<boolean>;
+  quickToolsGetSnippets: () => Promise<TextSnippetItem[]>;
+  quickToolsSaveSnippet: (snippet: Omit<TextSnippetItem, 'id' | 'createdAt' | 'updatedAt'> & { id?: string }) => Promise<TextSnippetItem>;
+  quickToolsDeleteSnippet: (id: string) => Promise<boolean>;
+  quickToolsExpandSnippet: (shortcutOrId: string, placeholders?: Record<string, string>) => Promise<{ success: boolean; expandedText: string }>;
 }
 
 export type WebsiteElementType =
@@ -743,6 +760,78 @@ export interface AccessibilityCommandResult {
   options?: string[];
   error?: string;
   summary?: string;
+}
+
+// ==========================================
+// QUICKTOOLS PHASE 1 TYPES
+// ==========================================
+
+export type FileCategory =
+  | 'Documents'
+  | 'Images'
+  | 'Screenshots'
+  | 'Videos'
+  | 'Audio'
+  | 'Archives'
+  | 'Code'
+  | 'Executables'
+  | 'Others';
+
+export interface ProposedFileMove {
+  fileName: string;
+  sourcePath: string;
+  destinationPath: string;
+  category: FileCategory;
+  fileSize: number;
+}
+
+export interface QuickActionPreview {
+  targetFolder: string;
+  proposedMoves: ProposedFileMove[];
+  categoryCounts: Record<string, number>;
+  totalFiles: number;
+  totalBytes: number;
+}
+
+export interface QuickActionBatchResult {
+  batchId: string;
+  timestamp: string;
+  targetFolder: string;
+  successCount: number;
+  failureCount: number;
+  movedFiles: Array<{ source: string; destination: string }>;
+  errors: Array<{ file: string; error: string }>;
+}
+
+export interface DuplicateFileGroup {
+  hash: string;
+  size: number;
+  files: string[];
+}
+
+export interface DuplicateScanResult {
+  scannedCount: number;
+  duplicateGroups: DuplicateFileGroup[];
+  wastedBytes: number;
+}
+
+export interface ClipboardHistoryItem {
+  id: string;
+  text: string;
+  copiedAt: string;
+  isPinned: boolean;
+  charCount: number;
+  isUrl: boolean;
+}
+
+export interface TextSnippetItem {
+  id: string;
+  shortcut: string;
+  title: string;
+  content: string;
+  tags: string[];
+  createdAt: string;
+  updatedAt: string;
 }
 
 declare global {

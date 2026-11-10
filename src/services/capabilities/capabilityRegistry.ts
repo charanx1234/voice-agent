@@ -11,6 +11,9 @@ import { windowsBrightnessService } from '../system/windowsBrightnessService';
 import { timeDateService } from '../system/timeDateService';
 import { weatherService } from '../weather/weatherService';
 import { desktopControlService } from '../desktop/desktopControlService';
+import { quickActionsService } from '../quicktools/quickActionsService';
+import { clipboardHistoryService } from '../quicktools/clipboardHistoryService';
+import { snippetsService } from '../quicktools/snippetsService';
 
 export type CapabilityCategory =
   | 'voice'
@@ -242,6 +245,59 @@ export class CapabilityRegistry {
       petAccessible: true,
       dashboardAccessible: true,
       execute: async (opts: any = {}) => desktopControlService.executeMouseAction(opts),
+    });
+
+    // 14. Quick Actions (File & Desktop Organization)
+    this.register({
+      id: 'quick_actions',
+      name: 'Quick Actions & Desktop Cleaner',
+      description: 'Organize files on Desktop/Downloads, categorize by type, find duplicates, and undo moves.',
+      category: 'productivity',
+      icon: 'FolderCheck',
+      quickActionPrompt: 'Organize my desktop files into categorized folders.',
+      petAccessible: true,
+      dashboardAccessible: true,
+      execute: async ({ action, target }: any = {}) => {
+        if (action === 'undo') return quickActionsService.undoLastOrganize();
+        const t = target || quickActionsService.getDesktopPath();
+        const preview = quickActionsService.generatePreview(t);
+        if (action === 'execute') return quickActionsService.executeOrganize(preview);
+        return preview;
+      },
+    });
+
+    // 15. Clipboard History
+    this.register({
+      id: 'clipboard_history',
+      name: 'Clipboard History Manager',
+      description: 'Search, favorite, and re-copy previously copied text and links safely.',
+      category: 'productivity',
+      icon: 'Clipboard',
+      quickActionPrompt: 'Show my recent clipboard history.',
+      petAccessible: true,
+      dashboardAccessible: true,
+      execute: async ({ action, query, text }: any = {}) => {
+        if (action === 'clear') return clipboardHistoryService.clearHistory();
+        if (action === 'search' && query) return clipboardHistoryService.search(query);
+        if (action === 'copy' && text) return clipboardHistoryService.copyToClipboard(text);
+        return clipboardHistoryService.getItems();
+      },
+    });
+
+    // 16. Smart Text Snippets
+    this.register({
+      id: 'smart_snippets',
+      name: 'Smart Text Snippets',
+      description: 'Expand text shortcuts with dynamic placeholders like {name}, {date}, and {subject}.',
+      category: 'productivity',
+      icon: 'FileCode',
+      quickActionPrompt: 'List all my saved text snippets.',
+      petAccessible: true,
+      dashboardAccessible: true,
+      execute: async ({ shortcut, placeholders }: any = {}) => {
+        if (shortcut) return snippetsService.expandSnippet(shortcut, placeholders);
+        return snippetsService.getSnippets();
+      },
     });
   }
 

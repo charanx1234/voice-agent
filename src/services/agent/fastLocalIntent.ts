@@ -5,6 +5,9 @@ import { windowsVolumeService } from '../system/windowsVolumeService';
 import { windowsBrightnessService } from '../system/windowsBrightnessService';
 import { timeDateService } from '../system/timeDateService';
 import { weatherService } from '../weather/weatherService';
+import { quickActionsService } from '../quicktools/quickActionsService';
+import { clipboardHistoryService } from '../quicktools/clipboardHistoryService';
+import { snippetsService } from '../quicktools/snippetsService';
 import {
   sendMediaKeyEvent,
   executeMusicControlTool,
@@ -17,7 +20,7 @@ import { isForeignAssistantCommand, validateVoiceAction } from './voiceActionGua
 
 export interface FastLocalIntentResult {
   matched: boolean;
-  intent: 'launch_app' | 'close_app' | 'media' | 'volume' | 'brightness' | 'time' | 'date' | 'battery' | 'window' | 'weather' | 'mouse';
+  intent: 'launch_app' | 'close_app' | 'media' | 'volume' | 'brightness' | 'time' | 'date' | 'battery' | 'window' | 'weather' | 'mouse' | 'quicktools';
   response: string;
   toolCalls?: Array<{
     toolName: string;
@@ -846,6 +849,285 @@ export class FastLocalIntentRouter {
         intent: 'mouse',
         response: 'Scrolled up.',
         toolCalls: [{ toolName: 'scroll_desktop', args: { direction: 'up' }, result: res, status: res.success ? 'completed' : 'failed' }],
+        executionMs: Date.now() - start,
+      };
+    }
+
+    // --- QUICKTOOLS PHASE 1: QUICK ACTIONS, CLIPBOARD, SNIPPETS ---
+    // 5.1 Desktop & Folder Clean / Organization
+    if (
+      /^(?:hey\s+)?(?:friday[\s,]+)?(?:clean\s+(?:up\s+)?my\s+desktop|clean\s+desktop|organise\s+my\s+desktop|organize\s+my\s+desktop|organize\s+desktop|organise\s+desktop|desktop\s+clean\s+chey)[?.!]?$/i.test(
+        lower
+      )
+    ) {
+      const target = quickActionsService.getDesktopPath();
+      const preview = quickActionsService.generatePreview(target);
+      const res = quickActionsService.executeOrganize(preview);
+      const response =
+        res.successCount > 0
+          ? `Cleaned your Desktop! Moved ${res.successCount} files into categorized folders. You can undo anytime.`
+          : 'Your Desktop is already tidy, nothing to move.';
+      return {
+        matched: true,
+        intent: 'quicktools',
+        response,
+        toolCalls: [
+          {
+            toolName: 'organize_desktop_folder',
+            args: { target: 'desktop', action: 'execute' },
+            result: res,
+            status: 'completed',
+          },
+        ],
+        executionMs: Date.now() - start,
+      };
+    }
+
+    if (
+      /^(?:hey\s+)?(?:friday[\s,]+)?(?:organise\s+(?:my\s+)?downloads|organize\s+(?:my\s+)?downloads|clean\s+(?:my\s+)?downloads)[?.!]?$/i.test(
+        lower
+      )
+    ) {
+      const target = quickActionsService.getDownloadsPath();
+      const preview = quickActionsService.generatePreview(target);
+      const res = quickActionsService.executeOrganize(preview);
+      const response =
+        res.successCount > 0
+          ? `Organized your Downloads! Moved ${res.successCount} files into categorized subfolders.`
+          : 'Your Downloads folder is already organized.';
+      return {
+        matched: true,
+        intent: 'quicktools',
+        response,
+        toolCalls: [
+          {
+            toolName: 'organize_desktop_folder',
+            args: { target: 'downloads', action: 'execute' },
+            result: res,
+            status: 'completed',
+          },
+        ],
+        executionMs: Date.now() - start,
+      };
+    }
+
+    if (
+      /^(?:hey\s+)?(?:friday[\s,]+)?(?:move\s+(?:all\s+)?pdfs\s+into\s+documents|organise\s+(?:my\s+)?pdfs|organize\s+(?:my\s+)?pdfs)[?.!]?$/i.test(
+        lower
+      )
+    ) {
+      const target = quickActionsService.getDesktopPath();
+      const preview = quickActionsService.generatePreview(target);
+      preview.proposedMoves = preview.proposedMoves.filter((m) => m.category === 'Documents');
+      const res = quickActionsService.executeOrganize(preview);
+      const response =
+        res.successCount > 0
+          ? `Moved ${res.successCount} PDF and document file(s) into your Documents folder.`
+          : 'No stray PDF files found on your desktop.';
+      return {
+        matched: true,
+        intent: 'quicktools',
+        response,
+        toolCalls: [
+          {
+            toolName: 'organize_desktop_folder',
+            args: { target: 'desktop', action: 'execute', category_filter: 'Documents' },
+            result: res,
+            status: 'completed',
+          },
+        ],
+        executionMs: Date.now() - start,
+      };
+    }
+
+    if (
+      /^(?:hey\s+)?(?:friday[\s,]+)?(?:organise\s+(?:my\s+)?screenshots|organize\s+(?:my\s+)?screenshots|clean\s+(?:my\s+)?screenshots)[?.!]?$/i.test(
+        lower
+      )
+    ) {
+      const target = quickActionsService.getDesktopPath();
+      const preview = quickActionsService.generatePreview(target);
+      preview.proposedMoves = preview.proposedMoves.filter((m) => m.category === 'Screenshots');
+      const res = quickActionsService.executeOrganize(preview);
+      const response =
+        res.successCount > 0
+          ? `Organized ${res.successCount} screenshot(s) into the Screenshots folder.`
+          : 'No screenshots found on your desktop.';
+      return {
+        matched: true,
+        intent: 'quicktools',
+        response,
+        toolCalls: [
+          {
+            toolName: 'organize_desktop_folder',
+            args: { target: 'desktop', action: 'execute', category_filter: 'Screenshots' },
+            result: res,
+            status: 'completed',
+          },
+        ],
+        executionMs: Date.now() - start,
+      };
+    }
+
+    if (
+      /^(?:hey\s+)?(?:friday[\s,]+)?(?:undo\s+(?:desktop\s+)?organi[sz]ation|undo\s+(?:last\s+)?clean|undo\s+organi[sz]e)[?.!]?$/i.test(
+        lower
+      )
+    ) {
+      const undoRes = quickActionsService.undoLastOrganize();
+      return {
+        matched: true,
+        intent: 'quicktools',
+        response: undoRes.message,
+        toolCalls: [
+          {
+            toolName: 'organize_desktop_folder',
+            args: { action: 'undo' },
+            result: undoRes,
+            status: undoRes.success ? 'completed' : 'failed',
+          },
+        ],
+        executionMs: Date.now() - start,
+      };
+    }
+
+    if (
+      /^(?:hey\s+)?(?:friday[\s,]+)?(?:find\s+duplicate\s+files|find\s+duplicates|check\s+duplicate\s+files|check\s+duplicates)[?.!]?$/i.test(
+        lower
+      )
+    ) {
+      const dup = quickActionsService.findDuplicates();
+      const wastedMb = (dup.wastedBytes / (1024 * 1024)).toFixed(1);
+      const response =
+        dup.duplicateGroups.length > 0
+          ? `Found ${dup.duplicateGroups.length} set(s) of duplicate files wasting ${wastedMb} MB in Downloads.`
+          : 'No duplicate files found in your Downloads.';
+      return {
+        matched: true,
+        intent: 'quicktools',
+        response,
+        toolCalls: [
+          {
+            toolName: 'find_duplicate_files',
+            args: { target: 'downloads' },
+            result: dup,
+            status: 'completed',
+          },
+        ],
+        executionMs: Date.now() - start,
+      };
+    }
+
+    // 5.2 Clipboard History
+    if (
+      /^(?:hey\s+)?(?:friday[\s,]+)?(?:show\s+(?:my\s+)?clipboard(?:\s+history)?|view\s+clipboard|what\s+did\s+i\s+copy(?:\s+earlier)?)[?.!]?$/i.test(
+        lower
+      )
+    ) {
+      const items = clipboardHistoryService.getItems();
+      const topItems = items.slice(0, 3).map((i) => `"${i.text.slice(0, 30)}..."`).join(', ');
+      const response =
+        items.length > 0
+          ? `You have ${items.length} items in your clipboard history. Recent: ${topItems}.`
+          : 'Your clipboard history is currently empty.';
+      return {
+        matched: true,
+        intent: 'quicktools',
+        response,
+        toolCalls: [
+          {
+            toolName: 'manage_clipboard_history',
+            args: { action: 'list' },
+            result: { count: items.length },
+            status: 'completed',
+          },
+        ],
+        executionMs: Date.now() - start,
+      };
+    }
+
+    if (
+      /^(?:hey\s+)?(?:friday[\s,]+)?(?:clear\s+(?:my\s+)?clipboard(?:\s+history)?)[?.!]?$/i.test(
+        lower
+      )
+    ) {
+      clipboardHistoryService.clearHistory();
+      return {
+        matched: true,
+        intent: 'quicktools',
+        response: 'Cleared your unpinned clipboard history.',
+        toolCalls: [
+          {
+            toolName: 'manage_clipboard_history',
+            args: { action: 'clear' },
+            result: { success: true },
+            status: 'completed',
+          },
+        ],
+        executionMs: Date.now() - start,
+      };
+    }
+
+    // 5.3 Smart Snippets
+    const insertSnippetMatch = lower.match(
+      /^(?:hey\s+)?(?:friday[\s,]+)?(?:insert|expand)\s+snippet\s+(?:named\s+)?(?:;)?([a-zA-Z0-9_\-]+)[?.!]?$/i
+    );
+    if (insertSnippetMatch) {
+      const shortcut = insertSnippetMatch[1];
+      const expanded = snippetsService.expandSnippet(shortcut);
+      if (expanded.success) {
+        clipboardHistoryService.copyToClipboard(expanded.expandedText);
+        return {
+          matched: true,
+          intent: 'quicktools',
+          response: `Expanded snippet "${shortcut}" and copied it to your clipboard.`,
+          toolCalls: [
+            {
+              toolName: 'manage_text_snippets',
+              args: { action: 'expand', shortcut },
+              result: expanded,
+              status: 'completed',
+            },
+          ],
+          executionMs: Date.now() - start,
+        };
+      } else {
+        return {
+          matched: true,
+          intent: 'quicktools',
+          response: `Could not find a snippet named "${shortcut}".`,
+          toolCalls: [
+            {
+              toolName: 'manage_text_snippets',
+              args: { action: 'expand', shortcut },
+              result: { success: false },
+              status: 'failed',
+            },
+          ],
+          executionMs: Date.now() - start,
+        };
+      }
+    }
+
+    if (
+      /^(?:hey\s+)?(?:friday[\s,]+)?(?:show\s+(?:my\s+)?snippets|list\s+(?:my\s+)?snippets)[?.!]?$/i.test(
+        lower
+      )
+    ) {
+      const list = snippetsService.getSnippets();
+      const shortcuts = list.map((s) => s.shortcut).join(', ');
+      return {
+        matched: true,
+        intent: 'quicktools',
+        response: `You have ${list.length} snippet(s): ${shortcuts}.`,
+        toolCalls: [
+          {
+            toolName: 'manage_text_snippets',
+            args: { action: 'list' },
+            result: { count: list.length },
+            status: 'completed',
+          },
+        ],
         executionMs: Date.now() - start,
       };
     }

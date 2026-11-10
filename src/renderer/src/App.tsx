@@ -7,6 +7,7 @@ import { TranscriptView } from './components/TranscriptView';
 import { SettingsModal } from './components/SettingsModal';
 import { ToolConfirmModal } from './components/ToolConfirmModal';
 import { ToolShortcutsPanel } from './components/ToolShortcutsPanel';
+import { QuickToolsModal } from './components/QuickToolsModal';
 import { MemoryPanel } from './components/MemoryPanel';
 import { Dashboard } from './components/Dashboard';
 import { WebsiteAccessibilityPanel } from './components/WebsiteAccessibilityPanel';
@@ -78,6 +79,7 @@ export const App: React.FC = () => {
   const [transcriptOpen, setTranscriptOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
+  const [quickToolsOpen, setQuickToolsOpen] = useState(false);
   const [memoryOpen, setMemoryOpen] = useState(false);
   const [memoryCount, setMemoryCount] = useState(0);
   const [recordingSeconds, setRecordingSeconds] = useState(0);
@@ -1566,6 +1568,7 @@ export const App: React.FC = () => {
             onToggleTranscript={() => setTranscriptOpen(!transcriptOpen)}
             onOpenSettings={() => setSettingsOpen(true)}
             onOpenShortcuts={() => setShortcutsOpen(true)}
+            onOpenQuickTools={() => setQuickToolsOpen(true)}
             onOpenMemory={() => setMemoryOpen(true)}
             dashboardOpen={dashboardOpen}
             dashboardCount={artifacts.length}
@@ -1629,6 +1632,13 @@ export const App: React.FC = () => {
       <ToolShortcutsPanel
         isOpen={shortcutsOpen}
         onClose={() => setShortcutsOpen(false)}
+        onAskFriday={(prompt) => handleSendMessage(prompt)}
+      />
+
+      {/* QuickTools Modal */}
+      <QuickToolsModal
+        isOpen={quickToolsOpen}
+        onClose={() => setQuickToolsOpen(false)}
         onAskFriday={(prompt) => handleSendMessage(prompt)}
       />
 

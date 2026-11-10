@@ -4,7 +4,7 @@
 [![AI Engine](https://img.shields.io/badge/AI%20Engine-Google%20Gemini%20Flash%20%2F%20Pro-4285F4.svg?style=for-the-badge&logo=google)](https://aistudio.google.com)
 [![Desktop Framework](https://img.shields.io/badge/Desktop-Electron%2034%20%2B%20React%2019-61DAFB.svg?style=for-the-badge&logo=react)](https://electronjs.org)
 [![Language](https://img.shields.io/badge/Languages-Telugu%20%7C%20English%20%7C%20Hindi%20%7C%20Tamil%20%7C%20Kannada-green.svg?style=for-the-badge)](https://github.com)
-[![Tests](https://img.shields.io/badge/Tests-45%20Passed%20(355%20Assertions)-success.svg?style=for-the-badge)](https://github.com)
+[![Tests](https://img.shields.io/badge/Tests-49%20Passed%20(377%20Assertions)-success.svg?style=for-the-badge)](https://github.com)
 [![License](https://img.shields.io/badge/License-MIT-orange.svg?style=for-the-badge)](LICENSE)
 
 **FRIDAY** is a modern, ultra-responsive personal AI desktop companion for Windows. Built with a **Pet-First Architecture**, FRIDAY lives directly on your desktop as an interactive floating character that listens, speaks, manages your PC, plays media, takes intelligent notes, and remembers your preferences across restarts.
@@ -14,6 +14,14 @@ FRIDAY is a **true standalone Windows desktop application** — install it once 
 ---
 
 ## 🌟 What's New in FRIDAY
+
+### ⚡ QuickTools Productivity Suite (Phase 1)
+- **Intelligent File & Desktop Organization**: Automatically scans and organizes loose files on your Desktop or Downloads into categorized folders (`Documents`, `Images`, `Screenshots`, `Videos`, `Audio`, `Archives`, `Code`, `Executables`).
+- **Duplicate File Finder**: Detects redundant and duplicate files using size grouping and cryptographic content hashing with zero CPU/memory spikes.
+- **Safety Previews & 1-Click Undo**: Non-destructive by design — previews every planned file move, resolves collisions with ` (1)` without overwriting, and keeps a restoration journal to undo changes anytime.
+- **Privacy-Shielded Clipboard History**: Maintains local history of copied snippets and links with search, star/pinning, and 1-click re-copying. Built-in filter automatically blocks sensitive passwords, API keys, JWTs, and tokens.
+- **Smart Text Snippets**: Instant text expansion shortcuts (`;mail`, `;phone`, `;intro`, `;meeting`) with dynamic placeholders like `{name}`, `{date}`, `{time}`, and `{subject}`.
+- **Dedicated QuickTools Modal**: Sleek glassmorphic interface accessible from the Control Bar with tabs for Quick Actions, Clipboard, and Snippets.
 
 ### 🔊 Real Windows System Volume & Mute Control
 - Controls actual Windows master audio using native Windows CoreAudio COM interfaces (`IMMDeviceEnumerator`, `IAudioEndpointVolume`).
@@ -216,8 +224,8 @@ npm test
 ```
 
 ```
-✓ Test Files  45 passed (45)
-✓ Tests       355 passed (355)
+✓ Test Files  49 passed (49)
+✓ Tests       377 passed (377)
 ```
 
 ---

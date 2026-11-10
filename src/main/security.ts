@@ -97,6 +97,23 @@ export const IPC_CHANNELS = {
   VOICE_TEST_MIC: 'friday:voice-test-mic',
   MAIN_VISIBILITY_CHANGED: 'friday:main-visibility-changed',
   GET_MAIN_VISIBILITY: 'friday:get-main-visibility',
+
+  // QuickTools Phase 1
+  QUICKTOOLS_GET_DESKTOP_PREVIEW: 'friday:quicktools-get-desktop-preview',
+  QUICKTOOLS_GET_DOWNLOADS_PREVIEW: 'friday:quicktools-get-downloads-preview',
+  QUICKTOOLS_GET_FOLDER_PREVIEW: 'friday:quicktools-get-folder-preview',
+  QUICKTOOLS_EXECUTE_ORGANIZE: 'friday:quicktools-execute-organize',
+  QUICKTOOLS_UNDO_ORGANIZE: 'friday:quicktools-undo-organize',
+  QUICKTOOLS_FIND_DUPLICATES: 'friday:quicktools-find-duplicates',
+  QUICKTOOLS_CLIPBOARD_LIST: 'friday:quicktools-clipboard-list',
+  QUICKTOOLS_CLIPBOARD_TOGGLE_PIN: 'friday:quicktools-clipboard-toggle-pin',
+  QUICKTOOLS_CLIPBOARD_DELETE: 'friday:quicktools-clipboard-delete',
+  QUICKTOOLS_CLIPBOARD_CLEAR: 'friday:quicktools-clipboard-clear',
+  QUICKTOOLS_CLIPBOARD_WRITE: 'friday:quicktools-clipboard-write',
+  QUICKTOOLS_SNIPPETS_LIST: 'friday:quicktools-snippets-list',
+  QUICKTOOLS_SNIPPETS_SAVE: 'friday:quicktools-snippets-save',
+  QUICKTOOLS_SNIPPETS_DELETE: 'friday:quicktools-snippets-delete',
+  QUICKTOOLS_SNIPPETS_EXPAND: 'friday:quicktools-snippets-expand',
 } as const;
 
 export function sanitizePath(inputPath: string): string {

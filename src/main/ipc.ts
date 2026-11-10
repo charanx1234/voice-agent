@@ -22,6 +22,9 @@ import { executeScreenControlTool } from '../services/agent/screenControlTools';
 import { AiProviderId, ChatMessage, MemoryInputPayload, PetCompanionState, SpeechSynthesisRequest, ToolConfirmationPayload } from '../shared/types';
 import { VoiceCoordinator } from './voiceCoordinator';
 import { capabilityRegistry } from '../services/capabilities/capabilityRegistry';
+import { quickActionsService } from '../services/quicktools/quickActionsService';
+import { clipboardHistoryService } from '../services/quicktools/clipboardHistoryService';
+import { snippetsService } from '../services/quicktools/snippetsService';
 
 let handlersRegistered = false;
 let activeVoiceCoordinator: VoiceCoordinator | null = null;
@@ -845,6 +848,84 @@ export function registerIpcHandlers(
       return false;
     }
   });
+
+  // Start background monitoring for clipboard changes safely
+  try {
+    clipboardHistoryService.startPolling(1000);
+  } catch {}
+
+  // QuickTools Phase 1 IPC Handlers
+  ipcMain.handle(IPC_CHANNELS.QUICKTOOLS_GET_DESKTOP_PREVIEW, async () => {
+    const desktop = quickActionsService.getDesktopPath();
+    return quickActionsService.generatePreview(desktop);
+  });
+
+  ipcMain.handle(IPC_CHANNELS.QUICKTOOLS_GET_DOWNLOADS_PREVIEW, async () => {
+    const downloads = quickActionsService.getDownloadsPath();
+    return quickActionsService.generatePreview(downloads);
+  });
+
+  ipcMain.handle(IPC_CHANNELS.QUICKTOOLS_GET_FOLDER_PREVIEW, async (_event, folderPath: string) => {
+    return quickActionsService.generatePreview(folderPath);
+  });
+
+  ipcMain.handle(IPC_CHANNELS.QUICKTOOLS_EXECUTE_ORGANIZE, async (_event, preview: any) => {
+    return quickActionsService.executeOrganize(preview);
+  });
+
+  ipcMain.handle(IPC_CHANNELS.QUICKTOOLS_UNDO_ORGANIZE, async () => {
+    return quickActionsService.undoLastOrganize();
+  });
+
+  ipcMain.handle(IPC_CHANNELS.QUICKTOOLS_FIND_DUPLICATES, async (_event, folderPath?: string) => {
+    return quickActionsService.findDuplicates(folderPath);
+  });
+
+  ipcMain.handle(IPC_CHANNELS.QUICKTOOLS_CLIPBOARD_LIST, async () => {
+    return clipboardHistoryService.getItems();
+  });
+
+  ipcMain.handle(IPC_CHANNELS.QUICKTOOLS_CLIPBOARD_TOGGLE_PIN, async (_event, id: string) => {
+    return clipboardHistoryService.togglePin(id);
+  });
+
+  ipcMain.handle(IPC_CHANNELS.QUICKTOOLS_CLIPBOARD_DELETE, async (_event, id: string) => {
+    return clipboardHistoryService.deleteItem(id);
+  });
+
+  ipcMain.handle(IPC_CHANNELS.QUICKTOOLS_CLIPBOARD_CLEAR, async () => {
+    clipboardHistoryService.clearHistory();
+  });
+
+  ipcMain.handle(IPC_CHANNELS.QUICKTOOLS_CLIPBOARD_WRITE, async (_event, text: string) => {
+    return clipboardHistoryService.copyToClipboard(text);
+  });
+
+  ipcMain.handle(IPC_CHANNELS.QUICKTOOLS_SNIPPETS_LIST, async () => {
+    return snippetsService.getSnippets();
+  });
+
+  ipcMain.handle(IPC_CHANNELS.QUICKTOOLS_SNIPPETS_SAVE, async (_event, snippet: any) => {
+    return snippetsService.saveSnippet(snippet);
+  });
+
+  ipcMain.handle(IPC_CHANNELS.QUICKTOOLS_SNIPPETS_DELETE, async (_event, id: string) => {
+    return snippetsService.deleteSnippet(id);
+  });
+
+  ipcMain.handle(
+    IPC_CHANNELS.QUICKTOOLS_SNIPPETS_EXPAND,
+    async (_event, payload: { shortcutOrId: string; placeholders?: any }) => {
+      const result = snippetsService.expandSnippet(
+        payload?.shortcutOrId || '',
+        payload?.placeholders || {}
+      );
+      if (result.success && result.expandedText) {
+        clipboardHistoryService.copyToClipboard(result.expandedText);
+      }
+      return result;
+    }
+  );
 }
 
 /** Renderer file-opening is limited to files inside an approved project root. */

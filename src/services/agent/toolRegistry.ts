@@ -11,6 +11,7 @@ import { screenControlToolDefinitions, executeScreenControlTool } from './screen
 import { chromeBrowserToolDefinitions, executeChromeBrowserTool } from './chromeBrowserTool';
 import { musicControlToolDefinitions, executeMusicControlTool } from './musicControlTool';
 import { systemControlToolDefinitions, executeSystemControlTool } from './systemControlTools';
+import { quickToolsDefinitions, executeQuickToolsAgent } from './quickToolsDefinitions';
 import { desktopControlService } from '../desktop/desktopControlService';
 import { settingsStore } from '../storage/settingsStore';
 import { accentIdFromName, defaultVoiceForAccent } from '../voice/voiceCatalog';
@@ -145,6 +146,7 @@ export class ToolRegistry {
       ...chromeBrowserToolDefinitions,
       ...musicControlToolDefinitions,
       ...systemControlToolDefinitions,
+      ...quickToolsDefinitions,
     ];
 
     // Format for @google/genai and @google/generative-ai
@@ -295,6 +297,16 @@ export class ToolRegistry {
         ].includes(toolName)
       ) {
         return await executeSystemControlTool(toolName, args);
+      }
+      if (
+        [
+          'organize_desktop_folder',
+          'find_duplicate_files',
+          'manage_clipboard_history',
+          'manage_text_snippets',
+        ].includes(toolName)
+      ) {
+        return await executeQuickToolsAgent(toolName, args);
       }
       if (
         [
