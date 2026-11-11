@@ -281,6 +281,37 @@ const apiBridge: FridayApiBridge = {
   quickToolsDeleteSnippet: (id: string) => ipcRenderer.invoke(IPC_CHANNELS.QUICKTOOLS_SNIPPETS_DELETE, id),
   quickToolsExpandSnippet: (shortcutOrId: string, placeholders?: any) =>
     ipcRenderer.invoke(IPC_CHANNELS.QUICKTOOLS_SNIPPETS_EXPAND, { shortcutOrId, placeholders }),
+
+  // QuickTools Phase 2: Desktop Management
+  quickToolsListWindows: () => ipcRenderer.invoke(IPC_CHANNELS.QUICKTOOLS_WINDOWS_LIST),
+  quickToolsApplyWindowLayout: (action: any) =>
+    ipcRenderer.invoke(IPC_CHANNELS.QUICKTOOLS_WINDOWS_LAYOUT, action),
+  quickToolsListNotes: (category?: string, query?: string) =>
+    ipcRenderer.invoke(IPC_CHANNELS.QUICKTOOLS_NOTES_LIST, category, query),
+  quickToolsSaveNote: (note: any) =>
+    ipcRenderer.invoke(IPC_CHANNELS.QUICKTOOLS_NOTES_SAVE, note),
+  quickToolsDeleteNote: (id: string) =>
+    ipcRenderer.invoke(IPC_CHANNELS.QUICKTOOLS_NOTES_DELETE, id),
+  quickToolsTogglePinNote: (id: string) =>
+    ipcRenderer.invoke(IPC_CHANNELS.QUICKTOOLS_NOTES_PIN, id),
+  quickToolsPreviewRename: (rule: any) =>
+    ipcRenderer.invoke(IPC_CHANNELS.QUICKTOOLS_RENAME_PREVIEW, rule),
+  quickToolsExecuteRename: (preview: any) =>
+    ipcRenderer.invoke(IPC_CHANNELS.QUICKTOOLS_RENAME_EXECUTE, preview),
+  quickToolsUndoRename: () =>
+    ipcRenderer.invoke(IPC_CHANNELS.QUICKTOOLS_RENAME_UNDO),
+
+  // QuickTools Phase 3: File Intelligence
+  quickToolsSearchFiles: (criteria: any) =>
+    ipcRenderer.invoke(IPC_CHANNELS.QUICKTOOLS_FILES_SEARCH, criteria),
+  quickToolsListWorkspaces: () =>
+    ipcRenderer.invoke(IPC_CHANNELS.QUICKTOOLS_WORKSPACES_LIST),
+  quickToolsSaveWorkspace: (workspace: any) =>
+    ipcRenderer.invoke(IPC_CHANNELS.QUICKTOOLS_WORKSPACES_SAVE, workspace),
+  quickToolsLaunchWorkspace: (idOrName: string) =>
+    ipcRenderer.invoke(IPC_CHANNELS.QUICKTOOLS_WORKSPACES_LAUNCH, idOrName),
+  quickToolsDeleteWorkspace: (id: string) =>
+    ipcRenderer.invoke(IPC_CHANNELS.QUICKTOOLS_WORKSPACES_DELETE, id),
 };
 
 contextBridge.exposeInMainWorld('fridayAPI', apiBridge);

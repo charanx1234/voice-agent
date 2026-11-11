@@ -1,6 +1,11 @@
 import { quickActionsService } from '../quicktools/quickActionsService';
 import { clipboardHistoryService } from '../quicktools/clipboardHistoryService';
 import { snippetsService } from '../quicktools/snippetsService';
+import { windowManagerService } from '../quicktools/windowManagerService';
+import { quickNotesService } from '../quicktools/quickNotesService';
+import { batchRenamerService } from '../quicktools/batchRenamerService';
+import { fileFinderService } from '../quicktools/fileFinderService';
+import { workspacesService } from '../quicktools/workspacesService';
 import { QuickActionPreview } from '../../shared/types';
 
 export const quickToolsDefinitions = [
@@ -96,6 +101,161 @@ export const quickToolsDefinitions = [
         content: {
           type: 'STRING',
           description: 'Snippet content when creating.',
+        },
+      },
+      required: ['action'],
+    },
+  },
+  {
+    name: 'arrange_windows',
+    description:
+      'Manages and snaps application windows on the screen. Supports splitting left/right, side-by-side app arrangement (e.g. Chrome on left, VS Code on right), maximizing, minimizing, centering, or listing open windows.',
+    parameters: {
+      type: 'OBJECT',
+      properties: {
+        action: {
+          type: 'STRING',
+          enum: ['split_left', 'split_right', 'side_by_side', 'maximize', 'minimize', 'restore', 'center', 'list'],
+          description: 'Window layout action.',
+        },
+        windowTarget: {
+          type: 'STRING',
+          description: 'Title or app name of the first target window (e.g. "Chrome", "Code", "Notepad").',
+        },
+        secondTarget: {
+          type: 'STRING',
+          description: 'Title or app name of the second window for side-by-side layout (e.g. "VS Code").',
+        },
+      },
+      required: ['action'],
+    },
+  },
+  {
+    name: 'manage_quick_notes',
+    description:
+      'Fast note-taking and idea capture with search, categories, and pinning. Never exposes private notes externally.',
+    parameters: {
+      type: 'OBJECT',
+      properties: {
+        action: {
+          type: 'STRING',
+          enum: ['list', 'search', 'create', 'delete', 'pin'],
+          description: 'Action to perform on quick notes.',
+        },
+        title: {
+          type: 'STRING',
+          description: 'Title of the note.',
+        },
+        content: {
+          type: 'STRING',
+          description: 'Content of the note.',
+        },
+        category: {
+          type: 'STRING',
+          description: 'Category (General, Ideas, Work, Todo).',
+        },
+        query: {
+          type: 'STRING',
+          description: 'Search string for searching notes.',
+        },
+        id: {
+          type: 'STRING',
+          description: 'ID of the note to pin or delete.',
+        },
+      },
+      required: ['action'],
+    },
+  },
+  {
+    name: 'batch_rename_files',
+    description:
+      'Safely previews, renames, or undoes batch file renaming with sequential numbering, prefixes/suffixes, and search/replace in a folder.',
+    parameters: {
+      type: 'OBJECT',
+      properties: {
+        action: {
+          type: 'STRING',
+          enum: ['preview', 'execute', 'undo'],
+          description: '"preview" to inspect planned new names, "execute" to apply, or "undo" to revert.',
+        },
+        folderPath: {
+          type: 'STRING',
+          description: 'Absolute path to the target folder.',
+        },
+        prefix: {
+          type: 'STRING',
+          description: 'Prefix to prepend to file names.',
+        },
+        suffix: {
+          type: 'STRING',
+          description: 'Suffix to append before file extension.',
+        },
+        findText: {
+          type: 'STRING',
+          description: 'Text string to find and replace in file names.',
+        },
+        replaceText: {
+          type: 'STRING',
+          description: 'Replacement text for findText.',
+        },
+        addNumber: {
+          type: 'BOOLEAN',
+          description: 'Whether to append sequential numbers (001, 002, ...).',
+        },
+        pattern: {
+          type: 'STRING',
+          description: 'Optional file extension filter (e.g. ".jpg", ".png").',
+        },
+      },
+      required: ['action'],
+    },
+  },
+  {
+    name: 'search_files_nlp',
+    description:
+      'Locates files on the system matching criteria such as file name query, file extension, modified recency, or text content preview.',
+    parameters: {
+      type: 'OBJECT',
+      properties: {
+        query: {
+          type: 'STRING',
+          description: 'Keyword to search in filename or file text.',
+        },
+        folderPath: {
+          type: 'STRING',
+          description: 'Root folder to search within (defaults to user home directory).',
+        },
+        extension: {
+          type: 'STRING',
+          description: 'File extension filter (e.g. "pdf", "docx", "ts", "png").',
+        },
+        searchContent: {
+          type: 'BOOLEAN',
+          description: 'Whether to search within readable text/code files.',
+        },
+        modifiedWithinDays: {
+          type: 'NUMBER',
+          description: 'Only return files modified within this many days.',
+        },
+      },
+      required: ['query'],
+    },
+  },
+  {
+    name: 'manage_workspaces',
+    description:
+      'Creates, lists, or launches multi-application desktop workspaces (e.g. Coding Mode, Study Workspace, Focus Mode) with automatic window positioning.',
+    parameters: {
+      type: 'OBJECT',
+      properties: {
+        action: {
+          type: 'STRING',
+          enum: ['list', 'launch', 'create', 'delete'],
+          description: 'Action to perform on workspaces.',
+        },
+        idOrName: {
+          type: 'STRING',
+          description: 'ID or Name of the workspace to launch or manage (e.g. "Coding Mode", "ws_coding").',
         },
       },
       required: ['action'],
@@ -261,6 +421,158 @@ export async function executeQuickToolsAgent(name: string, args: Record<string, 
           shortcut: s.shortcut,
           title: s.title,
           contentPreview: s.content.length > 60 ? s.content.slice(0, 60) + '...' : s.content,
+        })),
+      };
+    }
+
+    case 'arrange_windows': {
+      const action = args.action || 'list';
+      if (action === 'list') {
+        const windows = await windowManagerService.getOpenWindows();
+        return {
+          success: true,
+          windowCount: windows.length,
+          windows: windows.map((w) => ({
+            title: w.title,
+            process: w.processName,
+          })),
+        };
+      }
+
+      const res = await windowManagerService.arrangeWindow({
+        action: action as any,
+        windowTarget: args.windowTarget,
+        secondTarget: args.secondTarget,
+      });
+      return res;
+    }
+
+    case 'manage_quick_notes': {
+      const action = args.action || 'list';
+      if (action === 'create' && (args.content || args.title)) {
+        const note = quickNotesService.saveNote({
+          title: args.title || 'Quick Note',
+          content: args.content || args.title || '',
+          category: args.category || 'General',
+          tags: [],
+          isPinned: false,
+        });
+        return {
+          success: true,
+          message: `Saved note "${note.title}".`,
+          note,
+        };
+      }
+      if (action === 'search' && args.query) {
+        const notes = quickNotesService.getNotes(args.category, args.query);
+        return {
+          success: true,
+          query: args.query,
+          matchCount: notes.length,
+          notes: notes.slice(0, 10),
+        };
+      }
+      if (action === 'delete' && args.id) {
+        const ok = quickNotesService.deleteNote(args.id);
+        return { success: ok, message: ok ? 'Note deleted.' : 'Note not found.' };
+      }
+      if (action === 'pin' && args.id) {
+        const updated = quickNotesService.togglePin(args.id);
+        return { success: true, notes: updated.slice(0, 10) };
+      }
+      const notes = quickNotesService.getNotes(args.category);
+      return {
+        success: true,
+        noteCount: notes.length,
+        notes: notes.slice(0, 10),
+      };
+    }
+
+    case 'batch_rename_files': {
+      const action = args.action || 'preview';
+      if (action === 'undo') {
+        const undoRes = batchRenamerService.undoLastRename();
+        return undoRes;
+      }
+
+      const folderPath = args.folderPath || quickActionsService.getDesktopPath();
+      const preview = batchRenamerService.generatePreview({
+        folderPath,
+        prefix: args.prefix,
+        suffix: args.suffix,
+        findText: args.findText,
+        replaceText: args.replaceText,
+        addNumber: args.addNumber,
+        pattern: args.pattern,
+      });
+
+      if (action === 'preview') {
+        return {
+          success: true,
+          mode: 'preview',
+          totalFiles: preview.totalFiles,
+          conflicts: preview.conflictCount,
+          items: preview.items.slice(0, 15).map((i) => ({
+            original: i.originalName,
+            renamed: i.proposedName,
+            status: i.status,
+          })),
+        };
+      }
+
+      if (action === 'execute') {
+        const result = batchRenamerService.executeRename(preview);
+        return {
+          success: result.renamedCount > 0,
+          renamedCount: result.renamedCount,
+          skippedCount: result.skippedCount ?? 0,
+          batchId: result.batchId,
+        };
+      }
+      break;
+    }
+
+    case 'search_files_nlp': {
+      const result = fileFinderService.searchFiles({
+        query: args.query || '',
+        folderPath: args.folderPath,
+        extension: args.extension,
+        searchContent: Boolean(args.searchContent),
+        modifiedWithinDays: args.modifiedWithinDays,
+      });
+
+      return {
+        success: true,
+        totalMatches: result.totalMatches,
+        scannedCount: result.scannedCount,
+        files: result.results.slice(0, 15).map((r) => ({
+          name: r.fileName,
+          path: r.filePath,
+          size: r.sizeFormatted,
+          modified: r.modifiedAt,
+          snippet: r.previewSnippet,
+        })),
+      };
+    }
+
+    case 'manage_workspaces': {
+      const action = args.action || 'list';
+      if (action === 'launch' && args.idOrName) {
+        const res = await workspacesService.launchWorkspace(args.idOrName);
+        return res;
+      }
+      if (action === 'delete' && args.idOrName) {
+        const ok = workspacesService.deleteWorkspace(args.idOrName);
+        return { success: ok, message: ok ? 'Workspace deleted.' : 'Workspace not found.' };
+      }
+      const workspaces = workspacesService.getWorkspaces();
+      return {
+        success: true,
+        workspaces: workspaces.map((w) => ({
+          id: w.id,
+          name: w.name,
+          description: w.description,
+          appCount: w.apps.length,
         })),
       };
     }

@@ -17,6 +17,11 @@ import {
   FolderOpen,
   AlertCircle,
   Sparkles,
+  Layout,
+  StickyNote,
+  Edit3,
+  Compass,
+  Layers,
 } from 'lucide-react';
 import {
   QuickActionPreview,
@@ -25,6 +30,11 @@ import {
   ClipboardHistoryItem,
   TextSnippetItem,
 } from '@/shared/types';
+import { WindowManagerTab } from './quicktools/WindowManagerTab';
+import { QuickNotesTab } from './quicktools/QuickNotesTab';
+import { BatchRenamerTab } from './quicktools/BatchRenamerTab';
+import { FileFinderTab } from './quicktools/FileFinderTab';
+import { WorkspacesTab } from './quicktools/WorkspacesTab';
 
 interface QuickToolsModalProps {
   isOpen: boolean;
@@ -32,8 +42,18 @@ interface QuickToolsModalProps {
   onAskFriday?: (prompt: string) => void;
 }
 
+export type QuickToolsTab =
+  | 'actions'
+  | 'windows'
+  | 'notes'
+  | 'renamer'
+  | 'finder'
+  | 'workspaces'
+  | 'clipboard'
+  | 'snippets';
+
 export const QuickToolsModal: React.FC<QuickToolsModalProps> = ({ isOpen, onClose, onAskFriday }) => {
-  const [activeTab, setActiveTab] = useState<'actions' | 'clipboard' | 'snippets'>('actions');
+  const [activeTab, setActiveTab] = useState<QuickToolsTab>('actions');
 
   // Quick Actions State
   const [targetFolderType, setTargetFolderType] = useState<'desktop' | 'downloads'>('desktop');
@@ -286,10 +306,12 @@ export const QuickToolsModal: React.FC<QuickToolsModalProps> = ({ isOpen, onClos
         <div
           style={{
             display: 'flex',
-            gap: '8px',
-            padding: '12px 20px',
+            gap: '6px',
+            padding: '10px 16px',
             background: 'color-mix(in srgb, var(--surface) 50%, transparent)',
             borderBottom: '1px solid var(--border)',
+            overflowX: 'auto',
+            whiteSpace: 'nowrap',
           }}
         >
           <button
@@ -298,18 +320,124 @@ export const QuickToolsModal: React.FC<QuickToolsModalProps> = ({ isOpen, onClos
               display: 'flex',
               alignItems: 'center',
               gap: '6px',
-              padding: '6px 14px',
+              padding: '6px 12px',
               borderRadius: '8px',
-              fontSize: '0.85rem',
+              fontSize: '0.82rem',
               fontWeight: 500,
               cursor: 'pointer',
               border: activeTab === 'actions' ? '1px solid var(--accent)' : '1px solid transparent',
               background: activeTab === 'actions' ? 'color-mix(in srgb, var(--accent) 15%, transparent)' : 'transparent',
               color: activeTab === 'actions' ? 'var(--accent)' : 'var(--muted)',
+              flexShrink: 0,
             }}
           >
-            <FolderSync size={15} />
+            <FolderSync size={14} />
             Quick Actions
+          </button>
+
+          <button
+            onClick={() => setActiveTab('windows')}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px',
+              padding: '6px 12px',
+              borderRadius: '8px',
+              fontSize: '0.82rem',
+              fontWeight: 500,
+              cursor: 'pointer',
+              border: activeTab === 'windows' ? '1px solid var(--accent)' : '1px solid transparent',
+              background: activeTab === 'windows' ? 'color-mix(in srgb, var(--accent) 15%, transparent)' : 'transparent',
+              color: activeTab === 'windows' ? 'var(--accent)' : 'var(--muted)',
+              flexShrink: 0,
+            }}
+          >
+            <Layout size={14} />
+            Window Manager
+          </button>
+
+          <button
+            onClick={() => setActiveTab('notes')}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px',
+              padding: '6px 12px',
+              borderRadius: '8px',
+              fontSize: '0.82rem',
+              fontWeight: 500,
+              cursor: 'pointer',
+              border: activeTab === 'notes' ? '1px solid var(--accent)' : '1px solid transparent',
+              background: activeTab === 'notes' ? 'color-mix(in srgb, var(--accent) 15%, transparent)' : 'transparent',
+              color: activeTab === 'notes' ? 'var(--accent)' : 'var(--muted)',
+              flexShrink: 0,
+            }}
+          >
+            <StickyNote size={14} />
+            Quick Notes
+          </button>
+
+          <button
+            onClick={() => setActiveTab('renamer')}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px',
+              padding: '6px 12px',
+              borderRadius: '8px',
+              fontSize: '0.82rem',
+              fontWeight: 500,
+              cursor: 'pointer',
+              border: activeTab === 'renamer' ? '1px solid var(--accent)' : '1px solid transparent',
+              background: activeTab === 'renamer' ? 'color-mix(in srgb, var(--accent) 15%, transparent)' : 'transparent',
+              color: activeTab === 'renamer' ? 'var(--accent)' : 'var(--muted)',
+              flexShrink: 0,
+            }}
+          >
+            <Edit3 size={14} />
+            Batch Renamer
+          </button>
+
+          <button
+            onClick={() => setActiveTab('finder')}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px',
+              padding: '6px 12px',
+              borderRadius: '8px',
+              fontSize: '0.82rem',
+              fontWeight: 500,
+              cursor: 'pointer',
+              border: activeTab === 'finder' ? '1px solid var(--accent)' : '1px solid transparent',
+              background: activeTab === 'finder' ? 'color-mix(in srgb, var(--accent) 15%, transparent)' : 'transparent',
+              color: activeTab === 'finder' ? 'var(--accent)' : 'var(--muted)',
+              flexShrink: 0,
+            }}
+          >
+            <Search size={14} />
+            File Finder
+          </button>
+
+          <button
+            onClick={() => setActiveTab('workspaces')}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px',
+              padding: '6px 12px',
+              borderRadius: '8px',
+              fontSize: '0.82rem',
+              fontWeight: 500,
+              cursor: 'pointer',
+              border: activeTab === 'workspaces' ? '1px solid var(--accent)' : '1px solid transparent',
+              background: activeTab === 'workspaces' ? 'color-mix(in srgb, var(--accent) 15%, transparent)' : 'transparent',
+              color: activeTab === 'workspaces' ? 'var(--accent)' : 'var(--muted)',
+              flexShrink: 0,
+            }}
+          >
+            <Layers size={14} />
+            Workspaces
           </button>
 
           <button
@@ -318,18 +446,19 @@ export const QuickToolsModal: React.FC<QuickToolsModalProps> = ({ isOpen, onClos
               display: 'flex',
               alignItems: 'center',
               gap: '6px',
-              padding: '6px 14px',
+              padding: '6px 12px',
               borderRadius: '8px',
-              fontSize: '0.85rem',
+              fontSize: '0.82rem',
               fontWeight: 500,
               cursor: 'pointer',
               border: activeTab === 'clipboard' ? '1px solid var(--accent)' : '1px solid transparent',
               background: activeTab === 'clipboard' ? 'color-mix(in srgb, var(--accent) 15%, transparent)' : 'transparent',
               color: activeTab === 'clipboard' ? 'var(--accent)' : 'var(--muted)',
+              flexShrink: 0,
             }}
           >
-            <Clipboard size={15} />
-            Clipboard History
+            <Clipboard size={14} />
+            Clipboard
           </button>
 
           <button
@@ -338,18 +467,19 @@ export const QuickToolsModal: React.FC<QuickToolsModalProps> = ({ isOpen, onClos
               display: 'flex',
               alignItems: 'center',
               gap: '6px',
-              padding: '6px 14px',
+              padding: '6px 12px',
               borderRadius: '8px',
-              fontSize: '0.85rem',
+              fontSize: '0.82rem',
               fontWeight: 500,
               cursor: 'pointer',
               border: activeTab === 'snippets' ? '1px solid var(--accent)' : '1px solid transparent',
               background: activeTab === 'snippets' ? 'color-mix(in srgb, var(--accent) 15%, transparent)' : 'transparent',
               color: activeTab === 'snippets' ? 'var(--accent)' : 'var(--muted)',
+              flexShrink: 0,
             }}
           >
-            <FileCode size={15} />
-            Smart Snippets
+            <FileCode size={14} />
+            Snippets
           </button>
         </div>
 
@@ -981,6 +1111,21 @@ export const QuickToolsModal: React.FC<QuickToolsModalProps> = ({ isOpen, onClos
               </div>
             </div>
           )}
+
+          {/* TAB 3: WINDOW MANAGER */}
+          {activeTab === 'windows' && <WindowManagerTab />}
+
+          {/* TAB 4: QUICK NOTES */}
+          {activeTab === 'notes' && <QuickNotesTab />}
+
+          {/* TAB 5: BATCH RENAMER */}
+          {activeTab === 'renamer' && <BatchRenamerTab />}
+
+          {/* TAB 6: FILE FINDER */}
+          {activeTab === 'finder' && <FileFinderTab />}
+
+          {/* TAB 7: WORKSPACES */}
+          {activeTab === 'workspaces' && <WorkspacesTab />}
         </div>
       </div>
     </div>

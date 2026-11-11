@@ -692,6 +692,24 @@ export interface FridayApiBridge {
   quickToolsSaveSnippet: (snippet: Omit<TextSnippetItem, 'id' | 'createdAt' | 'updatedAt'> & { id?: string }) => Promise<TextSnippetItem>;
   quickToolsDeleteSnippet: (id: string) => Promise<boolean>;
   quickToolsExpandSnippet: (shortcutOrId: string, placeholders?: Record<string, string>) => Promise<{ success: boolean; expandedText: string }>;
+
+  // QuickTools Phase 2: Desktop Management
+  quickToolsListWindows: () => Promise<WindowInfo[]>;
+  quickToolsApplyWindowLayout: (action: WindowLayoutAction) => Promise<{ success: boolean; message: string }>;
+  quickToolsListNotes: (category?: string, query?: string) => Promise<QuickNoteItem[]>;
+  quickToolsSaveNote: (note: Omit<QuickNoteItem, 'id' | 'createdAt' | 'updatedAt'> & { id?: string }) => Promise<QuickNoteItem>;
+  quickToolsDeleteNote: (id: string) => Promise<boolean>;
+  quickToolsTogglePinNote: (id: string) => Promise<QuickNoteItem[]>;
+  quickToolsPreviewRename: (rule: BatchRenameRule) => Promise<BatchRenamePreview>;
+  quickToolsExecuteRename: (preview: BatchRenamePreview) => Promise<BatchRenameResult>;
+  quickToolsUndoRename: () => Promise<{ success: boolean; restoredCount: number; message: string }>;
+
+  // QuickTools Phase 3: File Intelligence
+  quickToolsSearchFiles: (criteria: FileSearchCriteria) => Promise<FileSearchResult>;
+  quickToolsListWorkspaces: () => Promise<WorkspaceConfig[]>;
+  quickToolsSaveWorkspace: (workspace: Omit<WorkspaceConfig, 'id' | 'createdAt'> & { id?: string }) => Promise<WorkspaceConfig>;
+  quickToolsLaunchWorkspace: (idOrName: string) => Promise<{ success: boolean; launchedCount: number; errors: string[] }>;
+  quickToolsDeleteWorkspace: (id: string) => Promise<boolean>;
 }
 
 export type WebsiteElementType =
@@ -832,6 +850,130 @@ export interface TextSnippetItem {
   tags: string[];
   createdAt: string;
   updatedAt: string;
+}
+
+// ==========================================
+// QUICKTOOLS PHASE 2 TYPES: DESKTOP MANAGEMENT
+// ==========================================
+
+export interface WindowInfo {
+  id: number;
+  processName: string;
+  title: string;
+  handle: number;
+}
+
+export interface WindowLayoutAction {
+  action: 'split_left' | 'split_right' | 'maximize' | 'minimize' | 'restore' | 'center' | 'split_top' | 'split_bottom' | 'grid_quad';
+  windowTarget?: string;
+  secondTarget?: string;
+  monitorIndex?: number;
+}
+
+export interface QuickNoteItem {
+  id: string;
+  title: string;
+  content: string;
+  category: 'Coding' | 'Work' | 'Personal' | 'Ideas' | 'Study' | 'General';
+  tags: string[];
+  isPinned: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface BatchRenameRule {
+  folderPath: string;
+  pattern?: string;
+  prefix?: string;
+  suffix?: string;
+  findText?: string;
+  replaceText?: string;
+  replaceWith?: string;
+  sequentialNumbering?: boolean;
+  addNumber?: boolean;
+  startNumber?: number;
+  numberPadding?: number;
+  datePrefix?: boolean;
+  addDate?: boolean;
+  changeCase?: 'lowercase' | 'uppercase' | 'titlecase' | 'none';
+}
+
+export interface RenameProposedItem {
+  originalName: string;
+  newName: string;
+  proposedName?: string;
+  sourcePath: string;
+  destinationPath: string;
+  collision: boolean;
+  status?: string;
+}
+
+export interface BatchRenamePreview {
+  folderPath: string;
+  items: RenameProposedItem[];
+  totalFiles: number;
+  conflictCount: number;
+}
+
+export interface BatchRenameResult {
+  batchId: string;
+  timestamp: string;
+  folderPath: string;
+  renamedCount: number;
+  successCount?: number;
+  failureCount: number;
+  skippedCount?: number;
+  items: Array<{ originalPath: string; newPath: string }>;
+  errors: Array<{ file: string; error: string }>;
+}
+
+// ==========================================
+// QUICKTOOLS PHASE 3 TYPES: FILE INTELLIGENCE
+// ==========================================
+
+export interface FileSearchCriteria {
+  query: string;
+  folderPath?: string;
+  extension?: string;
+  minSizeMb?: number;
+  maxSizeMb?: number;
+  modifiedWithinDays?: number;
+  searchContent?: boolean;
+}
+
+export interface FileSearchResultItem {
+  fileName: string;
+  filePath: string;
+  extension: string;
+  sizeBytes: number;
+  sizeFormatted: string;
+  modifiedAt: string;
+  previewSnippet?: string;
+}
+
+export interface FileSearchResult {
+  criteria: FileSearchCriteria;
+  results: FileSearchResultItem[];
+  totalMatches: number;
+  scannedCount: number;
+}
+
+export interface WorkspaceAppConfig {
+  appId: string;
+  name: string;
+  args?: string[];
+  launchDelayMs?: number;
+  layoutPosition?: 'left' | 'right' | 'maximize' | 'center' | 'normal';
+}
+
+export interface WorkspaceConfig {
+  id: string;
+  name: string;
+  description: string;
+  folderPath?: string;
+  apps: WorkspaceAppConfig[];
+  createdAt: string;
+  lastUsedAt?: string;
 }
 
 declare global {

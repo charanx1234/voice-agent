@@ -25,6 +25,11 @@ import { capabilityRegistry } from '../services/capabilities/capabilityRegistry'
 import { quickActionsService } from '../services/quicktools/quickActionsService';
 import { clipboardHistoryService } from '../services/quicktools/clipboardHistoryService';
 import { snippetsService } from '../services/quicktools/snippetsService';
+import { windowManagerService } from '../services/quicktools/windowManagerService';
+import { quickNotesService } from '../services/quicktools/quickNotesService';
+import { batchRenamerService } from '../services/quicktools/batchRenamerService';
+import { fileFinderService } from '../services/quicktools/fileFinderService';
+import { workspacesService } from '../services/quicktools/workspacesService';
 
 let handlersRegistered = false;
 let activeVoiceCoordinator: VoiceCoordinator | null = null;
@@ -926,6 +931,64 @@ export function registerIpcHandlers(
       return result;
     }
   );
+
+  // QuickTools Phase 2 IPC Handlers: Desktop Management
+  ipcMain.handle(IPC_CHANNELS.QUICKTOOLS_WINDOWS_LIST, async () => {
+    return windowManagerService.getOpenWindows();
+  });
+
+  ipcMain.handle(IPC_CHANNELS.QUICKTOOLS_WINDOWS_LAYOUT, async (_event, action: any) => {
+    return windowManagerService.arrangeWindow(action);
+  });
+
+  ipcMain.handle(IPC_CHANNELS.QUICKTOOLS_NOTES_LIST, async (_event, category?: string, query?: string) => {
+    return quickNotesService.getNotes(category, query);
+  });
+
+  ipcMain.handle(IPC_CHANNELS.QUICKTOOLS_NOTES_SAVE, async (_event, note: any) => {
+    return quickNotesService.saveNote(note);
+  });
+
+  ipcMain.handle(IPC_CHANNELS.QUICKTOOLS_NOTES_DELETE, async (_event, id: string) => {
+    return quickNotesService.deleteNote(id);
+  });
+
+  ipcMain.handle(IPC_CHANNELS.QUICKTOOLS_NOTES_PIN, async (_event, id: string) => {
+    return quickNotesService.togglePin(id);
+  });
+
+  ipcMain.handle(IPC_CHANNELS.QUICKTOOLS_RENAME_PREVIEW, async (_event, rule: any) => {
+    return batchRenamerService.generatePreview(rule);
+  });
+
+  ipcMain.handle(IPC_CHANNELS.QUICKTOOLS_RENAME_EXECUTE, async (_event, preview: any) => {
+    return batchRenamerService.executeRename(preview);
+  });
+
+  ipcMain.handle(IPC_CHANNELS.QUICKTOOLS_RENAME_UNDO, async () => {
+    return batchRenamerService.undoLastRename();
+  });
+
+  // QuickTools Phase 3 IPC Handlers: File Intelligence & Workspaces
+  ipcMain.handle(IPC_CHANNELS.QUICKTOOLS_FILES_SEARCH, async (_event, criteria: any) => {
+    return fileFinderService.searchFiles(criteria);
+  });
+
+  ipcMain.handle(IPC_CHANNELS.QUICKTOOLS_WORKSPACES_LIST, async () => {
+    return workspacesService.getWorkspaces();
+  });
+
+  ipcMain.handle(IPC_CHANNELS.QUICKTOOLS_WORKSPACES_SAVE, async (_event, workspace: any) => {
+    return workspacesService.saveWorkspace(workspace);
+  });
+
+  ipcMain.handle(IPC_CHANNELS.QUICKTOOLS_WORKSPACES_LAUNCH, async (_event, idOrName: string) => {
+    return workspacesService.launchWorkspace(idOrName);
+  });
+
+  ipcMain.handle(IPC_CHANNELS.QUICKTOOLS_WORKSPACES_DELETE, async (_event, id: string) => {
+    return workspacesService.deleteWorkspace(id);
+  });
 }
 
 /** Renderer file-opening is limited to files inside an approved project root. */

@@ -304,6 +304,11 @@ export class ToolRegistry {
           'find_duplicate_files',
           'manage_clipboard_history',
           'manage_text_snippets',
+          'arrange_windows',
+          'manage_quick_notes',
+          'batch_rename_files',
+          'search_files_nlp',
+          'manage_workspaces',
         ].includes(toolName)
       ) {
         return await executeQuickToolsAgent(toolName, args);

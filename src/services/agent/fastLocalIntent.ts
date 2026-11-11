@@ -8,6 +8,11 @@ import { weatherService } from '../weather/weatherService';
 import { quickActionsService } from '../quicktools/quickActionsService';
 import { clipboardHistoryService } from '../quicktools/clipboardHistoryService';
 import { snippetsService } from '../quicktools/snippetsService';
+import { windowManagerService } from '../quicktools/windowManagerService';
+import { quickNotesService } from '../quicktools/quickNotesService';
+import { batchRenamerService } from '../quicktools/batchRenamerService';
+import { fileFinderService } from '../quicktools/fileFinderService';
+import { workspacesService } from '../quicktools/workspacesService';
 import {
   sendMediaKeyEvent,
   executeMusicControlTool,
@@ -1125,6 +1130,275 @@ export class FastLocalIntentRouter {
             toolName: 'manage_text_snippets',
             args: { action: 'list' },
             result: { count: list.length },
+            status: 'completed',
+          },
+        ],
+        executionMs: Date.now() - start,
+      };
+    }
+
+    // --- QUICKTOOLS PHASE 2: WINDOW MANAGER, QUICK NOTES, BATCH RENAMER ---
+    // 5.4 Window Snapping & Arrangement
+    // Side by side: "put chrome on the left and vs code on the right" or "arrange chrome and notepad side by side"
+    const sideBySideMatch = lower.match(
+      /^(?:hey\s+)?(?:friday[\s,]+)?(?:put|snap|place|arrange)\s+(.+?)\s+on\s+the\s+left\s+and\s+(.+?)\s+on\s+the\s+right[?.!]?$/i
+    ) || lower.match(
+      /^(?:hey\s+)?(?:friday[\s,]+)?(?:arrange|put)\s+(.+?)\s+and\s+(.+?)\s+side\s+by\s+side[?.!]?$/i
+    );
+
+    if (sideBySideMatch) {
+      const app1 = sideBySideMatch[1].trim();
+      const app2 = sideBySideMatch[2].trim();
+      const layoutRes = await windowManagerService.arrangeWindow({
+        action: 'split_left',
+        windowTarget: app1,
+        secondTarget: app2,
+      });
+
+      return {
+        matched: true,
+        intent: 'quicktools',
+        response: layoutRes.message,
+        toolCalls: [
+          {
+            toolName: 'arrange_windows',
+            args: { action: 'side_by_side', windowTarget: app1, secondTarget: app2 },
+            result: layoutRes,
+            status: layoutRes.success ? 'completed' : 'failed',
+          },
+        ],
+        executionMs: Date.now() - start,
+      };
+    }
+
+    // Single snap: "snap to left", "put chrome on the left"
+    const snapLeftMatch = lower.match(
+      /^(?:hey\s+)?(?:friday[\s,]+)?(?:snap\s+(?:window\s+)?(?:to\s+(?:the\s+)?)?left|put\s+(.+?)\s+on\s+(?:the\s+)?left)[?.!]?$/i
+    );
+    if (snapLeftMatch) {
+      const target = snapLeftMatch[1]?.trim();
+      const layoutRes = await windowManagerService.arrangeWindow({
+        action: 'split_left',
+        windowTarget: target,
+      });
+
+      return {
+        matched: true,
+        intent: 'quicktools',
+        response: layoutRes.message,
+        toolCalls: [
+          {
+            toolName: 'arrange_windows',
+            args: { action: 'split_left', windowTarget: target },
+            result: layoutRes,
+            status: layoutRes.success ? 'completed' : 'failed',
+          },
+        ],
+        executionMs: Date.now() - start,
+      };
+    }
+
+    // Single snap: "snap to right", "put chrome on the right"
+    const snapRightMatch = lower.match(
+      /^(?:hey\s+)?(?:friday[\s,]+)?(?:snap\s+(?:window\s+)?(?:to\s+(?:the\s+)?)?right|put\s+(.+?)\s+on\s+(?:the\s+)?right)[?.!]?$/i
+    );
+    if (snapRightMatch) {
+      const target = snapRightMatch[1]?.trim();
+      const layoutRes = await windowManagerService.arrangeWindow({
+        action: 'split_right',
+        windowTarget: target,
+      });
+
+      return {
+        matched: true,
+        intent: 'quicktools',
+        response: layoutRes.message,
+        toolCalls: [
+          {
+            toolName: 'arrange_windows',
+            args: { action: 'split_right', windowTarget: target },
+            result: layoutRes,
+            status: layoutRes.success ? 'completed' : 'failed',
+          },
+        ],
+        executionMs: Date.now() - start,
+      };
+    }
+
+    // Center window
+    if (/^(?:hey\s+)?(?:friday[\s,]+)?(?:center\s+(?:the\s+)?window|center\s+screen)[?.!]?$/i.test(lower)) {
+      const layoutRes = await windowManagerService.arrangeWindow({ action: 'center' });
+      return {
+        matched: true,
+        intent: 'quicktools',
+        response: layoutRes.message,
+        toolCalls: [
+          {
+            toolName: 'arrange_windows',
+            args: { action: 'center' },
+            result: layoutRes,
+            status: layoutRes.success ? 'completed' : 'failed',
+          },
+        ],
+        executionMs: Date.now() - start,
+      };
+    }
+
+    // 5.5 Quick Notes
+    // Save note: "remember this note: ...", "take a note: ...", "save note: ..."
+    const noteSaveMatch = lower.match(
+      /^(?:hey\s+)?(?:friday[\s,]+)?(?:remember\s+this\s+note|take\s+a\s+note|save\s+note|save\s+this\s+note)[:\s]+(.+)$/i
+    );
+    if (noteSaveMatch) {
+      const noteContent = noteSaveMatch[1].trim();
+      const saved = quickNotesService.saveNote({
+        title: noteContent.length > 30 ? noteContent.slice(0, 30) + '...' : noteContent,
+        content: noteContent,
+        category: 'General',
+        tags: [],
+        isPinned: false,
+      });
+
+      return {
+        matched: true,
+        intent: 'quicktools',
+        response: `Saved note: "${saved.title}".`,
+        toolCalls: [
+          {
+            toolName: 'manage_quick_notes',
+            args: { action: 'create', content: noteContent },
+            result: saved,
+            status: 'completed',
+          },
+        ],
+        executionMs: Date.now() - start,
+      };
+    }
+
+    // Save idea: "save this as an idea: ..." or "save this idea: ..."
+    const ideaSaveMatch = lower.match(
+      /^(?:hey\s+)?(?:friday[\s,]+)?(?:save\s+this\s+as\s+an?\s+idea|save\s+this\s+idea)[:\s]+(.+)$/i
+    );
+    if (ideaSaveMatch) {
+      const ideaContent = ideaSaveMatch[1].trim();
+      const saved = quickNotesService.saveNote({
+        title: ideaContent.length > 30 ? ideaContent.slice(0, 30) + '...' : ideaContent,
+        content: ideaContent,
+        category: 'Ideas',
+        tags: ['idea'],
+        isPinned: false,
+      });
+
+      return {
+        matched: true,
+        intent: 'quicktools',
+        response: `Captured idea: "${saved.title}".`,
+        toolCalls: [
+          {
+            toolName: 'manage_quick_notes',
+            args: { action: 'create', content: ideaContent, category: 'Ideas' },
+            result: saved,
+            status: 'completed',
+          },
+        ],
+        executionMs: Date.now() - start,
+      };
+    }
+
+    // Show notes: "show my notes", "list notes"
+    if (/^(?:hey\s+)?(?:friday[\s,]+)?(?:show\s+(?:my\s+)?notes|list\s+(?:my\s+)?notes)[?.!]?$/i.test(lower)) {
+      const notes = quickNotesService.getNotes();
+      const topTitles = notes.slice(0, 3).map((n) => `"${n.title}"`).join(', ');
+      return {
+        matched: true,
+        intent: 'quicktools',
+        response: notes.length > 0
+          ? `You have ${notes.length} note(s). Recent: ${topTitles}.`
+          : 'You do not have any notes saved yet.',
+        toolCalls: [
+          {
+            toolName: 'manage_quick_notes',
+            args: { action: 'list' },
+            result: { count: notes.length },
+            status: 'completed',
+          },
+        ],
+        executionMs: Date.now() - start,
+      };
+    }
+
+    // --- QUICKTOOLS PHASE 3: WORKSPACES & FILE INTELLIGENCE ---
+    // Launch workspaces: "start coding mode", "launch study workspace", "open focus mode"
+    const wsLaunchMatch = lower.match(
+      /^(?:hey\s+)?(?:friday[\s,]+)?(?:start|launch|open)\s+(coding\s+mode|study\s+workspace|focus\s+mode)[?.!]?$/i
+    );
+    if (wsLaunchMatch) {
+      const wsName = wsLaunchMatch[1].trim();
+      const launchRes = await workspacesService.launchWorkspace(wsName);
+
+      return {
+        matched: true,
+        intent: 'quicktools',
+        response: launchRes.success
+          ? `Launched ${wsName} with ${launchRes.launchedCount} application(s).`
+          : `Could not launch workspace "${wsName}".`,
+        toolCalls: [
+          {
+            toolName: 'manage_workspaces',
+            args: { action: 'launch', idOrName: wsName },
+            result: launchRes,
+            status: launchRes.success ? 'completed' : 'failed',
+          },
+        ],
+        executionMs: Date.now() - start,
+      };
+    }
+
+    // List workspaces
+    if (/^(?:hey\s+)?(?:friday[\s,]+)?(?:show\s+(?:my\s+)?workspaces|list\s+workspaces)[?.!]?$/i.test(lower)) {
+      const list = workspacesService.getWorkspaces();
+      const names = list.map((w) => w.name).join(', ');
+      return {
+        matched: true,
+        intent: 'quicktools',
+        response: `Available workspaces: ${names}.`,
+        toolCalls: [
+          {
+            toolName: 'manage_workspaces',
+            args: { action: 'list' },
+            result: { count: list.length },
+            status: 'completed',
+          },
+        ],
+        executionMs: Date.now() - start,
+      };
+    }
+
+    // Find files: "find my latest pdf", "find pdf files"
+    const findFilesMatch = lower.match(
+      /^(?:hey\s+)?(?:friday[\s,]+)?(?:find|search\s+for)\s+(?:my\s+)?(?:latest\s+)?([a-z0-9_-]+)\s+files?[?.!]?$/i
+    );
+    if (findFilesMatch) {
+      const queryOrExt = findFilesMatch[1].trim();
+      const isExt = ['pdf', 'png', 'jpg', 'doc', 'docx', 'txt', 'csv', 'zip'].includes(queryOrExt.toLowerCase());
+      const searchRes = fileFinderService.searchFiles({
+        query: isExt ? '' : queryOrExt,
+        extension: isExt ? queryOrExt : undefined,
+        modifiedWithinDays: 30,
+      });
+
+      const topNames = searchRes.results.slice(0, 3).map((r) => r.fileName).join(', ');
+      return {
+        matched: true,
+        intent: 'quicktools',
+        response: searchRes.totalMatches > 0
+          ? `Found ${searchRes.totalMatches} file(s) matching "${queryOrExt}": ${topNames}.`
+          : `No recent files found matching "${queryOrExt}".`,
+        toolCalls: [
+          {
+            toolName: 'search_files_nlp',
+            args: { query: queryOrExt },
+            result: { totalMatches: searchRes.totalMatches },
             status: 'completed',
           },
         ],

@@ -114,6 +114,24 @@ export const IPC_CHANNELS = {
   QUICKTOOLS_SNIPPETS_SAVE: 'friday:quicktools-snippets-save',
   QUICKTOOLS_SNIPPETS_DELETE: 'friday:quicktools-snippets-delete',
   QUICKTOOLS_SNIPPETS_EXPAND: 'friday:quicktools-snippets-expand',
+
+  // QuickTools Phase 2: Desktop Management
+  QUICKTOOLS_WINDOWS_LIST: 'friday:quicktools-windows-list',
+  QUICKTOOLS_WINDOWS_LAYOUT: 'friday:quicktools-windows-layout',
+  QUICKTOOLS_NOTES_LIST: 'friday:quicktools-notes-list',
+  QUICKTOOLS_NOTES_SAVE: 'friday:quicktools-notes-save',
+  QUICKTOOLS_NOTES_DELETE: 'friday:quicktools-notes-delete',
+  QUICKTOOLS_NOTES_PIN: 'friday:quicktools-notes-pin',
+  QUICKTOOLS_RENAME_PREVIEW: 'friday:quicktools-rename-preview',
+  QUICKTOOLS_RENAME_EXECUTE: 'friday:quicktools-rename-execute',
+  QUICKTOOLS_RENAME_UNDO: 'friday:quicktools-rename-undo',
+
+  // QuickTools Phase 3: File Intelligence & Workspaces
+  QUICKTOOLS_FILES_SEARCH: 'friday:quicktools-files-search',
+  QUICKTOOLS_WORKSPACES_LIST: 'friday:quicktools-workspaces-list',
+  QUICKTOOLS_WORKSPACES_SAVE: 'friday:quicktools-workspaces-save',
+  QUICKTOOLS_WORKSPACES_LAUNCH: 'friday:quicktools-workspaces-launch',
+  QUICKTOOLS_WORKSPACES_DELETE: 'friday:quicktools-workspaces-delete',
 } as const;
 
 export function sanitizePath(inputPath: string): string {
