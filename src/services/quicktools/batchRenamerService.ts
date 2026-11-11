@@ -33,12 +33,19 @@ export class BatchRenamerService {
   }
 
   public generatePreview(rule: BatchRenameRule): BatchRenamePreview {
-    if (!fs.existsSync(rule.folderPath)) {
-      throw new Error(`Directory "${rule.folderPath}" does not exist.`);
+    let folder = rule.folderPath;
+    if (folder.toLowerCase() === 'desktop') {
+      folder = path.join(os.homedir(), 'Desktop');
+    } else if (folder.toLowerCase() === 'downloads') {
+      folder = path.join(os.homedir(), 'Downloads');
+    }
+
+    if (!fs.existsSync(folder)) {
+      throw new Error(`Directory "${folder}" does not exist.`);
     }
 
     const items: RenameProposedItem[] = [];
-    const entries = fs.readdirSync(rule.folderPath, { withFileTypes: true });
+    const entries = fs.readdirSync(folder, { withFileTypes: true });
 
     // Filter files
     let fileEntries = entries.filter((e) => e.isFile());
@@ -96,8 +103,8 @@ export class BatchRenamerService {
       }
 
       let newFileName = `${base}${ext}`;
-      let sourcePath = path.join(rule.folderPath, entry.name);
-      let destinationPath = path.join(rule.folderPath, newFileName);
+      let sourcePath = path.join(folder, entry.name);
+      let destinationPath = path.join(folder, newFileName);
 
       // Check collision
       let collision = false;

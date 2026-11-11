@@ -131,42 +131,6 @@ export const quickToolsDefinitions = [
     },
   },
   {
-    name: 'manage_quick_notes',
-    description:
-      'Fast note-taking and idea capture with search, categories, and pinning. Never exposes private notes externally.',
-    parameters: {
-      type: 'OBJECT',
-      properties: {
-        action: {
-          type: 'STRING',
-          enum: ['list', 'search', 'create', 'delete', 'pin'],
-          description: 'Action to perform on quick notes.',
-        },
-        title: {
-          type: 'STRING',
-          description: 'Title of the note.',
-        },
-        content: {
-          type: 'STRING',
-          description: 'Content of the note.',
-        },
-        category: {
-          type: 'STRING',
-          description: 'Category (General, Ideas, Work, Todo).',
-        },
-        query: {
-          type: 'STRING',
-          description: 'Search string for searching notes.',
-        },
-        id: {
-          type: 'STRING',
-          description: 'ID of the note to pin or delete.',
-        },
-      },
-      required: ['action'],
-    },
-  },
-  {
     name: 'batch_rename_files',
     description:
       'Safely previews, renames, or undoes batch file renaming with sequential numbering, prefixes/suffixes, and search/replace in a folder.',
@@ -205,57 +169,6 @@ export const quickToolsDefinitions = [
         pattern: {
           type: 'STRING',
           description: 'Optional file extension filter (e.g. ".jpg", ".png").',
-        },
-      },
-      required: ['action'],
-    },
-  },
-  {
-    name: 'search_files_nlp',
-    description:
-      'Locates files on the system matching criteria such as file name query, file extension, modified recency, or text content preview.',
-    parameters: {
-      type: 'OBJECT',
-      properties: {
-        query: {
-          type: 'STRING',
-          description: 'Keyword to search in filename or file text.',
-        },
-        folderPath: {
-          type: 'STRING',
-          description: 'Root folder to search within (defaults to user home directory).',
-        },
-        extension: {
-          type: 'STRING',
-          description: 'File extension filter (e.g. "pdf", "docx", "ts", "png").',
-        },
-        searchContent: {
-          type: 'BOOLEAN',
-          description: 'Whether to search within readable text/code files.',
-        },
-        modifiedWithinDays: {
-          type: 'NUMBER',
-          description: 'Only return files modified within this many days.',
-        },
-      },
-      required: ['query'],
-    },
-  },
-  {
-    name: 'manage_workspaces',
-    description:
-      'Creates, lists, or launches multi-application desktop workspaces (e.g. Coding Mode, Study Workspace, Focus Mode) with automatic window positioning.',
-    parameters: {
-      type: 'OBJECT',
-      properties: {
-        action: {
-          type: 'STRING',
-          enum: ['list', 'launch', 'create', 'delete'],
-          description: 'Action to perform on workspaces.',
-        },
-        idOrName: {
-          type: 'STRING',
-          description: 'ID or Name of the workspace to launch or manage (e.g. "Coding Mode", "ws_coding").',
         },
       },
       required: ['action'],

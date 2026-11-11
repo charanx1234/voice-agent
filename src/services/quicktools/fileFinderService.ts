@@ -42,11 +42,7 @@ const TEXT_SEARCH_EXTS = new Set([
 ]);
 
 export class FileFinderService {
-  public searchFiles(criteria: FileSearchCriteria, maxResults = 40): FileSearchResult {
-    const rootDir = criteria.folderPath && fs.existsSync(criteria.folderPath)
-      ? criteria.folderPath
-      : os.homedir();
-
+  public searchFiles(criteria: FileSearchCriteria, maxResults = 30): FileSearchResult {
     const results: FileSearchResultItem[] = [];
     let scannedCount = 0;
     const queryLower = (criteria.query || '').toLowerCase().trim();
@@ -61,52 +57,69 @@ export class FileFinderService {
     const minBytes = criteria.minSizeMb ? criteria.minSizeMb * 1024 * 1024 : 0;
     const maxBytes = criteria.maxSizeMb ? criteria.maxSizeMb * 1024 * 1024 : Infinity;
 
+    // Search targets: specific folder or user standard work folders
+    const targetDirs: string[] = [];
+    if (criteria.folderPath && fs.existsSync(criteria.folderPath)) {
+      targetDirs.push(criteria.folderPath);
+    } else {
+      const desktop = path.join(os.homedir(), 'Desktop');
+      const downloads = path.join(os.homedir(), 'Downloads');
+      const docs = path.join(os.homedir(), 'Documents');
+      if (fs.existsSync(desktop)) targetDirs.push(desktop);
+      if (fs.existsSync(downloads)) targetDirs.push(downloads);
+      if (fs.existsSync(docs)) targetDirs.push(docs);
+    }
+
     const traverse = (dir: string, depth = 0) => {
-      if (depth > 3 || results.length >= maxResults) return;
+      // Limit depth to 2 and max scanned items to 300 to ensure fast sub-50ms execution
+      if (depth > 2 || results.length >= maxResults || scannedCount >= 300) return;
 
       try {
         const entries = fs.readdirSync(dir, { withFileTypes: true });
 
         for (const entry of entries) {
-          if (results.length >= maxResults) break;
-
-          const baseNameLower = entry.name.toLowerCase();
-          if (IGNORED_DIRS.has(baseNameLower)) continue;
-          if (baseNameLower.startsWith('.')) continue;
+          if (results.length >= maxResults || scannedCount >= 300) break;
+          scannedCount++;
 
           const fullPath = path.join(dir, entry.name);
+          const nameLower = entry.name.toLowerCase();
 
           if (entry.isDirectory()) {
-            traverse(fullPath, depth + 1);
+            if (!IGNORED_DIRS.has(nameLower) && !entry.name.startsWith('.')) {
+              traverse(fullPath, depth + 1);
+            }
           } else if (entry.isFile()) {
-            scannedCount++;
-
             const ext = path.extname(entry.name).toLowerCase();
+
+            // Filter extension
             if (extFilter && ext !== extFilter) continue;
 
             try {
               const stats = fs.statSync(fullPath);
 
+              // Filter size
               if (stats.size < minBytes || stats.size > maxBytes) continue;
+
+              // Filter modified date
               if (cutoffDate && stats.mtime < cutoffDate) continue;
 
               let matches = false;
-              let snippet: string | undefined;
+              let snippet: string | undefined = undefined;
 
-              // Filename match
-              if (!queryLower || baseNameLower.includes(queryLower)) {
+              // Match by name
+              if (!queryLower || nameLower.includes(queryLower)) {
                 matches = true;
               }
 
-              // Content search if requested and file is a supported text type
-              if (!matches && criteria.searchContent && TEXT_SEARCH_EXTS.has(ext) && stats.size <= 2 * 1024 * 1024) {
+              // Optional search in content for text files
+              if (criteria.searchContent && queryLower && !matches && TEXT_SEARCH_EXTS.has(ext)) {
                 try {
                   const content = fs.readFileSync(fullPath, 'utf8');
                   const idx = content.toLowerCase().indexOf(queryLower);
-                  if (idx >= 0) {
+                  if (idx !== -1) {
                     matches = true;
                     const start = Math.max(0, idx - 30);
-                    const end = Math.min(content.length, idx + queryLower.length + 50);
+                    const end = Math.min(content.length, idx + queryLower.length + 30);
                     snippet = `...${content.slice(start, end).replace(/[\r\n]+/g, ' ')}...`;
                   }
                 } catch {}
@@ -129,7 +142,9 @@ export class FileFinderService {
       } catch {}
     };
 
-    traverse(rootDir);
+    for (const d of targetDirs) {
+      traverse(d);
+    }
 
     return {
       criteria,

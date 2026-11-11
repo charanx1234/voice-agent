@@ -82,7 +82,11 @@ export function extractMultilingualLaunchApp(text: string): string | null {
     let candidate = enMatch[1].replace(/^the\s+/i, '').replace(/\s+(?:application|app)$/i, '').trim();
     candidate = candidate.replace(/\s+(?:is|there)?\s*(?:on\s+(?:my\s+)?(?:desktop|pc|computer))(?:\s*,\s*check(?:\s+once)?)?$/i, '').trim();
     candidate = candidate.replace(/\s+(?:is|there)$/i, '').trim();
-    if (candidate && !/\b(weather|news|meaning|definition)\b/i.test(candidate)) {
+    if (
+      candidate &&
+      !/\b(weather|news|meaning|definition)\b/i.test(candidate) &&
+      !/\b(coding\s+mode|study\s+workspace|focus\s+mode|\w+\s+workspace|\w+\s+mode)\b/i.test(candidate)
+    ) {
       return candidate;
     }
   }
@@ -747,7 +751,75 @@ export class FastLocalIntentRouter {
       };
     }
 
-    // 5c. Real Windows Mouse & Cursor Controls
+    // 5c. High-Frequency App Launch (Multilingual: English, Telugu, Hinglish) - <15ms routing
+    const launchAppQuery = extractMultilingualLaunchApp(clean);
+    if (launchAppQuery) {
+      const appName = displayNameForAppQuery(launchAppQuery);
+      const launchResult = await toolRegistry.executeTool('launch_allowed_app', { appId: launchAppQuery });
+
+      if (launchResult?.success) {
+        let response = `Opening ${appName}.`;
+        if (isTelugu) response = `${appName} open chestunna.`;
+        else if (isHindi) response = `${appName} open kar raha hoon.`;
+
+        return {
+          matched: true,
+          intent: 'launch_app',
+          response,
+          toolCalls: [
+            {
+              toolName: 'launch_allowed_app',
+              args: { appId: launchAppQuery },
+              result: launchResult,
+              status: 'completed',
+            },
+          ],
+          executionMs: Date.now() - start,
+        };
+      } else {
+        return {
+          matched: true,
+          intent: 'launch_app',
+          response: launchResult?.error || `I couldn't find ${appName} on your computer.`,
+          toolCalls: [
+            {
+              toolName: 'launch_allowed_app',
+              args: { appId: launchAppQuery },
+              result: launchResult,
+              status: 'failed',
+            },
+          ],
+          executionMs: Date.now() - start,
+        };
+      }
+    }
+
+    // 5d. High-Frequency App Close (Multilingual: English, Telugu, Hinglish)
+    const closeAppQuery = extractMultilingualCloseApp(clean);
+    if (closeAppQuery) {
+      const closeResult = await desktopControlService.closeWindow(closeAppQuery);
+      if (closeResult.success) {
+        let response = `Closed ${closeAppQuery}.`;
+        if (isTelugu) response = `${closeAppQuery} close chesa.`;
+        else if (isHindi) response = `${closeAppQuery} band kar diya.`;
+
+        return {
+          matched: true,
+          intent: 'close_app',
+          response,
+          executionMs: Date.now() - start,
+        };
+      } else {
+        return {
+          matched: true,
+          intent: 'close_app',
+          response: `Could not find an open window for ${closeAppQuery}.`,
+          executionMs: Date.now() - start,
+        };
+      }
+    }
+
+    // 5e. Real Windows Mouse & Cursor Controls
     // Move mouse to screen corner or center e.g. "move the mouse to the top-right corner"
     const mouseCornerMatch = lower.match(
       /^(?:hey\s+)?(?:friday[\s,]+)?(?:please\s+)?move\s+(?:the\s+)?(?:mouse|cursor)\s+to\s+(?:the\s+)?(top-left|top-right|bottom-left|bottom-right|top\s+left|top\s+right|bottom\s+left|bottom\s+right|center)(?:\s+corner|\s+of\s+(?:the\s+)?screen)?[?.!]?$/i
@@ -1406,25 +1478,13 @@ export class FastLocalIntentRouter {
       };
     }
 
-    // 6. Window controls (Minimize / Maximize)
+    // 6. Window controls (Minimize / Maximize) - fast native user32 execution
     if (
       /^(?:hey\s+)?(?:friday[\s,]+)?(?:minimize\s+window|minimize|screen\s+thagginchu|minimize\s+chey)[?.!]?$/i.test(
         lower
       )
     ) {
-      const psMinimize = `
-Add-Type -TypeDefinition @"
-  using System;
-  using System.Runtime.InteropServices;
-  public class WinMin {
-    [DllImport("user32.dll")] public static extern IntPtr GetForegroundWindow();
-    [DllImport("user32.dll")] public static extern bool ShowWindowAsync(IntPtr hWnd, int nCmdShow);
-  }
-"@ -ErrorAction SilentlyContinue
-[WinMin]::ShowWindowAsync([WinMin]::GetForegroundWindow(), 6)
-"OK"
-`;
-      await runFastPowerShell(psMinimize);
+      await windowManagerService.applyWindowCommand(0, 'minimize');
       let response = 'Window minimized.';
       if (isTelugu) response = 'Window minimize chesa.';
       else if (isHindi) response = 'Window minimize kar diya.';
@@ -1442,19 +1502,7 @@ Add-Type -TypeDefinition @"
         lower
       )
     ) {
-      const psMaximize = `
-Add-Type -TypeDefinition @"
-  using System;
-  using System.Runtime.InteropServices;
-  public class WinMax {
-    [DllImport("user32.dll")] public static extern IntPtr GetForegroundWindow();
-    [DllImport("user32.dll")] public static extern bool ShowWindowAsync(IntPtr hWnd, int nCmdShow);
-  }
-"@ -ErrorAction SilentlyContinue
-[WinMax]::ShowWindowAsync([WinMax]::GetForegroundWindow(), 3)
-"OK"
-`;
-      await runFastPowerShell(psMaximize);
+      await windowManagerService.applyWindowCommand(0, 'maximize');
       let response = 'Window maximized.';
       if (isTelugu) response = 'Window maximize chesa.';
       else if (isHindi) response = 'Window maximize kar diya.';
@@ -1465,74 +1513,6 @@ Add-Type -TypeDefinition @"
         response,
         executionMs: Date.now() - start,
       };
-    }
-
-    // 7. App Launch (Multilingual: English, Telugu, Hinglish)
-    const launchAppQuery = extractMultilingualLaunchApp(clean);
-    if (launchAppQuery) {
-      const appName = displayNameForAppQuery(launchAppQuery);
-      const launchResult = await toolRegistry.executeTool('launch_allowed_app', { appId: launchAppQuery });
-
-      if (launchResult?.success) {
-        let response = `Opening ${appName}.`;
-        if (isTelugu) response = `${appName} open chestunna.`;
-        else if (isHindi) response = `${appName} open kar raha hoon.`;
-
-        return {
-          matched: true,
-          intent: 'launch_app',
-          response,
-          toolCalls: [
-            {
-              toolName: 'launch_allowed_app',
-              args: { appId: launchAppQuery },
-              result: launchResult,
-              status: 'completed',
-            },
-          ],
-          executionMs: Date.now() - start,
-        };
-      } else {
-        return {
-          matched: true,
-          intent: 'launch_app',
-          response: launchResult?.error || `I couldn't find ${appName} on your computer.`,
-          toolCalls: [
-            {
-              toolName: 'launch_allowed_app',
-              args: { appId: launchAppQuery },
-              result: launchResult,
-              status: 'failed',
-            },
-          ],
-          executionMs: Date.now() - start,
-        };
-      }
-    }
-
-    // 8. App Close (Multilingual: English, Telugu, Hinglish)
-    const closeAppQuery = extractMultilingualCloseApp(clean);
-    if (closeAppQuery) {
-      const closeResult = await desktopControlService.closeWindow(closeAppQuery);
-      if (closeResult.success) {
-        let response = `Closed ${closeAppQuery}.`;
-        if (isTelugu) response = `${closeAppQuery} close chesa.`;
-        else if (isHindi) response = `${closeAppQuery} band kar diya.`;
-
-        return {
-          matched: true,
-          intent: 'close_app',
-          response,
-          executionMs: Date.now() - start,
-        };
-      } else {
-        return {
-          matched: true,
-          intent: 'close_app',
-          response: `Could not find an open window for ${closeAppQuery}.`,
-          executionMs: Date.now() - start,
-        };
-      }
     }
 
     return null;

@@ -52,13 +52,38 @@ export class NotesStore {
     }
   }
 
-  public listNotes(): NoteItem[] {
-    return [...this.notes].sort(
-      (a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()
-    );
+  public listNotes(category?: string, query?: string): NoteItem[] {
+    let result = [...this.notes];
+
+    if (category && category !== 'All') {
+      const catLower = category.toLowerCase();
+      result = result.filter((n) => (n.category || 'General').toLowerCase() === catLower);
+    }
+
+    if (query && query.trim()) {
+      const q = query.toLowerCase().trim();
+      result = result.filter(
+        (n) =>
+          n.title.toLowerCase().includes(q) ||
+          n.content.toLowerCase().includes(q) ||
+          (n.tags && n.tags.some((t) => t.toLowerCase().includes(q)))
+      );
+    }
+
+    return result.sort((a, b) => {
+      if (a.isPinned && !b.isPinned) return -1;
+      if (!a.isPinned && b.isPinned) return 1;
+      return new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime();
+    });
   }
 
-  public saveNote(title: string, content: string): NoteItem {
+  public saveNote(
+    title: string,
+    content: string,
+    category = 'General',
+    tags: string[] = [],
+    isPinned = false
+  ): NoteItem {
     const cleanTitle = (title || 'Untitled Note').trim().replace(/[\\/:*?"<>|]/g, '_');
     const now = new Date().toISOString();
     
@@ -73,6 +98,9 @@ export class NotesStore {
       note = {
         ...this.notes[existingIndex],
         content,
+        category: category || this.notes[existingIndex].category || 'General',
+        tags: tags.length > 0 ? tags : (this.notes[existingIndex].tags || []),
+        isPinned: isPinned !== undefined ? isPinned : (this.notes[existingIndex].isPinned || false),
         updatedAt: now,
       };
       this.notes[existingIndex] = note;
@@ -82,6 +110,9 @@ export class NotesStore {
         id,
         title: cleanTitle,
         content,
+        category: category || 'General',
+        tags: tags || [],
+        isPinned: Boolean(isPinned),
         createdAt: now,
         updatedAt: now,
       };
@@ -98,6 +129,16 @@ export class NotesStore {
 
     this.persistIndex();
     return note;
+  }
+
+  public togglePin(id: string): NoteItem[] {
+    const note = this.notes.find((n) => n.id === id);
+    if (note) {
+      note.isPinned = !note.isPinned;
+      note.updatedAt = new Date().toISOString();
+      this.persistIndex();
+    }
+    return this.listNotes();
   }
 
   public searchNotes(query: string): NoteItem[] {

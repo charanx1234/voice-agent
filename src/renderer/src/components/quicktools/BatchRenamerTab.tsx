@@ -20,11 +20,7 @@ export const BatchRenamerTab: React.FC = () => {
 
   const getFolderPath = async (): Promise<string> => {
     if (folderType === 'custom' && customPath.trim()) return customPath.trim();
-    if (!window.fridayAPI) return '';
-    const p = folderType === 'downloads'
-      ? (await window.fridayAPI.quickToolsGetDownloadsPreview()).targetFolder
-      : (await window.fridayAPI.quickToolsGetDesktopPreview()).targetFolder;
-    return p;
+    return folderType; // 'desktop' or 'downloads' alias resolved directly in backend
   };
 
   const handleGeneratePreview = async () => {
