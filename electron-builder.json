@@ -10,6 +10,7 @@
     "dist-electron/**/*",
     "dist-renderer/**/*",
     "src/services/voiceflow/voiceflowEngine.py",
+    "src/services/typeflow/typeflowBackend.py",
     "package.json"
   ],
   "win": {

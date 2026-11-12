@@ -235,10 +235,17 @@ export class TypeFlowService extends EventEmitter implements ITypingEngine {
     });
   }
 
-  public async getTargetWindow(): Promise<TargetWindowInfo> {
+  public async getTargetWindow(targetHint?: string): Promise<TargetWindowInfo> {
     await this.initialize();
-    const res = await this.sendCommand('get_target');
+    const res = await this.sendCommand('get_target', { target_hint: targetHint });
     return res.target || { hwnd: 0, title: '', process: 'unknown' };
+  }
+
+  public async activateTarget(hwnd: number): Promise<boolean> {
+    if (!hwnd) return false;
+    await this.initialize();
+    const res = await this.sendCommand('activate_target', { hwnd });
+    return Boolean(res.activated);
   }
 
   public async validateTarget(target?: TargetWindowInfo): Promise<{ valid: boolean; reason?: string }> {
@@ -296,7 +303,7 @@ export class TypeFlowService extends EventEmitter implements ITypingEngine {
 
     await this.initialize();
 
-    const target = await this.getTargetWindow();
+    const target = await this.getTargetWindow(config.targetApp);
     const validation = await this.validateTarget(target);
     if (!validation.valid) {
       throw new Error(`Target validation failed: ${validation.reason}`);
@@ -307,8 +314,13 @@ export class TypeFlowService extends EventEmitter implements ITypingEngine {
     this.currentStatus = 'typing';
     this.progressCallback = onProgress || null;
 
-    const delayMs = config.charDelayMs ?? 25;
+    const delayMs = config.charDelayMs ?? (config.speedWpm ? Math.round(12000 / config.speedWpm) : 25);
     const autoValidate = config.autoValidateTarget !== false;
+
+    // Activate target window explicitly before typing
+    if (target.hwnd) {
+      await this.activateTarget(target.hwnd);
+    }
 
     const startRes = await this.sendCommand('start_typing', {
       session_id: sessionId,

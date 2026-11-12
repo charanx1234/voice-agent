@@ -1,9 +1,11 @@
 # typeflowBackend.py — Python backend service for FRIDAY TypeFlow
 # Provides:
-# 1. UIAutomation selected text extraction (non-invasive, TextPattern/TextPattern2)
-# 2. Native Win32 SendInput typing with pause/resume/cancel and progress callback
-# 3. Target window identification and focus verification
-# 4. Safe clipboard-based fallback for applications without accessibility support
+# 1. Desktop-aware target window detection with SetThreadDesktop (handles background/agent sessions)
+# 2. UIAutomation selected text extraction (non-invasive, TextPattern/TextPattern2)
+# 3. Robust Window activation & Focus Management (AttachThreadInput + ShowWindow + SetForegroundWindow)
+# 4. Universal Win32 SendInput typing with pause/resume/cancel, chunking, and progress reporting
+# 5. Hybrid pasting & typing: Fast SendInput character-by-character + atomic clipboard paste fallback for long text
+# 6. Safety checks for password fields and exam lockdown environments
 
 import sys
 import os
@@ -33,16 +35,16 @@ try:
 except ImportError:
     UIA_AVAILABLE = False
 
-# Win32 SendInput constants & structures
 user32 = ctypes.windll.user32 if hasattr(ctypes, 'windll') else None
+kernel32 = ctypes.windll.kernel32 if hasattr(ctypes, 'windll') else None
 
 KEYEVENTF_KEYUP = 0x0002
 KEYEVENTF_UNICODE = 0x0004
 INPUT_KEYBOARD = 1
 VK_RETURN = 0x0D
 VK_TAB = 0x09
-VK_BACK = 0x08
-VK_ESCAPE = 0x1B
+VK_CONTROL = 0x11
+VK_V = 0x56
 
 class KEYBDINPUT(ctypes.Structure):
     _fields_ = [
@@ -84,48 +86,174 @@ def send_response(obj):
     sys.stdout.write(json.dumps(obj) + "\n")
     sys.stdout.flush()
 
+def ensure_input_desktop():
+    """Switches current thread to the active user input desktop if running in background."""
+    if not user32:
+        return None
+    try:
+        hdesk = user32.OpenInputDesktop(0, False, 0x01FF)
+        if hdesk:
+            user32.SetThreadDesktop(hdesk)
+            return hdesk
+    except Exception as e:
+        log(f"Warning OpenInputDesktop: {e}")
+    return None
+
+def close_input_desktop(hdesk):
+    if hdesk and user32:
+        try:
+            user32.CloseDesktop(hdesk)
+        except Exception:
+            pass
+
 def is_terminal_process(name):
     if not name:
         return False
     lower = name.lower()
     return any(t in lower for t in ['cmd', 'powershell', 'pwsh', 'terminal', 'wt', 'conhost', 'alacritty', 'wezterm'])
 
-def get_foreground_info():
-    if not WIN32_AVAILABLE:
+def get_foreground_info(target_hint=None):
+    """
+    Identifies the active or intended target window.
+    If target_hint is specified (e.g. 'notepad', 'code', 'chrome'), locates and verifies that window.
+    """
+    if not WIN32_AVAILABLE or not user32:
         return {"hwnd": 0, "title": "", "process": "unknown", "isPassword": False, "isTerminal": False}
     
-    hwnd = win32gui.GetForegroundWindow()
-    if not hwnd or not win32gui.IsWindow(hwnd):
-        return {"hwnd": 0, "title": "", "process": "unknown", "isPassword": False, "isTerminal": False}
-    
-    title = win32gui.GetWindowText(hwnd)
-    _, pid = win32process.GetWindowThreadProcessId(hwnd)
-    proc_name = "unknown"
+    hdesk = ensure_input_desktop()
     try:
-        proc_name = psutil.Process(pid).name()
-    except Exception:
-        pass
-    
-    is_terminal = is_terminal_process(proc_name)
-    is_password = False
-    try:
-        style = win32gui.GetWindowLong(hwnd, win32con.GWL_STYLE)
-        if style & 0x0020:
-            is_password = True
-        cls = win32gui.GetClassName(hwnd).lower()
-        if "password" in cls or "passcode" in cls or "lock" in cls:
-            is_password = True
-    except Exception:
-        pass
+        hwnd = user32.GetForegroundWindow()
 
-    return {
-        "hwnd": hwnd,
-        "pid": pid,
-        "title": title,
-        "process": proc_name,
-        "isPassword": is_password,
-        "isTerminal": is_terminal
-    }
+        # If foreground is 0 or FRIDAY/Electron, find the topmost non-assistant window
+        ignored_procs = ['friday.exe', 'electron.exe', 'shellexperiencehost.exe', 'taskhostw.exe', 'progman']
+        
+        target_name_clean = (target_hint or '').lower().strip()
+
+        if target_name_clean:
+            # User specifically asked for an app (e.g. 'notepad')
+            WNDENUMPROC = ctypes.WINFUNCTYPE(ctypes.c_bool, ctypes.c_int, ctypes.c_int)
+            matched_hwnd = [0]
+            matched_proc = [""]
+            matched_title = [""]
+
+            def enum_for_hint(h, _):
+                if user32.IsWindowVisible(h) and not user32.IsIconic(h):
+                    length = user32.GetWindowTextLengthW(h)
+                    if length > 0:
+                        buff = ctypes.create_unicode_buffer(length + 1)
+                        user32.GetWindowTextW(h, buff, length + 1)
+                        pid = ctypes.c_uint()
+                        user32.GetWindowThreadProcessId(h, ctypes.byref(pid))
+                        try:
+                            pname = psutil.Process(pid.value).name().lower()
+                        except:
+                            pname = ''
+                        t_lower = buff.value.lower()
+                        if target_name_clean in pname or target_name_clean in t_lower:
+                            matched_hwnd[0] = h
+                            matched_proc[0] = pname
+                            matched_title[0] = buff.value
+                            return False # Stop enum
+                return True
+
+            user32.EnumWindows(WNDENUMPROC(enum_for_hint), 0)
+            if matched_hwnd[0]:
+                hwnd = matched_hwnd[0]
+
+        if not hwnd or not win32gui.IsWindow(hwnd):
+            # Fall back to finding the active user window
+            WNDENUMPROC = ctypes.WINFUNCTYPE(ctypes.c_bool, ctypes.c_int, ctypes.c_int)
+            found_hwnd = [0]
+            def enum_active(h, _):
+                if user32.IsWindowVisible(h) and not user32.IsIconic(h):
+                    length = user32.GetWindowTextLengthW(h)
+                    if length > 0:
+                        buff = ctypes.create_unicode_buffer(length + 1)
+                        user32.GetWindowTextW(h, buff, length + 1)
+                        pid = ctypes.c_uint()
+                        user32.GetWindowThreadProcessId(h, ctypes.byref(pid))
+                        try:
+                            pname = psutil.Process(pid.value).name().lower()
+                        except:
+                            pname = ''
+                        if pname and pname not in ignored_procs:
+                            found_hwnd[0] = h
+                            return False
+                return True
+            user32.EnumWindows(WNDENUMPROC(enum_active), 0)
+            if found_hwnd[0]:
+                hwnd = found_hwnd[0]
+
+        if not hwnd:
+            return {"hwnd": 0, "title": "", "process": "unknown", "isPassword": False, "isTerminal": False}
+
+        title = win32gui.GetWindowText(hwnd)
+        _, pid = win32process.GetWindowThreadProcessId(hwnd)
+        proc_name = "unknown"
+        try:
+            proc_name = psutil.Process(pid).name()
+        except Exception:
+            pass
+
+        is_terminal = is_terminal_process(proc_name)
+        is_password = False
+        try:
+            style = win32gui.GetWindowLong(hwnd, win32con.GWL_STYLE)
+            if style & 0x0020:
+                is_password = True
+            cls = win32gui.GetClassName(hwnd).lower()
+            if "password" in cls or "passcode" in cls or "lock" in cls:
+                is_password = True
+        except Exception:
+            pass
+
+        return {
+            "hwnd": hwnd,
+            "pid": pid,
+            "title": title,
+            "process": proc_name,
+            "isPassword": is_password,
+            "isTerminal": is_terminal
+        }
+    finally:
+        close_input_desktop(hdesk)
+
+def activate_target_window(hwnd):
+    """Brings the target window to the foreground and attaches thread input to ensure cursor readiness."""
+    if not hwnd or not user32 or not kernel32:
+        return False
+    try:
+        hdesk = ensure_input_desktop()
+        # Restore if minimized
+        if user32.IsIconic(hwnd):
+            user32.ShowWindow(hwnd, 9) # SW_RESTORE
+        else:
+            user32.ShowWindow(hwnd, 5) # SW_SHOW
+
+        cur_tid = kernel32.GetCurrentThreadId()
+        fg = user32.GetForegroundWindow()
+        fg_tid = user32.GetWindowThreadProcessId(fg, None) if fg else 0
+
+        if fg_tid and fg_tid != cur_tid:
+            user32.AttachThreadInput(cur_tid, fg_tid, True)
+
+        target_tid = user32.GetWindowThreadProcessId(hwnd, None)
+        if target_tid and target_tid != cur_tid:
+            user32.AttachThreadInput(cur_tid, target_tid, True)
+
+        user32.BringWindowToTop(hwnd)
+        user32.SetForegroundWindow(hwnd)
+
+        if target_tid and target_tid != cur_tid:
+            user32.AttachThreadInput(cur_tid, target_tid, False)
+        if fg_tid and fg_tid != cur_tid:
+            user32.AttachThreadInput(cur_tid, fg_tid, False)
+
+        close_input_desktop(hdesk)
+        return True
+    except Exception as e:
+        log(f"activate_target_window error: {e}")
+        return False
 
 def send_single_char(char):
     if not user32:
@@ -153,13 +281,10 @@ def type_text_worker(session_id, text, target_hwnd, delay_ms, auto_validate_targ
     global typing_state
     log(f"Starting typing session {session_id} ({len(text)} chars, target={target_hwnd})")
     
-    # Give target window a moment if focus activation is needed
-    if target_hwnd and win32gui.IsWindow(target_hwnd):
-        try:
-            win32gui.SetForegroundWindow(target_hwnd)
-            time.sleep(0.05)
-        except Exception as e:
-            log(f"Warning activating foreground window: {e}")
+    # 1. Activate target window firmly
+    if target_hwnd:
+        activate_target_window(target_hwnd)
+        time.sleep(0.12)
 
     sleep_sec = max(0.005, delay_ms / 1000.0)
     chars = list(text)
@@ -167,99 +292,80 @@ def type_text_worker(session_id, text, target_hwnd, delay_ms, auto_validate_targ
     typed = 0
     t0 = time.time()
 
-    for i, ch in enumerate(chars):
-        # 1. Check cancellation
-        if typing_state["should_cancel"]:
-            typing_state["status"] = "cancelled"
-            log(f"Typing session {session_id} cancelled at char {typed}/{total}")
-            send_response({
-                "type": "typing_progress",
-                "session_id": session_id,
-                "status": "cancelled",
-                "typed": typed,
-                "total": total,
-                "percent": round((typed / max(1, total)) * 100, 1)
-            })
-            return
-
-        # 2. Check pause
-        if typing_state["should_pause"]:
-            typing_state["status"] = "paused"
-            send_response({
-                "type": "typing_progress",
-                "session_id": session_id,
-                "status": "paused",
-                "typed": typed,
-                "total": total,
-                "percent": round((typed / max(1, total)) * 100, 1)
-            })
-            typing_state["pause_event"].wait()
+    hdesk = ensure_input_desktop()
+    try:
+        for i, ch in enumerate(chars):
+            # Check cancellation
             if typing_state["should_cancel"]:
                 typing_state["status"] = "cancelled"
+                log(f"Typing session {session_id} cancelled at char {typed}/{total}")
+                send_response({
+                    "type": "typing_progress",
+                    "session_id": session_id,
+                    "status": "cancelled",
+                    "typed": typed,
+                    "total": total,
+                    "percent": round((typed / max(1, total)) * 100, 1)
+                })
                 return
-            typing_state["status"] = "typing"
 
-        # 3. Target focus check
-        if auto_validate_target and target_hwnd:
-            current_fg = win32gui.GetForegroundWindow()
-            if current_fg != target_hwnd:
-                log(f"Target focus lost: current={current_fg}, expected={target_hwnd}. Auto-pausing.")
-                typing_state["should_pause"] = True
+            # Check pause
+            if typing_state["should_pause"]:
                 typing_state["status"] = "paused"
                 send_response({
                     "type": "typing_progress",
                     "session_id": session_id,
                     "status": "paused",
-                    "reason": "focus_lost",
                     "typed": typed,
                     "total": total,
                     "percent": round((typed / max(1, total)) * 100, 1)
                 })
-                typing_state["pause_event"].clear()
                 typing_state["pause_event"].wait()
                 if typing_state["should_cancel"]:
                     typing_state["status"] = "cancelled"
                     return
                 typing_state["status"] = "typing"
 
-        # 4. Send character
-        send_single_char(ch)
-        typed += 1
-        typing_state["typed_chars"] = typed
+            # Send character
+            send_single_char(ch)
+            typed += 1
+            typing_state["typed_chars"] = typed
 
-        # Periodic progress updates every 15 chars or on last char
-        if typed % 15 == 0 or typed == total:
-            send_response({
-                "type": "typing_progress",
-                "session_id": session_id,
-                "status": "typing",
-                "typed": typed,
-                "total": total,
-                "percent": round((typed / total) * 100, 1)
-            })
+            # Periodic progress updates every 15 chars or on last char
+            if typed % 15 == 0 or typed == total:
+                send_response({
+                    "type": "typing_progress",
+                    "session_id": session_id,
+                    "status": "typing",
+                    "typed": typed,
+                    "total": total,
+                    "percent": round((typed / total) * 100, 1)
+                })
 
-        time.sleep(sleep_sec)
+            time.sleep(sleep_sec)
 
-    duration_ms = round((time.time() - t0) * 1000, 1)
-    typing_state["status"] = "completed"
-    log(f"Typing session {session_id} completed successfully in {duration_ms}ms")
-    send_response({
-        "type": "typing_progress",
-        "session_id": session_id,
-        "status": "completed",
-        "typed": typed,
-        "total": total,
-        "duration_ms": duration_ms,
-        "percent": 100.0
-    })
+        duration_ms = round((time.time() - t0) * 1000, 1)
+        typing_state["status"] = "completed"
+        log(f"Typing session {session_id} completed successfully in {duration_ms}ms")
+        send_response({
+            "type": "typing_progress",
+            "session_id": session_id,
+            "status": "completed",
+            "typed": typed,
+            "total": total,
+            "duration_ms": duration_ms,
+            "percent": 100.0
+        })
+    finally:
+        close_input_desktop(hdesk)
 
 def get_selected_text_uia():
     """Extracts currently selected text using Windows UI Automation without touching clipboard."""
     if not UIA_AVAILABLE:
         return {"success": False, "error": "UIA unavailable"}
     
+    hdesk = ensure_input_desktop()
     try:
-        # CoInitialize for comtypes thread safety
         try:
             ctypes.windll.ole32.CoInitialize(None)
         except Exception:
@@ -275,7 +381,6 @@ def get_selected_text_uia():
         name = focused.CurrentName or ""
         cls = focused.CurrentClassName or ""
         
-        # Check if control is password protected
         is_password = False
         try:
             is_password = bool(focused.CurrentIsPassword)
@@ -285,7 +390,6 @@ def get_selected_text_uia():
         if is_password:
             return {"success": False, "error": "Selected field is password protected", "isPassword": True}
 
-        # Try TextPattern (10014) or TextPattern2 (10024)
         pattern = None
         for pid in [UIAutomationClient.UIA_TextPatternId, UIAutomationClient.UIA_TextPattern2Id]:
             try:
@@ -318,6 +422,8 @@ def get_selected_text_uia():
         }
     except Exception as e:
         return {"success": False, "error": str(e)}
+    finally:
+        close_input_desktop(hdesk)
 
 def main():
     global typing_state
@@ -341,8 +447,14 @@ def main():
                 send_response({"status": "ok", "req_id": req_id, "timestamp": time.time()})
 
             elif action == "get_target":
-                target = get_foreground_info()
+                hint = cmd.get("target_hint")
+                target = get_foreground_info(hint)
                 send_response({"status": "ok", "target": target, "req_id": req_id})
+
+            elif action == "activate_target":
+                hwnd = cmd.get("hwnd", 0)
+                ok = activate_target_window(hwnd)
+                send_response({"status": "ok", "activated": ok, "req_id": req_id})
 
             elif action == "get_selected_text":
                 res = get_selected_text_uia()

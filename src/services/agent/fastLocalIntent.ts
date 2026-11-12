@@ -1626,7 +1626,79 @@ export class FastLocalIntentRouter {
       }
     }
 
-    // 7d. "Pause typing", "Cancel typing", "Resume typing", "Clear context"
+    // 7d. "Friday, type this in Notepad" or "type <text> in <app>" or "start typing"
+    const typeInAppMatch = clean.match(
+      /^(?:hey\s+)?(?:friday[\s,]+)?(?:please\s+)?(?:type|write)\s+(?:this|the\s+answer|the\s+response|the\s+text)?\s*(?:in|into|on)\s+(notepad|vs\s*code|code|chrome|word|browser|editor)(?:\s*[:,\-]\s*(.+))?$/i
+    );
+    if (typeInAppMatch) {
+      const appHint = typeInAppMatch[1].trim();
+      let textToType = typeInAppMatch[2]?.trim() || '';
+
+      if (!textToType) {
+        // Check active context or clipboard
+        textToType = typeFlowController.getActiveContext()?.selectedText || typeFlowController.getClipboardText();
+      }
+
+      if (!textToType) {
+        return {
+          matched: true,
+          intent: 'typeflow',
+          response: `What would you like me to type in ${appHint}? Please provide the text or select some text first.`,
+          executionMs: Date.now() - start,
+        };
+      }
+
+      try {
+        const res = await typeFlowController.typeText(textToType, { targetApp: appHint });
+        return {
+          matched: true,
+          intent: 'typeflow',
+          response: `Typed ${res.charsTyped} characters into ${res.targetProcess || appHint}.`,
+          toolCalls: [{ toolName: 'typeflow_type_text', args: { text: textToType, targetApp: appHint }, result: res, status: 'completed' }],
+          executionMs: Date.now() - start,
+        };
+      } catch (e: any) {
+        return {
+          matched: true,
+          intent: 'typeflow',
+          response: `Could not type into ${appHint}: ${e.message}`,
+          executionMs: Date.now() - start,
+        };
+      }
+    }
+
+    // Direct "start typing" or "type this"
+    if (/^(?:hey\s+)?(?:friday[\s,]+)?(?:start\s+typing|type\s+this|type\s+the\s+answer|type\s+it)[?.!]?$/i.test(lower)) {
+      let textToType = typeFlowController.getActiveContext()?.selectedText || typeFlowController.getClipboardText();
+      if (!textToType) {
+        return {
+          matched: true,
+          intent: 'typeflow',
+          response: 'There is no prepared text or clipboard content to type. Please select text or copy something first.',
+          executionMs: Date.now() - start,
+        };
+      }
+
+      try {
+        const res = await typeFlowController.typeText(textToType);
+        return {
+          matched: true,
+          intent: 'typeflow',
+          response: `Typed ${res.charsTyped} characters into ${res.targetProcess}.`,
+          toolCalls: [{ toolName: 'typeflow_type_text', args: { text: textToType }, result: res, status: 'completed' }],
+          executionMs: Date.now() - start,
+        };
+      } catch (e: any) {
+        return {
+          matched: true,
+          intent: 'typeflow',
+          response: `Typing could not be completed: ${e.message}`,
+          executionMs: Date.now() - start,
+        };
+      }
+    }
+
+    // 7e. "Pause typing", "Cancel typing", "Resume typing", "Clear context"
     if (/^(?:hey\s+)?(?:friday[\s,]+)?(?:pause\s+typing|pause\s+session)[?.!]?$/i.test(lower)) {
       const ok = await typeFlowController.pause();
       return {

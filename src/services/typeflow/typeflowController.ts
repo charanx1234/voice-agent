@@ -179,7 +179,7 @@ export class TypeFlowController extends EventEmitter {
     text: string,
     options: TypingSessionConfig & { source?: TypeFlowHistoryItem['source'] } = {}
   ): Promise<TypingResult> {
-    const target = await typeFlowService.getTargetWindow();
+    const target = await typeFlowService.getTargetWindow(options.targetApp);
     const validation = await typingEngineManager.validateTarget(target);
     if (!validation.valid) {
       throw new Error(`Cannot type into target application: ${validation.reason}`);

@@ -462,6 +462,7 @@ public class FridayMouseDriver {
 
   /**
    * Types text into the currently focused field or a target element.
+   * Uses TypeFlow's native SendInput engine for unicode and multiline safety.
    */
   public async typeText(params: {
     text: string;
@@ -469,17 +470,35 @@ public class FridayMouseDriver {
     clearFirst?: boolean;
     pressEnterAfter?: boolean;
   }): Promise<DesktopActionResult> {
-    if (params.target) {
-      const clickRes = await this.clickElement({ target: params.target });
-      if (!clickRes.success) return clickRes;
-      await new Promise((r) => setTimeout(r, 120));
-    }
+    try {
+      const { typeFlowController } = await import('../typeflow/typeflowController');
+      let textToType = params.text;
+      if (params.pressEnterAfter) textToType += '\n';
 
-    const escaped = params.text.replace(/["`$\\]/g, '`$&');
-    const enterCmd = params.pressEnterAfter ? `[System.Windows.Forms.SendKeys]::SendWait("{ENTER}")` : '';
-    const selectAllCmd = params.clearFirst ? `[System.Windows.Forms.SendKeys]::SendWait("^a{BACKSPACE}")` : '';
+      const res = await typeFlowController.typeText(textToType, {
+        targetApp: params.target,
+        charDelayMs: 15,
+      });
 
-    const psScript = `
+      return {
+        success: res.success,
+        action: 'type',
+        target: params.target || res.targetProcess || 'focused element',
+        details: `Typed ${res.charsTyped} characters successfully.`,
+      };
+    } catch (e: any) {
+      // Fallback to PowerShell SendWait if TypeFlow unavailable
+      if (params.target) {
+        const clickRes = await this.clickElement({ target: params.target });
+        if (!clickRes.success) return clickRes;
+        await new Promise((r) => setTimeout(r, 120));
+      }
+
+      const escaped = params.text.replace(/["`$\\]/g, '`$&');
+      const enterCmd = params.pressEnterAfter ? `[System.Windows.Forms.SendKeys]::SendWait("{ENTER}")` : '';
+      const selectAllCmd = params.clearFirst ? `[System.Windows.Forms.SendKeys]::SendWait("^a{BACKSPACE}")` : '';
+
+      const psScript = `
 Add-Type -AssemblyName System.Windows.Forms -ErrorAction SilentlyContinue
 ${selectAllCmd}
 [System.Windows.Forms.SendKeys]::SendWait("${escaped}")
@@ -487,27 +506,28 @@ ${enterCmd}
 "OK"
 `;
 
-    try {
-      const result = await this.runPowerShell(psScript);
-      if (result.includes('OK')) {
+      try {
+        const result = await this.runPowerShell(psScript);
+        if (result.includes('OK')) {
+          return {
+            success: true,
+            action: 'type',
+            target: params.target || 'focused element',
+            details: `Typed ${params.text.length} characters successfully.`,
+          };
+        }
         return {
-          success: true,
+          success: false,
           action: 'type',
-          target: params.target || 'focused element',
-          details: `Typed ${params.text.length} characters successfully.`,
+          error: 'Key entry could not be delivered.',
+        };
+      } catch (err: any) {
+        return {
+          success: false,
+          action: 'type',
+          error: err?.message || 'Typing failed.',
         };
       }
-      return {
-        success: false,
-        action: 'type',
-        error: 'Key entry could not be delivered.',
-      };
-    } catch (err: any) {
-      return {
-        success: false,
-        action: 'type',
-        error: err?.message || 'Typing failed.',
-      };
     }
   }
 

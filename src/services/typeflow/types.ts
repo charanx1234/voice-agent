@@ -27,6 +27,8 @@ export interface TypingSessionConfig {
   restoreClipboard?: boolean;
   chunkSize?: number;
   autoValidateTarget?: boolean;
+  targetApp?: string;
+  source?: string;
 }
 
 export interface TypingProgress {

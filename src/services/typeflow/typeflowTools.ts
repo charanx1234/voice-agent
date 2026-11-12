@@ -38,11 +38,12 @@ export const typeFlowToolDefinitions = [
   },
   {
     name: 'typeflow_type_text',
-    description: 'Types specific text into the active supported application window after user approval.',
+    description: 'Types specific text into the active or specified application window (Notepad, VS Code, Chrome, etc.) using FRIDAY TypeFlow.',
     parameters: {
       type: 'OBJECT',
       properties: {
         text: { type: 'STRING', description: 'The text to type into the focused field.' },
+        targetApp: { type: 'STRING', description: 'Optional target application name (e.g. "notepad", "code", "chrome").' },
         delay_ms: { type: 'NUMBER', description: 'Typing delay in ms per character (default 25).' },
       },
       required: ['text'],
@@ -156,7 +157,7 @@ export async function executeTypeFlowTool(name: string, args: Record<string, any
         const text = args.text || '';
         if (!text) return { success: false, error: 'No text provided to type.' };
         const delayMs = args.delay_ms || 25;
-        const res = await typeFlowController.typeText(text, { charDelayMs: delayMs });
+        const res = await typeFlowController.typeText(text, { charDelayMs: delayMs, targetApp: args.targetApp });
         return {
           success: res.success,
           charsTyped: res.charsTyped,
