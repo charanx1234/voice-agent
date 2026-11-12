@@ -132,6 +132,22 @@ export const IPC_CHANNELS = {
   QUICKTOOLS_WORKSPACES_SAVE: 'friday:quicktools-workspaces-save',
   QUICKTOOLS_WORKSPACES_LAUNCH: 'friday:quicktools-workspaces-launch',
   QUICKTOOLS_WORKSPACES_DELETE: 'friday:quicktools-workspaces-delete',
+
+  // FRIDAY VoiceFlow Subsystem
+  VOICEFLOW_GET_STATUS: 'friday:voiceflow-get-status',
+  VOICEFLOW_GET_SETTINGS: 'friday:voiceflow-get-settings',
+  VOICEFLOW_SAVE_SETTINGS: 'friday:voiceflow-save-settings',
+  VOICEFLOW_START_SESSION: 'friday:voiceflow-start-session',
+  VOICEFLOW_STOP_SESSION: 'friday:voiceflow-stop-session',
+  VOICEFLOW_TRANSCRIBE: 'friday:voiceflow-transcribe',
+  VOICEFLOW_CAPTURE_TARGET: 'friday:voiceflow-capture-target',
+  VOICEFLOW_ENHANCE_AND_INSERT: 'friday:voiceflow-enhance-and-insert',
+  VOICEFLOW_INSERT_TEXT: 'friday:voiceflow-insert-text',
+  VOICEFLOW_STATE_CHANGED: 'friday:voiceflow-state-changed',
+  VOICEFLOW_HISTORY_LIST: 'friday:voiceflow-history-list',
+  VOICEFLOW_HISTORY_CLEAR: 'friday:voiceflow-history-clear',
+  VOICEFLOW_HISTORY_DELETE: 'friday:voiceflow-history-delete',
+  VOICEFLOW_TRIGGER_SHORTCUT: 'friday:voiceflow-trigger-shortcut',
 } as const;
 
 export function sanitizePath(inputPath: string): string {

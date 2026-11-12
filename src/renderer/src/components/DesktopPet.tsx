@@ -28,6 +28,9 @@ import {
 } from '@/shared/types';
 import { useHandsFree } from '../hooks/useHandsFree';
 import { playWakeChime } from '../utils/audioChime';
+import { voiceFlowController } from '@/services/voiceflow/voiceflowController';
+import { VoiceFlowHUD } from './VoiceFlowHUD';
+import { VoiceFlowState } from '@/services/voiceflow/types';
 import '../styles/desktopPet.css';
 
 const DEFAULT_STATE: PetCompanionState = {
@@ -63,6 +66,7 @@ export const DesktopPet: React.FC = () => {
   const [isExpanded, setIsExpanded] = useState(false);
   const [settingsDrawerOpen, setSettingsDrawerOpen] = useState(false);
   const [copiedId, setCopiedId] = useState<string | null>(null);
+  const [voiceFlowState, setVoiceFlowState] = useState<VoiceFlowState>('IDLE_READY');
 
   // Centralized Audio / Mouth reactive state
   const [liveAmplitude, setLiveAmplitude] = useState<number>(0);
@@ -647,6 +651,40 @@ export const DesktopPet: React.FC = () => {
       cleanups.push(cleanupStream);
     }
 
+    // FRIDAY VoiceFlow Controller subscription (reactive pet state synchronization)
+    const unsubVoiceFlow = voiceFlowController.subscribeState((vfState) => {
+      if (unmount) return;
+      setVoiceFlowState(vfState);
+      if (vfState === 'RECORDING') {
+        setPetState((prev) => ({ ...prev, robotState: 'listening', voiceSessionState: 'LISTENING' }));
+      } else if (vfState === 'TRANSCRIBING') {
+        setPetState((prev) => ({ ...prev, robotState: 'thinking', voiceSessionState: 'TRANSCRIBING' }));
+      } else if (vfState === 'ENHANCING') {
+        setPetState((prev) => ({ ...prev, robotState: 'thinking', voiceSessionState: 'THINKING' }));
+      } else if (vfState === 'COMPLETED') {
+        setPetState((prev) => ({ ...prev, robotState: 'idle', voiceSessionState: 'STANDBY', expression: 'happy' }));
+      } else if (vfState === 'ERROR') {
+        setPetState((prev) => ({ ...prev, robotState: 'error', voiceSessionState: 'ERROR' }));
+      } else if (vfState === 'IDLE_READY' || vfState === 'CANCELLED') {
+        setPetState((prev) => ({ ...prev, robotState: 'idle', voiceSessionState: 'STANDBY' }));
+      }
+    });
+    cleanups.push(unsubVoiceFlow);
+
+    // Global shortcut activation listener
+    if (window.fridayAPI?.onVoiceFlowTriggerShortcut) {
+      const unsubShortcut = window.fridayAPI.onVoiceFlowTriggerShortcut(() => {
+        if (!unmount) {
+          if (voiceFlowController.isBusy()) {
+            voiceFlowController.cancel();
+          } else {
+            void voiceFlowController.activate('shortcut');
+          }
+        }
+      });
+      cleanups.push(unsubShortcut);
+    }
+
     return () => {
       unmount = true;
       cleanups.forEach((fn) => fn());
@@ -778,7 +816,19 @@ export const DesktopPet: React.FC = () => {
 
       // Click detected (quick release with minimal movement)
       if (dx < 6 && dy < 6 && dt < 450) {
+        // If VoiceFlow is actively recording or processing, clicking pet cancels it immediately
+        if (voiceFlowController.isBusy()) {
+          voiceFlowController.cancel();
+          return;
+        }
+
         if (!isExpanded) {
+          // Master requirement: Clicking the desktop pet activates VoiceFlow!
+          const vfSettings = voiceFlowController.getSettings();
+          if (vfSettings.enabled) {
+            void voiceFlowController.activate('pet');
+            return;
+          }
           toggleExpanded(true);
         } else {
           toggleRecording();
@@ -981,6 +1031,57 @@ export const DesktopPet: React.FC = () => {
             ⚠
           </div>
         )}
+
+        {/* VoiceFlow Active Dictation Indicator */}
+        {voiceFlowState === 'RECORDING' && (
+          <div
+            className="pet-badge-voiceflow"
+            style={{
+              position: 'absolute',
+              top: '6px',
+              right: '6px',
+              width: '22px',
+              height: '22px',
+              borderRadius: '50%',
+              background: '#ef4444',
+              boxShadow: '0 0 10px #ef4444',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              color: '#ffffff',
+              fontSize: '11px',
+              zIndex: 10,
+            }}
+            title="VoiceFlow Recording — click pet to cancel"
+          >
+            🎙️
+          </div>
+        )}
+        {voiceFlowState === 'COMPLETED' && (
+          <div
+            className="pet-badge-voiceflow"
+            style={{
+              position: 'absolute',
+              top: '6px',
+              right: '6px',
+              width: '22px',
+              height: '22px',
+              borderRadius: '50%',
+              background: '#22c55e',
+              boxShadow: '0 0 10px #22c55e',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              color: '#ffffff',
+              fontSize: '12px',
+              fontWeight: 'bold',
+              zIndex: 10,
+            }}
+            title="VoiceFlow Inserted Text"
+          >
+            ✓
+          </div>
+        )}
       </div>
     </div>
   );
@@ -993,6 +1094,7 @@ export const DesktopPet: React.FC = () => {
       onDoubleClick={handleDoubleClick}
       onContextMenu={handleContextMenu}
     >
+      <VoiceFlowHUD />
       {/* 1. COMPACT MODE VIEW */}
       {!isExpanded ? (
         <div className="pet-root">

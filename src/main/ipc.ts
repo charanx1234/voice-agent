@@ -30,6 +30,9 @@ import { quickNotesService } from '../services/quicktools/quickNotesService';
 import { batchRenamerService } from '../services/quicktools/batchRenamerService';
 import { fileFinderService } from '../services/quicktools/fileFinderService';
 import { workspacesService } from '../services/quicktools/workspacesService';
+import { voiceFlowService } from '../services/voiceflow/voiceflowService';
+import { voiceFlowEnhancer } from '../services/voiceflow/voiceflowEnhancer';
+import { voiceFlowPaste } from '../services/voiceflow/voiceflowPaste';
 
 let handlersRegistered = false;
 let activeVoiceCoordinator: VoiceCoordinator | null = null;
@@ -989,6 +992,79 @@ export function registerIpcHandlers(
   ipcMain.handle(IPC_CHANNELS.QUICKTOOLS_WORKSPACES_DELETE, async (_event, id: string) => {
     return workspacesService.deleteWorkspace(id);
   });
+
+  // FRIDAY VoiceFlow IPC Handlers (Phase 1)
+  ipcMain.handle(IPC_CHANNELS.VOICEFLOW_GET_STATUS, async () => {
+    return {
+      ready: voiceFlowService.isReady(),
+      engine: 'faster-whisper',
+      device: 'cpu',
+      computeType: 'int8',
+    };
+  });
+
+  ipcMain.handle(
+    IPC_CHANNELS.VOICEFLOW_TRANSCRIBE,
+    async (_event, audioBase64: string, language?: string, model?: string) => {
+      try {
+        const result = await voiceFlowService.transcribeAudio(audioBase64, language, model);
+        return { success: true, result };
+      } catch (err: any) {
+        console.error('[FRIDAY IPC] VoiceFlow transcription failed:', err?.message || err);
+        return { success: false, error: err?.message || 'VoiceFlow transcription failed.' };
+      }
+    }
+  );
+
+  ipcMain.handle(IPC_CHANNELS.VOICEFLOW_CAPTURE_TARGET, async () => {
+    try {
+      const target = await voiceFlowPaste.captureTarget();
+      return { success: true, target };
+    } catch (err: any) {
+      console.warn('[FRIDAY IPC] Capture target failed:', err?.message || err);
+      return {
+        success: false,
+        target: { hwnd: 0, title: '', process: 'unknown', isPassword: false, isTerminal: false },
+        error: err?.message || 'Could not capture target window.',
+      };
+    }
+  });
+
+  ipcMain.handle(
+    IPC_CHANNELS.VOICEFLOW_INSERT_TEXT,
+    async (_event, text: string, target?: any, options?: any) => {
+      try {
+        const result = await voiceFlowPaste.insertText(text, target, options);
+        return { success: true, result };
+      } catch (err: any) {
+        console.error('[FRIDAY IPC] VoiceFlow text insertion failed:', err?.message || err);
+        return { success: false, error: err?.message || 'Text insertion failed.' };
+      }
+    }
+  );
+
+  ipcMain.handle(
+    IPC_CHANNELS.VOICEFLOW_ENHANCE_AND_INSERT,
+    async (_event, rawText: string, mode: any, target?: any, options?: any) => {
+      try {
+        const enhanced = await voiceFlowEnhancer.enhance(rawText, mode, options);
+        let targetToUse = target;
+        if (!targetToUse || !targetToUse.hwnd) {
+          targetToUse = await voiceFlowPaste.captureTarget();
+        }
+        const insertionResult = await voiceFlowPaste.insertText(enhanced.text, targetToUse, options);
+        return {
+          success: true,
+          result: enhanced,
+          enhancedText: enhanced.text,
+          insertion: insertionResult,
+        };
+      } catch (err: any) {
+        console.error('[FRIDAY IPC] VoiceFlow enhance and insert failed:', err?.message || err);
+        return { success: false, error: err?.message || 'VoiceFlow operation failed.' };
+      }
+    }
+  );
 }
 
 /** Renderer file-opening is limited to files inside an approved project root. */

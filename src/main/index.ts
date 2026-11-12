@@ -1,5 +1,5 @@
 import fs from 'fs';
-import { app, BrowserWindow, shell, screen, Tray, Menu, nativeImage, session } from 'electron';
+import { app, BrowserWindow, shell, screen, Tray, Menu, nativeImage, session, globalShortcut } from 'electron';
 import { IPC_CHANNELS } from './security';
 import path from 'path';
 import { registerIpcHandlers } from './ipc';
@@ -435,6 +435,20 @@ if (!hasSingleInstanceLock) {
     // Lightweight health polling (5s) for the dashboard; no permissions required.
     systemHealthService.start();
 
+    // Optional configurable global shortcut for FRIDAY VoiceFlow dictation (Ctrl+Alt+Space)
+    try {
+      globalShortcut.register('CommandOrControl+Alt+Space', () => {
+        const wins = BrowserWindow.getAllWindows();
+        wins.forEach((w) => {
+          if (!w.isDestroyed()) {
+            w.webContents.send(IPC_CHANNELS.VOICEFLOW_TRIGGER_SHORTCUT);
+          }
+        });
+      });
+    } catch (e) {
+      console.warn('[FRIDAY] Could not register global shortcut for VoiceFlow:', e);
+    }
+
     app.on('activate', () => {
       if (BrowserWindow.getAllWindows().length === 0) {
         createWindow();
@@ -445,6 +459,9 @@ if (!hasSingleInstanceLock) {
   // Persist the final memory snapshot before the process exits.
   app.on('will-quit', () => {
     console.log('[FRIDAY] Shutting down backend services.');
+    try {
+      globalShortcut.unregisterAll();
+    } catch {}
     memoryService.flushNow();
     remindersService.shutdownNow();
     systemHealthService.stop();

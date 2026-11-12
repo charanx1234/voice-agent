@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { detectLocalWakePhrase, parseWakeReply, stripWakePhrase, WAKE_WORD_DISPLAY } from '../src/services/voice/wakeWord';
+import {
+  detectLocalWakePhrase,
+  parseWakeReply,
+  stripWakePhrase,
+  WAKE_WORD_DISPLAY,
+  detectVoiceFlowActivationPhrase,
+} from '../src/services/voice/wakeWord';
 
 describe('Wake word parsing', () => {
   it('exposes the display phrase', () => {
@@ -46,5 +52,31 @@ describe('Wake word parsing', () => {
       command: 'remind me at six',
     });
     expect(detectLocalWakePhrase('hello there')).toEqual({ wake: false, command: '' });
+  });
+});
+
+describe('VoiceFlow natural-language activation phrase detection', () => {
+  it('detects "Friday, type this" activation with empty trailing text', () => {
+    const res = detectVoiceFlowActivationPhrase('Friday, type this');
+    expect(res.isVoiceFlow).toBe(true);
+    expect(res.immediateText).toBe('');
+  });
+
+  it('detects "Friday type this" with immediate spoken content', () => {
+    const res = detectVoiceFlowActivationPhrase('Friday type this: Please review the attached PR before 5pm');
+    expect(res.isVoiceFlow).toBe(true);
+    expect(res.immediateText).toBe('Please review the attached PR before 5pm');
+  });
+
+  it('detects "Hey Friday dictate this" correctly', () => {
+    const res = detectVoiceFlowActivationPhrase('Hey Friday, dictate this Meeting notes for Sprint 4');
+    expect(res.isVoiceFlow).toBe(true);
+    expect(res.immediateText).toBe('Meeting notes for Sprint 4');
+  });
+
+  it('ignores standard conversational commands', () => {
+    expect(detectVoiceFlowActivationPhrase('Friday, what is the weather today?').isVoiceFlow).toBe(false);
+    expect(detectVoiceFlowActivationPhrase('Hey Friday, open Spotify').isVoiceFlow).toBe(false);
+    expect(detectVoiceFlowActivationPhrase('Tell me a story').isVoiceFlow).toBe(false);
   });
 });

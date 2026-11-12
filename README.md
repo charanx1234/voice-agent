@@ -115,6 +115,29 @@ FRIDAY is engineered for sub-second, real-time desktop responsiveness:
 - **Physical Acoustic Engine**: Strict impulse checks (sharp attack, crest factor `>= 2.8`, high frequencies `1.5 kHz – 8 kHz`, tempo `180ms – 800ms`) reject keyboard typing, desk knocks, and speech.
 - **5-Minute Continuous Listening**: Stays awake for 5 minutes after being triggered. The timer resets every time you speak.
 
+### 19. 🎙️ FRIDAY VoiceFlow — Always-Ready AI Dictation & Auto-Insert
+- **Zero Push-to-Talk Friction**: Speak naturally without pressing and holding any keyboard keys or manually toggling recording.
+- **Local Speech Recognition Engine**: Transcribes speech locally and offline using `faster-whisper` (INT8 quantized on CPU) with integrated Silero VAD — zero cloud audio upload for dictation.
+- **Natural Language & Multi-Modal Activation**:
+  - **Wake Phrase**: Say *"Friday, type this"* (or *"Friday, type this please review my pull request"*).
+  - **Desktop Pet Click**: Click the floating desktop pet once to start dictating; click again anytime to cancel.
+  - **Global Shortcut**: Press `Ctrl+Alt+Space` in any Windows application.
+- **5 Intelligent AI Enhancement Modes**:
+  - `Natural Mode`: Fixes grammar, sentence structure, and punctuation while keeping your natural voice and Telugu-English mixed expressions intact.
+  - `Professional Mode`: Structures formal messages and emails with polite, clear tone and zero fluff.
+  - `Concise Mode`: Removes verbal fillers (`um`, `like`, `you know`) and delivers crisp, direct sentences.
+  - `Code Mode`: Strictly preserves programming identifiers, syntax, filenames, and commands without prose formatting.
+  - `Verbatim Mode`: Direct transcription with minimal correction (bypasses LLM rewriting).
+- **Hex-Engineered 6-Step Safe Text Insertion**:
+  - Snapshots target application and window handle (`HWND`) before dictation starts.
+  - **Password Field Security Gate**: Blocks automated text injection into password or sensitive controls.
+  - Waits for modifier keys (`Ctrl`, `Alt`, `Shift`, `Win`) to be released.
+  - Takes an atomic snapshot of your existing clipboard.
+  - Injects enhanced text via terminal-aware synthetic paste (`Ctrl+V` or `Ctrl+Shift+V`).
+  - Asynchronously restores your original clipboard after 500ms.
+- **Floating Recording HUD**: Floating glassmorphic HUD pill with live audio waveform VU meter, current mode badge, target process indicator, and instant cancel control.
+- **Local History & Settings**: Review recent dictations, change speech models (`tiny`, `base`, `small`, `turbo`), configure languages (`auto`, `en`, `te`), or toggle direct transcription in Settings ➔ **FRIDAY VOICEFLOW**.
+
 ---
 
 ## 🧪 Testing Guide — How to Test Every Feature Properly
@@ -190,6 +213,16 @@ Use this checklist to test each capability via **Voice** (or by typing into the 
 | **Spotify Direct** | Say `Play Believer on Spotify` | Opens Spotify and starts playback. |
 | **YouTube Direct** | Say `Play lofi music on YouTube` | Opens YouTube and starts playing video. |
 | **Media Controls** | Say `Pause music`, then `Resume music`, then `Next song` | Sends native media key events to Windows. |
+
+### 7. Test FRIDAY VoiceFlow (Always-Ready Local Dictation)
+| Action | How to Test | Expected Result |
+|---|---|---|
+| **Pet Click Activation** | Click once on the compact Desktop Pet | Recording HUD appears, pet displays red recording indicator. Speak your text; it transcribes, polishes, and inserts into active window. |
+| **Pet Click Cancel** | Click pet once, then click pet again while recording | Cancels dictation immediately without inserting text or modifying clipboard. |
+| **Wake Phrase (Inline)** | Say `Friday, type this please review the PR by 5pm` | Directly intercepts dictation, enhances text, and inserts into your active window. |
+| **Wake Phrase (Dictate)** | Say `Friday, type this` | Activates recording session with HUD, listens for speech, auto-detects utterance end via VAD, and pastes. |
+| **Global Shortcut** | Press `Ctrl + Alt + Space` in any text box (Notepad, VS Code, Browser) | Dictation HUD opens, captures speech, polishes with selected mode, and inserts. |
+| **Modes & Settings** | Open Settings ➔ *FRIDAY VOICEFLOW* | Switch modes (`Natural`, `Professional`, `Concise`, `Code`, `Verbatim`), toggle direct transcription, select speech models, or view dictation history. |
 
 ---
 

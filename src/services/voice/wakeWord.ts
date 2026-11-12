@@ -91,3 +91,35 @@ export function stripWakePhrase(text: string): string {
 
   return out.trim();
 }
+
+/**
+ * Natural language activation pattern for VoiceFlow dictation.
+ * Matches: "Friday, type this", "Friday type this", "Hey Friday, type this",
+ * "type this", "dictate this", or "write this".
+ */
+export const VOICEFLOW_TRIGGER_PATTERN =
+  /^(?:(?:hey|hi|okay|ok)?\s*friday[\s,.:;!?-]+)?(?:type\s+this|dictate\s+this|write\s+this)\b/i;
+
+export interface VoiceFlowPhraseResult {
+  isVoiceFlow: boolean;
+  /** Any direct text that immediately followed the trigger phrase */
+  immediateText: string;
+}
+
+/**
+ * Distinguishes FRIDAY VoiceFlow activation from normal conversational commands.
+ */
+export function detectVoiceFlowActivationPhrase(transcript: string | undefined | null): VoiceFlowPhraseResult {
+  const text = (transcript || '').replace(/\s+/g, ' ').trim();
+  const match = text.match(VOICEFLOW_TRIGGER_PATTERN);
+  if (!match || match.index === undefined) {
+    return { isVoiceFlow: false, immediateText: '' };
+  }
+
+  const immediateText = text
+    .slice(match.index + match[0].length)
+    .replace(/^[\s,.:;!?-]+/, '')
+    .trim();
+
+  return { isVoiceFlow: true, immediateText };
+}

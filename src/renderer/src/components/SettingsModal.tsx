@@ -19,7 +19,12 @@ import {
   Play,
   Square,
   ShieldCheck,
+  Zap,
+  Sparkles,
 } from 'lucide-react';
+import { voiceFlowController } from '@/services/voiceflow/voiceflowController';
+import { voiceFlowHistory } from '@/services/voiceflow/voiceflowHistory';
+import { VoiceFlowMode, VoiceFlowHistoryItem } from '@/services/voiceflow/types';
 import { AiProviderId, AiProviderStatus, ElevenLabsUsage, EnrolledSpeakerProfile, FridaySettings } from '@/shared/types';
 import { speakerVerificationService } from '@/services/voice/speakerVerification';
 import { AudioPipeline } from '@/services/voice/audioPipeline';
@@ -148,6 +153,16 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   const [isTesting, setIsTesting] = useState(false);
   const [isSaved, setIsSaved] = useState(false);
 
+  // FRIDAY VoiceFlow Settings State
+  const [vfEnabled, setVfEnabled] = useState(true);
+  const [vfMode, setVfMode] = useState<VoiceFlowMode>('natural');
+  const [vfDirect, setVfDirect] = useState(false);
+  const [vfModel, setVfModel] = useState<'tiny' | 'base' | 'small' | 'turbo'>('base');
+  const [vfLanguage, setVfLanguage] = useState('auto');
+  const [vfShortcut, setVfShortcut] = useState(true);
+  const [vfRestoreClipboard, setVfRestoreClipboard] = useState(true);
+  const [vfHistory, setVfHistory] = useState<VoiceFlowHistoryItem[]>([]);
+
   useEffect(() => {
     if (isOpen) {
       setApiKeyInput(settings.apiKey || '');
@@ -214,6 +229,19 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
           }
         });
       }
+
+      // Load VoiceFlow preferences and history
+      try {
+        const vf = voiceFlowController.getSettings();
+        setVfEnabled(vf.enabled);
+        setVfMode(vf.mode);
+        setVfDirect(vf.directTranscription);
+        setVfModel(vf.model);
+        setVfLanguage(vf.language);
+        setVfShortcut(vf.shortcutEnabled);
+        setVfRestoreClipboard(vf.restoreClipboard);
+        setVfHistory(voiceFlowHistory.getHistory().slice(0, 5));
+      } catch {}
     }
   }, [isOpen, settings]);
 
@@ -420,6 +448,20 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
       approvedFolders,
       requireToolConfirmations: confirmations,
     });
+
+    // Save VoiceFlow settings
+    try {
+      voiceFlowController.updateSettings({
+        enabled: vfEnabled,
+        mode: vfMode,
+        directTranscription: vfDirect,
+        model: vfModel,
+        language: vfLanguage,
+        shortcutEnabled: vfShortcut,
+        restoreClipboard: vfRestoreClipboard,
+      });
+    } catch {}
+
     setIsSaved(true);
     setTimeout(() => setIsSaved(false), 2000);
   };
@@ -1650,6 +1692,213 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                     </button>
                   </div>
                 ))
+              )}
+            </div>
+          </div>
+
+          {/* Section: FRIDAY VoiceFlow (Local AI Dictation) */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+            <label
+              style={{
+                fontSize: '0.78rem',
+                fontWeight: 600,
+                color: 'var(--muted)',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px',
+              }}
+            >
+              <Zap size={14} color="var(--accent)" />
+              <span>FRIDAY VOICEFLOW (ALWAYS-READY DICTATION)</span>
+            </label>
+
+            <div
+              style={{
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '8px',
+                padding: '10px 12px',
+                backgroundColor: 'color-mix(in srgb, var(--accent) 5%, transparent)',
+                border: '1px solid color-mix(in srgb, var(--accent) 18%, transparent)',
+                borderRadius: '10px',
+              }}
+            >
+              {/* Enabled Switch */}
+              <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', fontSize: '0.8rem', fontWeight: 600 }}>
+                <input
+                  type="checkbox"
+                  checked={vfEnabled}
+                  onChange={(e) => setVfEnabled(e.target.checked)}
+                  style={{ accentColor: 'var(--accent)' }}
+                />
+                <span>Enable FRIDAY VoiceFlow</span>
+              </label>
+
+              <div style={{ fontSize: '0.72rem', color: 'var(--muted)' }}>
+                Activation: Say <em>"Friday, type this"</em>, click the desktop pet, or press <em>Ctrl+Alt+Space</em>.
+              </div>
+
+              {vfEnabled && (
+                <>
+                  {/* Mode selector */}
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', marginTop: '4px' }}>
+                    <span style={{ fontSize: '0.74rem', color: 'var(--muted)', fontWeight: 600 }}>AI Enhancement Mode:</span>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '4px' }}>
+                      {(['natural', 'professional', 'concise', 'code', 'verbatim'] as const).map((m) => {
+                        const active = vfMode === m;
+                        return (
+                          <button
+                            key={m}
+                            type="button"
+                            onClick={() => setVfMode(m)}
+                            style={{
+                              padding: '5px 6px',
+                              borderRadius: '6px',
+                              fontSize: '0.72rem',
+                              fontWeight: 600,
+                              textTransform: 'capitalize',
+                              cursor: 'pointer',
+                              backgroundColor: active
+                                ? 'color-mix(in srgb, var(--accent) 20%, transparent)'
+                                : 'color-mix(in srgb, var(--text) 4%, transparent)',
+                              border: `1px solid ${active ? 'var(--accent)' : 'transparent'}`,
+                              color: active ? 'var(--accent)' : 'var(--muted)',
+                            }}
+                          >
+                            {m}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  {/* Direct transcription toggle */}
+                  <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', fontSize: '0.74rem', color: 'var(--muted)', marginTop: '2px' }}>
+                    <input
+                      type="checkbox"
+                      checked={vfDirect}
+                      onChange={(e) => setVfDirect(e.target.checked)}
+                      style={{ accentColor: 'var(--accent)' }}
+                    />
+                    <span>Direct transcription only (bypass AI enhancement)</span>
+                  </label>
+
+                  {/* Model & Language row */}
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', marginTop: '4px' }}>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '3px' }}>
+                      <span style={{ fontSize: '0.72rem', color: 'var(--muted)', fontWeight: 600 }}>Speech Model:</span>
+                      <select
+                        value={vfModel}
+                        onChange={(e) => setVfModel(e.target.value as any)}
+                        style={{
+                          padding: '5px 8px',
+                          borderRadius: '6px',
+                          backgroundColor: 'var(--surface-2)',
+                          border: '1px solid color-mix(in srgb, var(--text) 12%, transparent)',
+                          color: 'var(--text)',
+                          fontSize: '0.74rem',
+                          cursor: 'pointer',
+                        }}
+                      >
+                        <option value="base">base (Balanced, ~140MB)</option>
+                        <option value="tiny">tiny (Ultra-fast, ~75MB)</option>
+                        <option value="small">small (High accuracy, ~480MB)</option>
+                        <option value="turbo">turbo (Large v3 Turbo)</option>
+                      </select>
+                    </div>
+
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '3px' }}>
+                      <span style={{ fontSize: '0.72rem', color: 'var(--muted)', fontWeight: 600 }}>Language:</span>
+                      <select
+                        value={vfLanguage}
+                        onChange={(e) => setVfLanguage(e.target.value)}
+                        style={{
+                          padding: '5px 8px',
+                          borderRadius: '6px',
+                          backgroundColor: 'var(--surface-2)',
+                          border: '1px solid color-mix(in srgb, var(--text) 12%, transparent)',
+                          color: 'var(--text)',
+                          fontSize: '0.74rem',
+                          cursor: 'pointer',
+                        }}
+                      >
+                        <option value="auto">Auto (English, Telugu, Mixed)</option>
+                        <option value="en">English (en)</option>
+                        <option value="te">Telugu (te)</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  {/* Clipboard Restoration & Shortcut */}
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', marginTop: '2px' }}>
+                    <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', fontSize: '0.74rem', color: 'var(--muted)' }}>
+                      <input
+                        type="checkbox"
+                        checked={vfRestoreClipboard}
+                        onChange={(e) => setVfRestoreClipboard(e.target.checked)}
+                        style={{ accentColor: 'var(--accent)' }}
+                      />
+                      <span>Restore user clipboard snapshot after paste</span>
+                    </label>
+
+                    <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', fontSize: '0.74rem', color: 'var(--muted)' }}>
+                      <input
+                        type="checkbox"
+                        checked={vfShortcut}
+                        onChange={(e) => setVfShortcut(e.target.checked)}
+                        style={{ accentColor: 'var(--accent)' }}
+                      />
+                      <span>Enable global shortcut (Ctrl+Alt+Space)</span>
+                    </label>
+                  </div>
+
+                  {/* History Preview */}
+                  {vfHistory.length > 0 && (
+                    <div style={{ marginTop: '6px', borderTop: '1px solid color-mix(in srgb, var(--text) 8%, transparent)', paddingTop: '6px' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '4px' }}>
+                        <span style={{ fontSize: '0.72rem', fontWeight: 600, color: 'var(--muted)' }}>Recent Dictations:</span>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            voiceFlowHistory.clear();
+                            setVfHistory([]);
+                          }}
+                          style={{
+                            background: 'none',
+                            border: 'none',
+                            color: 'var(--muted)',
+                            fontSize: '0.68rem',
+                            cursor: 'pointer',
+                            textDecoration: 'underline',
+                          }}
+                        >
+                          Clear
+                        </button>
+                      </div>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', maxHeight: '100px', overflowY: 'auto' }}>
+                        {vfHistory.map((h) => (
+                          <div
+                            key={h.id}
+                            style={{
+                              padding: '4px 6px',
+                              borderRadius: '4px',
+                              backgroundColor: 'color-mix(in srgb, var(--text) 3%, transparent)',
+                              fontSize: '0.7rem',
+                            }}
+                          >
+                            <div style={{ display: 'flex', justifyContent: 'space-between', color: 'var(--muted)' }}>
+                              <span>{h.targetApp || 'App'}</span>
+                              <span style={{ textTransform: 'capitalize' }}>{h.mode} • {h.latencyMs}ms</span>
+                            </div>
+                            <div style={{ color: 'var(--text)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                              {h.enhancedText || h.rawTranscript}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </>
               )}
             </div>
           </div>

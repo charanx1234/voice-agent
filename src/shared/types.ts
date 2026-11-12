@@ -713,6 +713,19 @@ export interface FridayApiBridge {
   quickToolsSaveWorkspace: (workspace: Omit<WorkspaceConfig, 'id' | 'createdAt'> & { id?: string }) => Promise<WorkspaceConfig>;
   quickToolsLaunchWorkspace: (idOrName: string) => Promise<{ success: boolean; launchedCount: number; errors: string[] }>;
   quickToolsDeleteWorkspace: (id: string) => Promise<boolean>;
+
+  // FRIDAY VoiceFlow
+  voiceFlowGetStatus?: () => Promise<{ ready: boolean; engine: string; device: string; computeType: string }>;
+  voiceFlowTranscribe?: (audioBase64: string, language?: string, model?: string) => Promise<{ success: boolean; result?: any; error?: string }>;
+  voiceFlowEnhance?: (rawText: string, mode?: string, options?: { language?: string; directTranscription?: boolean }) => Promise<{ success: boolean; result?: any; error?: string }>;
+  voiceFlowCaptureTarget?: () => Promise<{ success: boolean; target: any; error?: string }>;
+  voiceFlowInsertText?: (text: string, target?: any, options?: { restoreClipboard?: boolean; restoreDelayMs?: number }) => Promise<{ success: boolean; result?: any; error?: string }>;
+  voiceFlowEnhanceAndInsert?: (rawText: string, mode?: string, target?: any, options?: any) => Promise<{ success: boolean; result?: any; insertion?: any; error?: string }>;
+  voiceflowTranscribe?: (audioBase64: string, language?: string, model?: string) => Promise<{ success: boolean; result?: any; error?: string; text?: string; language?: string }>;
+  voiceflowCaptureTarget?: () => Promise<any>;
+  voiceflowInsertText?: (text: string, target?: any, options?: any) => Promise<any>;
+  voiceflowEnhanceAndInsert?: (rawText: string, mode?: string, target?: any, options?: any) => Promise<any>;
+  onVoiceFlowTriggerShortcut?: (callback: () => void) => () => void;
 }
 
 export type WebsiteElementType =

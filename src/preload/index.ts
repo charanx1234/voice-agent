@@ -312,6 +312,30 @@ const apiBridge: FridayApiBridge = {
     ipcRenderer.invoke(IPC_CHANNELS.QUICKTOOLS_WORKSPACES_LAUNCH, idOrName),
   quickToolsDeleteWorkspace: (id: string) =>
     ipcRenderer.invoke(IPC_CHANNELS.QUICKTOOLS_WORKSPACES_DELETE, id),
+
+  // FRIDAY VoiceFlow
+  voiceFlowGetStatus: () => ipcRenderer.invoke(IPC_CHANNELS.VOICEFLOW_GET_STATUS),
+  voiceFlowTranscribe: (audioBase64: string, language?: string, model?: string) =>
+    ipcRenderer.invoke(IPC_CHANNELS.VOICEFLOW_TRANSCRIBE, audioBase64, language, model),
+  voiceFlowEnhance: (rawText: string, mode?: string, options?: any) =>
+    ipcRenderer.invoke(IPC_CHANNELS.VOICEFLOW_ENHANCE_AND_INSERT, rawText, mode, options),
+  voiceFlowCaptureTarget: () => ipcRenderer.invoke(IPC_CHANNELS.VOICEFLOW_CAPTURE_TARGET),
+  voiceFlowInsertText: (text: string, target?: any, options?: any) =>
+    ipcRenderer.invoke(IPC_CHANNELS.VOICEFLOW_INSERT_TEXT, text, target, options),
+  voiceFlowEnhanceAndInsert: (rawText: string, mode?: string, target?: any, options?: any) =>
+    ipcRenderer.invoke(IPC_CHANNELS.VOICEFLOW_ENHANCE_AND_INSERT, rawText, mode, target, options),
+  voiceflowTranscribe: (audioBase64: string, language?: string, model?: string) =>
+    ipcRenderer.invoke(IPC_CHANNELS.VOICEFLOW_TRANSCRIBE, audioBase64, language, model),
+  voiceflowEnhanceAndInsert: (rawText: string, mode?: string, target?: any, options?: any) =>
+    ipcRenderer.invoke(IPC_CHANNELS.VOICEFLOW_ENHANCE_AND_INSERT, rawText, mode, target, options),
+  voiceflowCaptureTarget: () => ipcRenderer.invoke(IPC_CHANNELS.VOICEFLOW_CAPTURE_TARGET),
+  voiceflowInsertText: (text: string, target?: any, options?: any) =>
+    ipcRenderer.invoke(IPC_CHANNELS.VOICEFLOW_INSERT_TEXT, text, target, options),
+  onVoiceFlowTriggerShortcut: (callback: () => void) => {
+    const handler = () => callback();
+    ipcRenderer.on(IPC_CHANNELS.VOICEFLOW_TRIGGER_SHORTCUT, handler);
+    return () => ipcRenderer.removeListener(IPC_CHANNELS.VOICEFLOW_TRIGGER_SHORTCUT, handler);
+  },
 };
 
 contextBridge.exposeInMainWorld('fridayAPI', apiBridge);

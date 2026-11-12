@@ -38,6 +38,9 @@ import { playWakeChime } from './utils/audioChime';
 import { voiceTiming } from './utils/voiceTiming';
 import { validateVoiceAction } from '@/services/agent/voiceActionGuard';
 import { voiceSessionManager } from '@/services/voice/voiceSession';
+import { detectVoiceFlowActivationPhrase } from '@/services/voice/wakeWord';
+import { voiceFlowController } from '@/services/voiceflow/voiceflowController';
+import { VoiceFlowHUD } from './components/VoiceFlowHUD';
 
 export const App: React.FC = () => {
   const [settings, setSettings] = useState<FridaySettings>({
@@ -1213,6 +1216,17 @@ export const App: React.FC = () => {
       }));
       const minPeak = settings.audioQualityThreshold || 0.03;
       if (isLikelySilence(peakLevel) || peakLevel < minPeak) return;
+
+      // Check for VoiceFlow natural language trigger phrase ("Friday, type this ...")
+      if (recognizedText) {
+        const vfPhrase = detectVoiceFlowActivationPhrase(recognizedText);
+        if (vfPhrase.isVoiceFlow) {
+          console.info('[VoiceFlow] Natural language trigger intercepted:', recognizedText);
+          void voiceFlowController.activate('phrase', vfPhrase.immediateText);
+          return;
+        }
+      }
+
       if (settings.speakerVerificationEnabled && isVerifiedSpeaker === false) {
         const text = "I heard speech, but it doesn't match your enrolled voice. Desktop actions were blocked for security.";
         const msg: ChatMessage = {
@@ -1245,6 +1259,12 @@ export const App: React.FC = () => {
     onWake: (command) => {
       setVoiceSessionState('WAKE_WORD_DETECTED');
       if (command) {
+        const vfPhrase = detectVoiceFlowActivationPhrase(command);
+        if (vfPhrase.isVoiceFlow) {
+          console.info('[VoiceFlow] Wake trigger intercepted for VoiceFlow:', command);
+          void voiceFlowController.activate('phrase', vfPhrase.immediateText);
+          return;
+        }
         void sendRef.current(command);
       } else {
         // Instant silent wake-up: show visual aura, switch robot & pet state to listening, play subtle chime, stay completely silent
@@ -1677,6 +1697,9 @@ export const App: React.FC = () => {
         onClose={() => setDiagnosticsOpen(false)}
         diagnostics={voiceDiagnostics}
       />
+
+      {/* Floating VoiceFlow Recording HUD */}
+      <VoiceFlowHUD />
     </div>
   );
 };

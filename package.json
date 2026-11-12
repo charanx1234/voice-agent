@@ -8,7 +8,7 @@
   "scripts": {
     "dev": "vite",
     "dev:electron": "concurrently -k \"vite\" \"cross-env WAIT_ON_DEV=1 electron dist-electron/main/index.js\"",
-    "build:electron": "tsc -p tsconfig.electron.json",
+    "build:electron": "tsc -p tsconfig.electron.json && node -e \"const fs = require('fs'); fs.mkdirSync('dist-electron/services/voiceflow', {recursive: true}); fs.copyFileSync('src/services/voiceflow/voiceflowEngine.py', 'dist-electron/services/voiceflow/voiceflowEngine.py');\"",
     "build:renderer": "vite build",
     "build": "npm run build:electron && npm run build:renderer",
     "start": "npm run build && electron dist-electron/main/index.js",

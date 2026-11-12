@@ -9,6 +9,7 @@
   "files": [
     "dist-electron/**/*",
     "dist-renderer/**/*",
+    "src/services/voiceflow/voiceflowEngine.py",
     "package.json"
   ],
   "win": {
