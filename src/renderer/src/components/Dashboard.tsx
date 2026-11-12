@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
-import { X, Copy, Check, BellRing, Code2, FileText, List, Table2, Braces } from 'lucide-react';
+import { X, Copy, Check, BellRing, Code2, FileText, List, Table2, Braces, Keyboard } from 'lucide-react';
 import { DashboardArtifact, ReminderItem } from '@/shared/types';
 import { copyTextToClipboard } from '../utils/clipboard';
+import { TypeFlowDashboardTab } from './TypeFlowDashboardTab';
 
 interface DashboardProps {
   artifacts: DashboardArtifact[];
@@ -137,6 +138,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
 }) => {
   const [copied, setCopied] = useState(false);
   const [copyError, setCopyError] = useState(false);
+  const [currentTab, setCurrentTab] = useState<'artifacts' | 'typeflow'>('artifacts');
   const active = artifacts.find((artifact) => artifact.id === activeId) || artifacts[0] || null;
 
   const handleCopy = async () => {
@@ -177,14 +179,48 @@ export const Dashboard: React.FC<DashboardProps> = ({
         }}
       >
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-          <Braces size={15} color="var(--accent)" />
-          <span style={{ fontSize: '0.78rem', fontWeight: 700, letterSpacing: '0.06em' }}>
-            DASHBOARD
-          </span>
+          <button
+            onClick={() => setCurrentTab('artifacts')}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px',
+              background: currentTab === 'artifacts' ? 'rgba(255,255,255,0.08)' : 'transparent',
+              border: `1px solid ${currentTab === 'artifacts' ? 'var(--border)' : 'transparent'}`,
+              borderRadius: '6px',
+              padding: '4px 8px',
+              color: currentTab === 'artifacts' ? 'var(--accent)' : 'var(--muted)',
+              cursor: 'pointer',
+              fontSize: '0.78rem',
+              fontWeight: 700,
+            }}
+          >
+            <Braces size={14} />
+            <span>ARTIFACTS</span>
+          </button>
+          <button
+            onClick={() => setCurrentTab('typeflow')}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px',
+              background: currentTab === 'typeflow' ? 'rgba(59, 130, 246, 0.15)' : 'transparent',
+              border: `1px solid ${currentTab === 'typeflow' ? 'rgba(59, 130, 246, 0.4)' : 'transparent'}`,
+              borderRadius: '6px',
+              padding: '4px 8px',
+              color: currentTab === 'typeflow' ? '#60a5fa' : 'var(--muted)',
+              cursor: 'pointer',
+              fontSize: '0.78rem',
+              fontWeight: 700,
+            }}
+          >
+            <Keyboard size={14} />
+            <span>TYPEFLOW</span>
+          </button>
         </div>
 
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-          {active && (
+          {currentTab === 'artifacts' && active && (
             <button
               onClick={handleCopy}
               title={copyError ? 'Clipboard access failed' : 'Copy content'}
@@ -216,77 +252,85 @@ export const Dashboard: React.FC<DashboardProps> = ({
         </div>
       </div>
 
-      {/* Artifact tabs */}
-      {artifacts.length > 0 && (
-        <div
-          style={{
-            display: 'flex',
-            gap: '6px',
-            padding: '8px 12px',
-            overflowX: 'auto',
-            borderBottom: '1px solid var(--border)',
-          }}
-        >
-          {artifacts.map((artifact) => {
-            const isActive = active?.id === artifact.id;
-            return (
-              <button
-                key={artifact.id}
-                onClick={() => onSelect(artifact.id)}
-                title={artifact.title}
+      {currentTab === 'typeflow' ? (
+        <div style={{ flex: 1, padding: '14px', overflowY: 'auto' }}>
+          <TypeFlowDashboardTab />
+        </div>
+      ) : (
+        <>
+          {/* Artifact tabs */}
+          {artifacts.length > 0 && (
+            <div
+              style={{
+                display: 'flex',
+                gap: '6px',
+                padding: '8px 12px',
+                overflowX: 'auto',
+                borderBottom: '1px solid var(--border)',
+              }}
+            >
+              {artifacts.map((artifact) => {
+                const isActive = active?.id === artifact.id;
+                return (
+                  <button
+                    key={artifact.id}
+                    onClick={() => onSelect(artifact.id)}
+                    title={artifact.title}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '5px',
+                      flexShrink: 0,
+                      maxWidth: '190px',
+                      padding: '4px 9px',
+                      borderRadius: '8px',
+                      fontSize: '0.72rem',
+                      cursor: 'pointer',
+                      backgroundColor: isActive
+                        ? 'color-mix(in srgb, var(--accent) 12%, transparent)'
+                        : 'transparent',
+                      border: `1px solid ${
+                        isActive ? 'color-mix(in srgb, var(--accent) 40%, transparent)' : 'var(--border)'
+                      }`,
+                      color: isActive ? 'var(--accent)' : 'var(--muted)',
+                    }}
+                  >
+                    {KIND_ICONS[artifact.kind]}
+                    <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      {artifact.title}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          )}
+
+          {/* Artifact body */}
+          <div style={{ flex: 1, overflowY: 'auto', padding: '14px' }}>
+            {active ? (
+              <>
+                <h3 style={{ fontSize: '0.92rem', fontWeight: 700, marginBottom: '10px', color: 'var(--text)' }}>
+                  {active.title}
+                </h3>
+                {renderArtifact(active)}
+              </>
+            ) : (
+              <div
                 style={{
                   display: 'flex',
                   alignItems: 'center',
-                  gap: '5px',
-                  flexShrink: 0,
-                  maxWidth: '190px',
-                  padding: '4px 9px',
-                  borderRadius: '8px',
-                  fontSize: '0.72rem',
-                  cursor: 'pointer',
-                  backgroundColor: isActive
-                    ? 'color-mix(in srgb, var(--accent) 12%, transparent)'
-                    : 'transparent',
-                  border: `1px solid ${
-                    isActive ? 'color-mix(in srgb, var(--accent) 40%, transparent)' : 'var(--border)'
-                  }`,
-                  color: isActive ? 'var(--accent)' : 'var(--muted)',
+                  justifyContent: 'center',
+                  height: '100%',
+                  color: 'var(--muted-dim)',
+                  fontSize: '0.8rem',
                 }}
               >
-                {KIND_ICONS[artifact.kind]}
-                <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                  {artifact.title}
-                </span>
-              </button>
-            );
-          })}
-        </div>
-      )}
-
-      {/* Artifact body */}
-      <div style={{ flex: 1, overflowY: 'auto', padding: '14px' }}>
-        {active ? (
-          <>
-            <h3 style={{ fontSize: '0.92rem', fontWeight: 700, marginBottom: '10px', color: 'var(--text)' }}>
-              {active.title}
-            </h3>
-            {renderArtifact(active)}
-          </>
-        ) : (
-          <div
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              height: '100%',
-              color: 'var(--muted-dim)',
-              fontSize: '0.8rem',
-            }}
-          >
-            No output yet.
+                No output yet.
+              </div>
+            )}
           </div>
-        )}
-      </div>
+        </>
+      )}
 
       {/* Reminders */}
       <div

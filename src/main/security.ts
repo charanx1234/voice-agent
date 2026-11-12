@@ -148,6 +148,22 @@ export const IPC_CHANNELS = {
   VOICEFLOW_HISTORY_CLEAR: 'friday:voiceflow-history-clear',
   VOICEFLOW_HISTORY_DELETE: 'friday:voiceflow-history-delete',
   VOICEFLOW_TRIGGER_SHORTCUT: 'friday:voiceflow-trigger-shortcut',
+
+  // FRIDAY TypeFlow Subsystem
+  TYPEFLOW_TYPE_CLIPBOARD: 'friday:typeflow-type-clipboard',
+  TYPEFLOW_READ_SELECTION: 'friday:typeflow-read-selection',
+  TYPEFLOW_EXPLAIN_SELECTION: 'friday:typeflow-explain-selection',
+  TYPEFLOW_TYPE_TEXT: 'friday:typeflow-type-text',
+  TYPEFLOW_PAUSE: 'friday:typeflow-pause',
+  TYPEFLOW_RESUME: 'friday:typeflow-resume',
+  TYPEFLOW_CANCEL: 'friday:typeflow-cancel',
+  TYPEFLOW_GET_STATE: 'friday:typeflow-get-state',
+  TYPEFLOW_GET_TEMPLATES: 'friday:typeflow-get-templates',
+  TYPEFLOW_SAVE_TEMPLATE: 'friday:typeflow-save-template',
+  TYPEFLOW_DELETE_TEMPLATE: 'friday:typeflow-delete-template',
+  TYPEFLOW_GET_HISTORY: 'friday:typeflow-get-history',
+  TYPEFLOW_CLEAR_HISTORY: 'friday:typeflow-clear-history',
+  TYPEFLOW_PROGRESS: 'friday:typeflow-progress',
 } as const;
 
 export function sanitizePath(inputPath: string): string {

@@ -336,6 +336,31 @@ const apiBridge: FridayApiBridge = {
     ipcRenderer.on(IPC_CHANNELS.VOICEFLOW_TRIGGER_SHORTCUT, handler);
     return () => ipcRenderer.removeListener(IPC_CHANNELS.VOICEFLOW_TRIGGER_SHORTCUT, handler);
   },
+
+  // FRIDAY TypeFlow Bridge
+  typeFlowTypeClipboard: (config?: any) => ipcRenderer.invoke(IPC_CHANNELS.TYPEFLOW_TYPE_CLIPBOARD, config),
+  typeFlowReadSelection: () => ipcRenderer.invoke(IPC_CHANNELS.TYPEFLOW_READ_SELECTION),
+  typeFlowExplainSelection: (instruction?: string) => ipcRenderer.invoke(IPC_CHANNELS.TYPEFLOW_EXPLAIN_SELECTION, instruction),
+  typeFlowTypeText: (text: string, config?: any) => ipcRenderer.invoke(IPC_CHANNELS.TYPEFLOW_TYPE_TEXT, text, config),
+  typeFlowPause: () => ipcRenderer.invoke(IPC_CHANNELS.TYPEFLOW_PAUSE),
+  typeFlowResume: () => ipcRenderer.invoke(IPC_CHANNELS.TYPEFLOW_RESUME),
+  typeFlowCancel: () => ipcRenderer.invoke(IPC_CHANNELS.TYPEFLOW_CANCEL),
+  typeFlowGetState: () => ipcRenderer.invoke(IPC_CHANNELS.TYPEFLOW_GET_STATE),
+  typeFlowGetTemplates: () => ipcRenderer.invoke(IPC_CHANNELS.TYPEFLOW_GET_TEMPLATES),
+  typeFlowSaveTemplate: (template: any) => ipcRenderer.invoke(IPC_CHANNELS.TYPEFLOW_SAVE_TEMPLATE, template),
+  typeFlowDeleteTemplate: (id: string) => ipcRenderer.invoke(IPC_CHANNELS.TYPEFLOW_DELETE_TEMPLATE, id),
+  typeFlowGetHistory: () => ipcRenderer.invoke(IPC_CHANNELS.TYPEFLOW_GET_HISTORY),
+  typeFlowClearHistory: () => ipcRenderer.invoke(IPC_CHANNELS.TYPEFLOW_CLEAR_HISTORY),
+  onTypeFlowProgress: (callback: (progress: any) => void) => {
+    const handler = (_event: any, payload: any) => callback(payload);
+    ipcRenderer.on(IPC_CHANNELS.TYPEFLOW_PROGRESS, handler);
+    return () => ipcRenderer.removeListener(IPC_CHANNELS.TYPEFLOW_PROGRESS, handler);
+  },
+  onTypeFlowShortcut: (callback: () => void) => {
+    const handler = () => callback();
+    ipcRenderer.on(IPC_CHANNELS.TYPEFLOW_TYPE_CLIPBOARD, handler);
+    return () => ipcRenderer.removeListener(IPC_CHANNELS.TYPEFLOW_TYPE_CLIPBOARD, handler);
+  },
 };
 
 contextBridge.exposeInMainWorld('fridayAPI', apiBridge);

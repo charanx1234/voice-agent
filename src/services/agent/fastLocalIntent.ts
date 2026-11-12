@@ -13,6 +13,8 @@ import { quickNotesService } from '../quicktools/quickNotesService';
 import { batchRenamerService } from '../quicktools/batchRenamerService';
 import { fileFinderService } from '../quicktools/fileFinderService';
 import { workspacesService } from '../quicktools/workspacesService';
+import { typeFlowController } from '../typeflow/typeflowController';
+import { typeFlowAi } from '../typeflow/typeflowAiIntelligence';
 import {
   sendMediaKeyEvent,
   executeMusicControlTool,
@@ -25,7 +27,7 @@ import { isForeignAssistantCommand, validateVoiceAction } from './voiceActionGua
 
 export interface FastLocalIntentResult {
   matched: boolean;
-  intent: 'launch_app' | 'close_app' | 'media' | 'volume' | 'brightness' | 'time' | 'date' | 'battery' | 'window' | 'weather' | 'mouse' | 'quicktools';
+  intent: 'launch_app' | 'close_app' | 'media' | 'volume' | 'brightness' | 'time' | 'date' | 'battery' | 'window' | 'weather' | 'mouse' | 'quicktools' | 'typeflow';
   response: string;
   toolCalls?: Array<{
     toolName: string;
@@ -1511,6 +1513,156 @@ export class FastLocalIntentRouter {
         matched: true,
         intent: 'window',
         response,
+        executionMs: Date.now() - start,
+      };
+    }
+
+    // ==========================================
+    // 7. FRIDAY TYPEFLOW NATURAL-LANGUAGE INTENTS
+    // ==========================================
+    // 7a. "Type my clipboard", "Type clipboard", "Paste and type clipboard"
+    if (
+      /^(?:hey\s+)?(?:friday[\s,]+)?(?:type\s+(?:my\s+)?clipboard|type\s+clipboard\s+content|clipboard\s+type\s+chey)[?.!]?$/i.test(
+        lower
+      )
+    ) {
+      try {
+        const text = typeFlowController.getClipboardText();
+        if (!text) {
+          return {
+            matched: true,
+            intent: 'typeflow',
+            response: 'Your clipboard is empty, sir.',
+            executionMs: Date.now() - start,
+          };
+        }
+        const res = await typeFlowController.typeClipboard();
+        return {
+          matched: true,
+          intent: 'typeflow',
+          response: `Typing ${res.charsTyped} characters into ${res.targetProcess}.`,
+          toolCalls: [{ toolName: 'typeflow_type_clipboard', args: {}, result: res, status: 'completed' }],
+          executionMs: Date.now() - start,
+        };
+      } catch (e: any) {
+        return {
+          matched: true,
+          intent: 'typeflow',
+          response: `Could not type clipboard: ${e.message}`,
+          executionMs: Date.now() - start,
+        };
+      }
+    }
+
+    // 7b. "Read the selected text", "Read selection", "What is selected"
+    if (
+      /^(?:hey\s+)?(?:friday[\s,]+)?(?:read\s+(?:the\s+)?selected\s+text|read\s+selection|what\s+did\s+i\s+select)[?.!]?$/i.test(
+        lower
+      )
+    ) {
+      try {
+        const sel = await typeFlowController.readSelectedText();
+        if (!sel.text) {
+          return {
+            matched: true,
+            intent: 'typeflow',
+            response: 'No text is currently selected. Please highlight text with your mouse first.',
+            executionMs: Date.now() - start,
+          };
+        }
+        const preview = sel.text.length > 150 ? sel.text.slice(0, 147) + '...' : sel.text;
+        return {
+          matched: true,
+          intent: 'typeflow',
+          response: `I've read the selected text from ${sel.application}: "${preview}"`,
+          toolCalls: [{ toolName: 'typeflow_read_selection', args: {}, result: sel, status: 'completed' }],
+          executionMs: Date.now() - start,
+        };
+      } catch (e: any) {
+        return {
+          matched: true,
+          intent: 'typeflow',
+          response: `Failed to read selection: ${e.message}`,
+          executionMs: Date.now() - start,
+        };
+      }
+    }
+
+    // 7c. "Explain this", "Explain this question", "Summarise this paragraph"
+    if (
+      /^(?:hey\s+)?(?:friday[\s,]+)?(?:explain\s+(?:this|the\s+question|this\s+code)|summarise\s+(?:this|this\s+paragraph)|find\s+the\s+mistake)[?.!]?$/i.test(
+        lower
+      )
+    ) {
+      try {
+        let sel = typeFlowController.getActiveContext()?.selectedText;
+        if (!sel) {
+          const fresh = await typeFlowController.readSelectedText();
+          sel = fresh.text;
+        }
+        if (!sel) {
+          return {
+            matched: true,
+            intent: 'typeflow',
+            response: 'Please highlight the text or question you would like me to explain first.',
+            executionMs: Date.now() - start,
+          };
+        }
+        const explanation = await typeFlowAi.generateResponse(sel, clean);
+        return {
+          matched: true,
+          intent: 'typeflow',
+          response: explanation,
+          toolCalls: [{ toolName: 'typeflow_explain_selection', args: { instruction: clean }, result: { explanation }, status: 'completed' }],
+          executionMs: Date.now() - start,
+        };
+      } catch (e: any) {
+        return {
+          matched: true,
+          intent: 'typeflow',
+          response: `Could not process selected text: ${e.message}`,
+          executionMs: Date.now() - start,
+        };
+      }
+    }
+
+    // 7d. "Pause typing", "Cancel typing", "Resume typing", "Clear context"
+    if (/^(?:hey\s+)?(?:friday[\s,]+)?(?:pause\s+typing|pause\s+session)[?.!]?$/i.test(lower)) {
+      const ok = await typeFlowController.pause();
+      return {
+        matched: true,
+        intent: 'typeflow',
+        response: ok ? 'Typing session paused.' : 'No active typing session to pause.',
+        executionMs: Date.now() - start,
+      };
+    }
+
+    if (/^(?:hey\s+)?(?:friday[\s,]+)?(?:resume\s+typing|resume\s+session)[?.!]?$/i.test(lower)) {
+      const ok = await typeFlowController.resume();
+      return {
+        matched: true,
+        intent: 'typeflow',
+        response: ok ? 'Typing session resumed.' : 'No paused session to resume.',
+        executionMs: Date.now() - start,
+      };
+    }
+
+    if (/^(?:hey\s+)?(?:friday[\s,]+)?(?:cancel\s+typing|cancel\s+the\s+session|stop\s+typing)[?.!]?$/i.test(lower)) {
+      const ok = await typeFlowController.cancel();
+      return {
+        matched: true,
+        intent: 'typeflow',
+        response: ok ? 'Typing session cancelled.' : 'No active session to cancel.',
+        executionMs: Date.now() - start,
+      };
+    }
+
+    if (/^(?:hey\s+)?(?:friday[\s,]+)?(?:clear\s+(?:the\s+)?context|clear\s+typeflow\s+context)[?.!]?$/i.test(lower)) {
+      typeFlowController.clearContext();
+      return {
+        matched: true,
+        intent: 'typeflow',
+        response: 'TypeFlow context has been cleared.',
         executionMs: Date.now() - start,
       };
     }

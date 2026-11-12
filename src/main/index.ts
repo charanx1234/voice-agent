@@ -449,6 +449,20 @@ if (!hasSingleInstanceLock) {
       console.warn('[FRIDAY] Could not register global shortcut for VoiceFlow:', e);
     }
 
+    // Configurable global shortcut for FRIDAY TypeFlow Clipboard Typing (F1)
+    try {
+      globalShortcut.register('F1', () => {
+        const wins = BrowserWindow.getAllWindows();
+        wins.forEach((w) => {
+          if (!w.isDestroyed()) {
+            w.webContents.send(IPC_CHANNELS.TYPEFLOW_TYPE_CLIPBOARD);
+          }
+        });
+      });
+    } catch (e) {
+      console.warn('[FRIDAY] Could not register F1 global shortcut for TypeFlow:', e);
+    }
+
     app.on('activate', () => {
       if (BrowserWindow.getAllWindows().length === 0) {
         createWindow();

@@ -30,6 +30,7 @@ import { useHandsFree } from '../hooks/useHandsFree';
 import { playWakeChime } from '../utils/audioChime';
 import { voiceFlowController } from '@/services/voiceflow/voiceflowController';
 import { VoiceFlowHUD } from './VoiceFlowHUD';
+import { TypeFlowPetHUD } from './TypeFlowPetHUD';
 import { VoiceFlowState } from '@/services/voiceflow/types';
 import '../styles/desktopPet.css';
 
@@ -1400,6 +1401,7 @@ export const DesktopPet: React.FC = () => {
           <div className="pet-footer-character">
             {renderPetCharacter(136)}
           </div>
+          <TypeFlowPetHUD />
         </div>
       )}
     </div>

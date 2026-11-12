@@ -12,6 +12,7 @@ import { chromeBrowserToolDefinitions, executeChromeBrowserTool } from './chrome
 import { musicControlToolDefinitions, executeMusicControlTool } from './musicControlTool';
 import { systemControlToolDefinitions, executeSystemControlTool } from './systemControlTools';
 import { quickToolsDefinitions, executeQuickToolsAgent } from './quickToolsDefinitions';
+import { typeFlowToolDefinitions, executeTypeFlowTool } from '../typeflow/typeflowTools';
 import { desktopControlService } from '../desktop/desktopControlService';
 import { settingsStore } from '../storage/settingsStore';
 import { accentIdFromName, defaultVoiceForAccent } from '../voice/voiceCatalog';
@@ -147,6 +148,7 @@ export class ToolRegistry {
       ...musicControlToolDefinitions,
       ...systemControlToolDefinitions,
       ...quickToolsDefinitions,
+      ...typeFlowToolDefinitions,
     ];
 
     // Format for @google/genai and @google/generative-ai
@@ -312,6 +314,9 @@ export class ToolRegistry {
         ].includes(toolName)
       ) {
         return await executeQuickToolsAgent(toolName, args);
+      }
+      if (toolName.startsWith('typeflow_')) {
+        return await executeTypeFlowTool(toolName, args);
       }
       if (
         [

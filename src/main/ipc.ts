@@ -33,6 +33,8 @@ import { workspacesService } from '../services/quicktools/workspacesService';
 import { voiceFlowService } from '../services/voiceflow/voiceflowService';
 import { voiceFlowEnhancer } from '../services/voiceflow/voiceflowEnhancer';
 import { voiceFlowPaste } from '../services/voiceflow/voiceflowPaste';
+import { typeFlowController } from '../services/typeflow/typeflowController';
+import { typeFlowAi } from '../services/typeflow/typeflowAiIntelligence';
 
 let handlersRegistered = false;
 let activeVoiceCoordinator: VoiceCoordinator | null = null;
@@ -1065,6 +1067,105 @@ export function registerIpcHandlers(
       }
     }
   );
+
+  // FRIDAY TypeFlow IPC Handlers
+  typeFlowController.on('progress', (progress) => {
+    safeSend(getMainWindow(), IPC_CHANNELS.TYPEFLOW_PROGRESS, progress);
+    const petWin = getPetWindow ? getPetWindow() : null;
+    safeSend(petWin, IPC_CHANNELS.TYPEFLOW_PROGRESS, progress);
+  });
+
+  ipcMain.handle(IPC_CHANNELS.TYPEFLOW_TYPE_CLIPBOARD, async (_event, config?: any) => {
+    try {
+      const res = await typeFlowController.typeClipboard(config);
+      return { success: true, result: res };
+    } catch (err: any) {
+      return { success: false, error: err.message || 'Clipboard typing failed' };
+    }
+  });
+
+  ipcMain.handle(IPC_CHANNELS.TYPEFLOW_READ_SELECTION, async () => {
+    try {
+      const res = await typeFlowController.readSelectedText();
+      return { success: true, result: res };
+    } catch (err: any) {
+      return { success: false, error: err.message || 'Selection reading failed' };
+    }
+  });
+
+  ipcMain.handle(IPC_CHANNELS.TYPEFLOW_EXPLAIN_SELECTION, async (_event, instruction?: string) => {
+    try {
+      let sel = typeFlowController.getActiveContext()?.selectedText;
+      if (!sel) {
+        const fresh = await typeFlowController.readSelectedText();
+        sel = fresh.text;
+      }
+      if (!sel) {
+        return { success: false, error: 'Please select text first.' };
+      }
+      const explanation = await typeFlowAi.generateResponse(sel, instruction);
+      return { success: true, selectedText: sel, explanation };
+    } catch (err: any) {
+      return { success: false, error: err.message || 'Explanation failed' };
+    }
+  });
+
+  ipcMain.handle(IPC_CHANNELS.TYPEFLOW_TYPE_TEXT, async (_event, text: string, config?: any) => {
+    try {
+      const res = await typeFlowController.typeText(text, config);
+      return { success: true, result: res };
+    } catch (err: any) {
+      return { success: false, error: err.message || 'Typing failed' };
+    }
+  });
+
+  ipcMain.handle(IPC_CHANNELS.TYPEFLOW_PAUSE, async () => {
+    return { success: await typeFlowController.pause() };
+  });
+
+  ipcMain.handle(IPC_CHANNELS.TYPEFLOW_RESUME, async () => {
+    return { success: await typeFlowController.resume() };
+  });
+
+  ipcMain.handle(IPC_CHANNELS.TYPEFLOW_CANCEL, async () => {
+    return { success: await typeFlowController.cancel() };
+  });
+
+  ipcMain.handle(IPC_CHANNELS.TYPEFLOW_GET_STATE, async () => {
+    return {
+      success: true,
+      context: typeFlowController.getActiveContext(),
+      queue: typeFlowController.getQueue(),
+      history: typeFlowController.getHistory(),
+      templates: typeFlowController.getTemplates(),
+    };
+  });
+
+  ipcMain.handle(IPC_CHANNELS.TYPEFLOW_GET_TEMPLATES, async () => {
+    return { success: true, templates: typeFlowController.getTemplates() };
+  });
+
+  ipcMain.handle(IPC_CHANNELS.TYPEFLOW_SAVE_TEMPLATE, async (_event, template: any) => {
+    try {
+      const saved = typeFlowController.saveTemplate(template);
+      return { success: true, template: saved };
+    } catch (err: any) {
+      return { success: false, error: err.message };
+    }
+  });
+
+  ipcMain.handle(IPC_CHANNELS.TYPEFLOW_DELETE_TEMPLATE, async (_event, id: string) => {
+    return { success: typeFlowController.deleteTemplate(id) };
+  });
+
+  ipcMain.handle(IPC_CHANNELS.TYPEFLOW_GET_HISTORY, async () => {
+    return { success: true, history: typeFlowController.getHistory() };
+  });
+
+  ipcMain.handle(IPC_CHANNELS.TYPEFLOW_CLEAR_HISTORY, async () => {
+    typeFlowController.clearHistory();
+    return { success: true };
+  });
 }
 
 /** Renderer file-opening is limited to files inside an approved project root. */

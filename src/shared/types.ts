@@ -726,6 +726,23 @@ export interface FridayApiBridge {
   voiceflowInsertText?: (text: string, target?: any, options?: any) => Promise<any>;
   voiceflowEnhanceAndInsert?: (rawText: string, mode?: string, target?: any, options?: any) => Promise<any>;
   onVoiceFlowTriggerShortcut?: (callback: () => void) => () => void;
+
+  // FRIDAY TypeFlow
+  typeFlowTypeClipboard?: (config?: any) => Promise<{ success: boolean; result?: any; error?: string }>;
+  typeFlowReadSelection?: () => Promise<{ success: boolean; result?: any; error?: string }>;
+  typeFlowExplainSelection?: (instruction?: string) => Promise<{ success: boolean; selectedText?: string; explanation?: string; error?: string }>;
+  typeFlowTypeText?: (text: string, config?: any) => Promise<{ success: boolean; result?: any; error?: string }>;
+  typeFlowPause?: () => Promise<{ success: boolean }>;
+  typeFlowResume?: () => Promise<{ success: boolean }>;
+  typeFlowCancel?: () => Promise<{ success: boolean }>;
+  typeFlowGetState?: () => Promise<{ success: boolean; context?: any; queue?: any[]; history?: any[]; templates?: any[] }>;
+  typeFlowGetTemplates?: () => Promise<{ success: boolean; templates: any[] }>;
+  typeFlowSaveTemplate?: (template: any) => Promise<{ success: boolean; template?: any; error?: string }>;
+  typeFlowDeleteTemplate?: (id: string) => Promise<{ success: boolean }>;
+  typeFlowGetHistory?: () => Promise<{ success: boolean; history: any[] }>;
+  typeFlowClearHistory?: () => Promise<{ success: boolean }>;
+  onTypeFlowProgress?: (callback: (progress: any) => void) => () => void;
+  onTypeFlowShortcut?: (callback: () => void) => () => void;
 }
 
 export type WebsiteElementType =

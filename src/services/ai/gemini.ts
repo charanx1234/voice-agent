@@ -589,6 +589,34 @@ CRITICAL TRANSCRIPTION RULES:
     return '';
   }
 
+  /**
+   * Generates a raw text response for prompt instructions without conversational side-effects.
+   */
+  public async generateRaw(promptText: string): Promise<string> {
+    const settings = settingsStore.getSettings();
+    const candidates = buildModelCandidates(settings.modelName);
+    const client = this.getClient();
+
+    for (const modelCandidate of candidates) {
+      try {
+        const result = await retryWithBackoff(
+          async () => {
+            return await client.models.generateContent({
+              model: modelCandidate,
+              contents: [{ role: 'user', parts: [{ text: promptText }] }],
+            });
+          },
+          { maxRetries: 2, baseDelayMs: 300 }
+        );
+        const text = (result.text || '').trim();
+        if (text) return text;
+      } catch (err: any) {
+        console.warn(`[Gemini] generateRaw attempt with ${modelCandidate} failed:`, err?.message || err);
+      }
+    }
+    return '';
+  }
+
   public async sendMessage(
     params: SendMessageParams,
     hooks: SendMessageHooks = {}
