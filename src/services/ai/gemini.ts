@@ -499,10 +499,14 @@ export class GeminiService {
     console.info(`[STT Pipeline] Received audio for transcription: ${sizeKb} KB, mime=${cleanMime}`);
 
     // 1. Try Groq Whisper first (ultra-fast <200ms, accurate, no quota limits)
-    const groqResult = await this.transcribeWithGroqWhisper(cleanBase64, cleanMime);
-    if (groqResult !== null) {
-      console.info(`[STT Pipeline] Groq Whisper transcribed: "${groqResult}"`);
-      return groqResult;
+    try {
+      const groqResult = await this.transcribeWithGroqWhisper(cleanBase64, cleanMime);
+      if (groqResult !== null) {
+        console.info(`[STT Pipeline] Groq Whisper transcribed: "${groqResult}"`);
+        return groqResult;
+      }
+    } catch (groqErr: any) {
+      console.warn('[STT Pipeline] Groq Whisper attempt failed, falling back to Gemini:', groqErr?.message || groqErr);
     }
 
     // 2. Fall back to Gemini multimodal audio models

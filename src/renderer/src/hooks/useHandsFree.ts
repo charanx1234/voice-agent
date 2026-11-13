@@ -503,8 +503,8 @@ export function useHandsFree(options: HandsFreeOptions) {
         const canCapture = isAwake || (now < awakeUntil) || speaking;
         if (canCapture) {
           if (speaking) {
-            // Intentional Barge-in during speech playback
-            console.log('[AudioPipeline] Barge-in speech detected during assistant playback! Interrupting...');
+            // Intentional Barge-in during speech playback: Stop playback immediately, capture user's new question
+            console.log('[AudioPipeline] Barge-in speech detected during assistant playback! Interrupting and listening to user...');
             turnInProgress = false;
             isAwake = true;
             awakeUntil = now + 15000;
@@ -512,7 +512,12 @@ export function useHandsFree(options: HandsFreeOptions) {
             utteranceStartedAt = now;
             activeUtterancePcmBuffers = [...preRollPcmBuffers];
             preRollPcmBuffers = [];
+            // Immediately execute caller-supplied onBargeIn callback
             optionsRef.current.onBargeIn();
+            // Also invoke IPC voiceInterrupt bridge directly to ensure both renderer and main audio processes halt instantly
+            if (typeof window !== 'undefined' && window.fridayAPI?.voiceInterrupt) {
+              window.fridayAPI.voiceInterrupt();
+            }
             activeSpeechReported = true;
             optionsRef.current.onSpeechActivity(true);
             voiceSessionManager.log({

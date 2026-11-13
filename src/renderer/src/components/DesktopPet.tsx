@@ -83,6 +83,7 @@ export const DesktopPet: React.FC = () => {
   const mouseDownRef = useRef<{ x: number; y: number; time: number } | null>(null);
   const chatScrollRef = useRef<HTMLDivElement>(null);
   const activeReqIdRef = useRef<string | null>(null);
+  const isTurnProcessingRef = useRef(false);
 
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
@@ -208,8 +209,17 @@ export const DesktopPet: React.FC = () => {
   // Submit a typed or spoken message to the unified AI brain and tools
   const handleSendMessage = useCallback(
     async (textToSend?: string, audioBase64?: string, audioMimeType?: string) => {
+      if (isTurnProcessingRef.current && (petState.robotState === 'thinking' || petState.voiceSessionState === 'THINKING')) {
+        console.warn('[DesktopPet] Single-input enforcement: Already processing a turn. Ignoring overlapping input.');
+        return;
+      }
+      isTurnProcessingRef.current = true;
+
       const text = (textToSend || inputText).trim();
-      if (!text && !audioBase64) return;
+      if (!text && !audioBase64) {
+        isTurnProcessingRef.current = false;
+        return;
+      }
 
       const userMsg: ChatMessage = {
         id: `msg_${Date.now()}_u`,
@@ -282,6 +292,8 @@ export const DesktopPet: React.FC = () => {
         console.error('[FRIDAY Pet] Send message error:', err);
         setPetState((p) => ({ ...p, robotState: 'error', voiceSessionState: 'ERROR' }));
         setTimeout(() => setPetState((p) => ({ ...p, robotState: 'idle' })), 2000);
+      } finally {
+        isTurnProcessingRef.current = false;
       }
     },
     [inputText, messages, playAudioOutput, settings]
@@ -738,7 +750,7 @@ export const DesktopPet: React.FC = () => {
   );
 
   useHandsFree({
-    enabled: false,
+    enabled: isHandsFreeEligible,
     isMicMuted: Boolean(settings.soundMuted),
     isTextModeActive: false,
     language: settings.preferredLanguage || 'en-IN',

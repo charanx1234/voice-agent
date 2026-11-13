@@ -206,6 +206,7 @@ export const App: React.FC = () => {
   const standbyPendingRef = useRef(false);
   const streamCopyTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const goStandbyRef = useRef<() => void>(() => undefined);
+  const isTurnProcessingRef = useRef(false);
   const handsFreeRef = useRef<{
     mode: 'off' | 'standby' | 'active';
     wake: () => void;
@@ -521,6 +522,13 @@ export const App: React.FC = () => {
       turnId?: string,
       source: 'TEXT' | 'VOICE' = audioBase64 ? 'VOICE' : 'TEXT'
     ) => {
+      // Single Input at a single time: If already busy processing a turn, lock out incoming inputs
+      if (isTurnProcessingRef.current && source === 'VOICE' && robotStateRef.current === 'thinking') {
+        console.warn('[App] Single-input enforcement: Already processing a turn. Ignoring overlapping voice input.');
+        return;
+      }
+      isTurnProcessingRef.current = true;
+
       const activeTurn = turnId || `turn_${Date.now()}_${++requestIdRef.current}`;
       activeStreamIdRef.current = activeTurn;
       let resolvedText = (text || '').trim();
@@ -538,7 +546,7 @@ export const App: React.FC = () => {
           ...prev,
           sttStatus: 'requesting',
           sessionState: 'TRANSCRIBING',
-          sttModel: 'gemini-2.5-flash',
+          sttModel: 'groq-whisper / gemini-flash',
         }));
         voiceTiming.recordTranscriptionStart(activeTurn);
 
@@ -1006,6 +1014,7 @@ export const App: React.FC = () => {
         };
         setMessages((prev) => [...prev, errorMsg]);
       } finally {
+        isTurnProcessingRef.current = false;
         setStreamingResponse('');
         activeStreamIdRef.current = null;
         setTimeout(() => {
