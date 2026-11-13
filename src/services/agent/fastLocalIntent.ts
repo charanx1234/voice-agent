@@ -1628,7 +1628,7 @@ export class FastLocalIntentRouter {
 
     // 7d. "Friday, type this in Notepad" or "type <text> in <app>" or "start typing"
     const typeInAppMatch = clean.match(
-      /^(?:hey\s+)?(?:friday[\s,]+)?(?:please\s+)?(?:type|write)\s+(?:this|the\s+answer|the\s+response|the\s+text)?\s*(?:in|into|on)\s+(notepad|vs\s*code|code|chrome|word|browser|editor)(?:\s*[:,\-]\s*(.+))?$/i
+      /^(?:hey\s+)?(?:friday[\s,]+)?(?:please\s+)?(?:type|write)\s+(?:this|the\s+answer|the\s+response|the\s+text)?\s*(?:in|into|on)\s+([a-zA-Z0-9\s._-]+?)(?:\s*[:,\-]\s*(.+))?$/i
     );
     if (typeInAppMatch) {
       const appHint = typeInAppMatch[1].trim();

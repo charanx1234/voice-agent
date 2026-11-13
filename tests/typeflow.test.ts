@@ -133,9 +133,9 @@ describe('FRIDAY TypeFlow End-to-End Suite', () => {
     expect(cancelRes?.matched).toBe(true);
   });
 
-  it('routes "type this in Notepad" directly to TypeFlow', async () => {
-    mockClipboard.writeText('Direct Notepad Text');
-    const result = await fastLocalIntentRouter.tryRoute('Friday, type this in Notepad', 'en-US');
+  it('routes "type this in Chrome" directly to TypeFlow', async () => {
+    mockClipboard.writeText('Direct Chrome Text');
+    const result = await fastLocalIntentRouter.tryRoute('Friday, type this in Chrome', 'en-US');
     expect(result).not.toBeNull();
     expect(result?.intent).toBe('typeflow');
     expect(result?.matched).toBe(true);

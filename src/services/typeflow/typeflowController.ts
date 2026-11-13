@@ -174,12 +174,34 @@ export class TypeFlowController extends EventEmitter {
 
   /**
    * Initiates text typing through the typing engine with target verification and history logging.
+   * If targetApp is specified but not open, automatically launches it and waits for its window to become active.
    */
   public async typeText(
     text: string,
     options: TypingSessionConfig & { source?: TypeFlowHistoryItem['source'] } = {}
   ): Promise<TypingResult> {
-    const target = await typeFlowService.getTargetWindow(options.targetApp);
+    let target = await typeFlowService.getTargetWindow(options.targetApp);
+
+    // If a specific target application was requested but isn't open, open it!
+    if (options.targetApp && target.notRunning) {
+      try {
+        const { executeAppShortcutsTool } = await import('../agent/appShortcutsTool');
+        await executeAppShortcutsTool('launch_allowed_app', { appId: options.targetApp });
+        // Poll for target window to appear (up to 2 seconds)
+        for (let i = 0; i < 10; i++) {
+          await new Promise((r) => setTimeout(r, 200));
+          target = await typeFlowService.getTargetWindow(options.targetApp);
+          if (target && target.hwnd && !target.notRunning) {
+            // Give window a brief moment to settle its input focus
+            await new Promise((r) => setTimeout(r, 200));
+            break;
+          }
+        }
+      } catch (launchErr: any) {
+        console.warn(`[TypeFlowController] Could not auto-launch ${options.targetApp}:`, launchErr);
+      }
+    }
+
     const validation = await typingEngineManager.validateTarget(target);
     if (!validation.valid) {
       throw new Error(`Cannot type into target application: ${validation.reason}`);

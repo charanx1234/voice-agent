@@ -18,6 +18,24 @@ import threading
 import ctypes
 from ctypes import wintypes
 
+user32 = ctypes.windll.user32 if hasattr(ctypes, 'windll') else None
+kernel32 = ctypes.windll.kernel32 if hasattr(ctypes, 'windll') else None
+
+# CRITICAL WINDOWS INITIALIZATION:
+# Switch process/thread to user input desktop immediately at startup BEFORE COM or any GUI/library is loaded.
+def ensure_process_input_desktop():
+    if not user32:
+        return
+    try:
+        hdesk = user32.OpenInputDesktop(0, False, 0x01FF)
+        if hdesk:
+            user32.SetThreadDesktop(hdesk)
+    except Exception as e:
+        sys.stderr.write(f"[TypeFlowBackend] Error initializing input desktop: {e}\n")
+        sys.stderr.flush()
+
+ensure_process_input_desktop()
+
 try:
     import win32gui
     import win32process
@@ -35,9 +53,6 @@ try:
 except ImportError:
     UIA_AVAILABLE = False
 
-user32 = ctypes.windll.user32 if hasattr(ctypes, 'windll') else None
-kernel32 = ctypes.windll.kernel32 if hasattr(ctypes, 'windll') else None
-
 KEYEVENTF_KEYUP = 0x0002
 KEYEVENTF_UNICODE = 0x0004
 INPUT_KEYBOARD = 1
@@ -46,21 +61,43 @@ VK_TAB = 0x09
 VK_CONTROL = 0x11
 VK_V = 0x56
 
+# Standard 64-bit Windows INPUT union and structure (40 bytes on x64)
+class MOUSEINPUT(ctypes.Structure):
+    _fields_ = [
+        ('dx', ctypes.c_long),
+        ('dy', ctypes.c_long),
+        ('mouseData', ctypes.c_ulong),
+        ('dwFlags', ctypes.c_ulong),
+        ('time', ctypes.c_ulong),
+        ('dwExtraInfo', ctypes.c_ulonglong)
+    ]
+
 class KEYBDINPUT(ctypes.Structure):
     _fields_ = [
-        ('wVk', wintypes.WORD),
-        ('wScan', wintypes.WORD),
-        ('dwFlags', wintypes.DWORD),
-        ('time', wintypes.DWORD),
-        ('dwExtraInfo', ctypes.c_ulong)
+        ('wVk', ctypes.c_ushort),
+        ('wScan', ctypes.c_ushort),
+        ('dwFlags', ctypes.c_ulong),
+        ('time', ctypes.c_ulong),
+        ('dwExtraInfo', ctypes.c_ulonglong)
+    ]
+
+class HARDWAREINPUT(ctypes.Structure):
+    _fields_ = [
+        ('uMsg', ctypes.c_ulong),
+        ('wParamL', ctypes.c_ushort),
+        ('wParamH', ctypes.c_ushort)
     ]
 
 class INPUT_I(ctypes.Union):
-    _fields_ = [('ki', KEYBDINPUT)]
+    _fields_ = [
+        ('mi', MOUSEINPUT),
+        ('ki', KEYBDINPUT),
+        ('hi', HARDWAREINPUT)
+    ]
 
 class INPUT(ctypes.Structure):
     _fields_ = [
-        ('type', wintypes.DWORD),
+        ('type', ctypes.c_ulong),
         ('i', INPUT_I)
     ]
 
@@ -100,11 +137,8 @@ def ensure_input_desktop():
     return None
 
 def close_input_desktop(hdesk):
-    if hdesk and user32:
-        try:
-            user32.CloseDesktop(hdesk)
-        except Exception:
-            pass
+    # Keep the thread attached to the user desktop to ensure SendInput and GetForegroundWindow remain functional
+    pass
 
 def is_terminal_process(name):
     if not name:
@@ -130,7 +164,14 @@ def get_foreground_info(target_hint=None):
         target_name_clean = (target_hint or '').lower().strip()
 
         if target_name_clean:
-            # User specifically asked for an app (e.g. 'notepad')
+            # User specifically asked for an app (e.g. 'notepad', 'code', 'chrome')
+            # Normalize common names
+            norm_hint = target_name_clean
+            if norm_hint == 'vs code' or norm_hint == 'vscode':
+                norm_hint = 'code'
+            elif norm_hint == 'browser':
+                norm_hint = 'chrome'
+
             WNDENUMPROC = ctypes.WINFUNCTYPE(ctypes.c_bool, ctypes.c_int, ctypes.c_int)
             matched_hwnd = [0]
             matched_proc = [""]
@@ -139,17 +180,22 @@ def get_foreground_info(target_hint=None):
             def enum_for_hint(h, _):
                 if user32.IsWindowVisible(h) and not user32.IsIconic(h):
                     length = user32.GetWindowTextLengthW(h)
+                    buff = ctypes.create_unicode_buffer(length + 1)
                     if length > 0:
-                        buff = ctypes.create_unicode_buffer(length + 1)
                         user32.GetWindowTextW(h, buff, length + 1)
-                        pid = ctypes.c_uint()
-                        user32.GetWindowThreadProcessId(h, ctypes.byref(pid))
-                        try:
-                            pname = psutil.Process(pid.value).name().lower()
-                        except:
-                            pname = ''
-                        t_lower = buff.value.lower()
-                        if target_name_clean in pname or target_name_clean in t_lower:
+                    
+                    pid = ctypes.c_uint()
+                    user32.GetWindowThreadProcessId(h, ctypes.byref(pid))
+                    try:
+                        pname = psutil.Process(pid.value).name().lower()
+                    except:
+                        pname = ''
+                    t_lower = buff.value.lower()
+
+                    # Match by process name or window title
+                    if norm_hint in pname or (t_lower and norm_hint in t_lower):
+                        # Filter out background tools
+                        if pname not in ignored_procs:
                             matched_hwnd[0] = h
                             matched_proc[0] = pname
                             matched_title[0] = buff.value
@@ -159,6 +205,9 @@ def get_foreground_info(target_hint=None):
             user32.EnumWindows(WNDENUMPROC(enum_for_hint), 0)
             if matched_hwnd[0]:
                 hwnd = matched_hwnd[0]
+            else:
+                # Target app was explicitly requested but not currently running/visible
+                return {"hwnd": 0, "title": "", "process": target_hint, "isPassword": False, "isTerminal": False, "notRunning": True}
 
         if not hwnd or not win32gui.IsWindow(hwnd):
             # Fall back to finding the active user window
@@ -371,15 +420,26 @@ def get_selected_text_uia():
         except Exception:
             pass
 
-        UIAutomationClient = comtypes.client.GetModule('UIAutomationCore.dll')
-        uia = comtypes.client.CreateObject(UIAutomationClient.CUIAutomation8, interface=UIAutomationClient.IUIAutomation)
+        try:
+            UIAutomationClient = comtypes.client.GetModule('UIAutomationCore.dll')
+            uia = comtypes.client.CreateObject(UIAutomationClient.CUIAutomation, interface=UIAutomationClient.IUIAutomation)
+        except Exception as e:
+            return {"success": False, "error": f"Failed to initialize UIA client: {e}"}
         
-        focused = uia.GetFocusedElement()
+        try:
+            focused = uia.GetFocusedElement()
+        except Exception as e:
+            return {"success": False, "error": f"GetFocusedElement failed: {e}"}
+            
         if not focused:
             return {"success": False, "error": "No focused element"}
         
-        name = focused.CurrentName or ""
-        cls = focused.CurrentClassName or ""
+        try:
+            name = focused.CurrentName or ""
+            cls = focused.CurrentClassName or ""
+        except Exception:
+            name = ""
+            cls = ""
         
         is_password = False
         try:

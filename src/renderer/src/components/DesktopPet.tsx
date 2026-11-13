@@ -549,15 +549,35 @@ export const DesktopPet: React.FC = () => {
     if (window.fridayAPI?.onVoiceStateChanged) {
       const cleanupVoice = window.fridayAPI.onVoiceStateChanged((st: any) => {
         if (!unmount && st) {
-          setPetState((prev) => ({
-            ...prev,
-            robotState: st.robotState || prev.robotState,
-            voiceSessionState: st.sessionState || prev.voiceSessionState,
-            expression: st.expression || prev.expression,
-            mood: st.mood || prev.mood,
-            isSpeaking: Boolean(st.isSpeaking),
-            isVerifiedSpeaker: st.isVerifiedSpeaker !== undefined ? st.isVerifiedSpeaker : prev.isVerifiedSpeaker,
-          }));
+          setPetState((prev) => {
+            const nextRobot = st.robotState || prev.robotState;
+            const nextSession = st.sessionState || prev.voiceSessionState;
+            const nextExpr = st.expression || prev.expression;
+            const nextMood = st.mood || prev.mood;
+            const nextSpeaking = Boolean(st.isSpeaking);
+            const nextVerified = st.isVerifiedSpeaker !== undefined ? st.isVerifiedSpeaker : prev.isVerifiedSpeaker;
+
+            if (
+              prev.robotState === nextRobot &&
+              prev.voiceSessionState === nextSession &&
+              prev.expression === nextExpr &&
+              prev.mood === nextMood &&
+              prev.isSpeaking === nextSpeaking &&
+              prev.isVerifiedSpeaker === nextVerified
+            ) {
+              return prev; // Suppress duplicate re-renders
+            }
+
+            return {
+              ...prev,
+              robotState: nextRobot,
+              voiceSessionState: nextSession,
+              expression: nextExpr,
+              mood: nextMood,
+              isSpeaking: nextSpeaking,
+              isVerifiedSpeaker: nextVerified,
+            };
+          });
 
           // When wake-word triggers, smoothly expand so user sees live conversation
           if (st.sessionState === 'WAKE_DETECTED' || st.sessionState === 'WAKE_WORD_DETECTED') {
@@ -602,7 +622,20 @@ export const DesktopPet: React.FC = () => {
     // Pet state changed (e.g. muted status, position reset)
     if (window.fridayAPI?.onPetStateChanged) {
       const cleanupState = window.fridayAPI.onPetStateChanged((state) => {
-        if (!unmount && state) setPetState((prev) => ({ ...prev, ...state }));
+        if (!unmount && state) {
+          setPetState((prev) => {
+            // Check if any visible field actually changed to prevent redundant component re-renders
+            let changed = false;
+            for (const key of Object.keys(state) as (keyof PetCompanionState)[]) {
+              if (key === 'amplitude') continue; // Amplitude handled through dedicated mouth stream
+              if (prev[key] !== state[key]) {
+                changed = true;
+                break;
+              }
+            }
+            return changed ? { ...prev, ...state } : prev;
+          });
+        }
       });
       cleanups.push(cleanupState);
     }

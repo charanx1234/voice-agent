@@ -16,6 +16,7 @@ export interface TargetWindowInfo {
   process: string;
   isPassword?: boolean;
   isTerminal?: boolean;
+  notRunning?: boolean;
 }
 
 export interface TypingSessionConfig {
