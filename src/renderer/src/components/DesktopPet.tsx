@@ -77,7 +77,8 @@ export const DesktopPet: React.FC = () => {
 
   // Self-sufficient Voice Recording & Playback State
   const [isRecording, setIsRecording] = useState(false);
-  const [isMainVisible, setIsMainVisible] = useState(false);
+  // Default isMainVisible to true so Desktop Pet doesn't create a competing mic stream during app startup
+  const [isMainVisible, setIsMainVisible] = useState(true);
   const [pendingConfirm, setPendingConfirm] = useState<ToolConfirmationPayload | null>(null);
 
   const mouseDownRef = useRef<{ x: number; y: number; time: number } | null>(null);

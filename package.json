@@ -23,7 +23,6 @@
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
     "sql.js": "^1.15.2",
-    "systeminformation": "^5.33.19",
     "ws": "^8.22.1"
   },
   "devDependencies": {

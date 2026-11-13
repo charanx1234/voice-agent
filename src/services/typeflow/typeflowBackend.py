@@ -28,6 +28,8 @@ def ensure_process_input_desktop():
         return
     try:
         hdesk = user32.OpenInputDesktop(0, False, 0x01FF)
+        if not hdesk:
+            hdesk = user32.OpenDesktopW("Default", 0, False, 0x01FF)
         if hdesk:
             user32.SetThreadDesktop(hdesk)
     except Exception as e:
@@ -129,6 +131,8 @@ def ensure_input_desktop():
         return None
     try:
         hdesk = user32.OpenInputDesktop(0, False, 0x01FF)
+        if not hdesk:
+            hdesk = user32.OpenDesktopW("Default", 0, False, 0x01FF)
         if hdesk:
             user32.SetThreadDesktop(hdesk)
             return hdesk
@@ -172,25 +176,19 @@ def get_foreground_info(target_hint=None):
             elif norm_hint == 'browser':
                 norm_hint = 'chrome'
 
-            WNDENUMPROC = ctypes.WINFUNCTYPE(ctypes.c_bool, ctypes.c_int, ctypes.c_int)
             matched_hwnd = [0]
             matched_proc = [""]
             matched_title = [""]
 
             def enum_for_hint(h, _):
-                if user32.IsWindowVisible(h) and not user32.IsIconic(h):
-                    length = user32.GetWindowTextLengthW(h)
-                    buff = ctypes.create_unicode_buffer(length + 1)
-                    if length > 0:
-                        user32.GetWindowTextW(h, buff, length + 1)
-                    
-                    pid = ctypes.c_uint()
-                    user32.GetWindowThreadProcessId(h, ctypes.byref(pid))
+                if win32gui.IsWindowVisible(h) and not win32gui.IsIconic(h):
+                    t = win32gui.GetWindowText(h)
+                    _, pid = win32process.GetWindowThreadProcessId(h)
                     try:
-                        pname = psutil.Process(pid.value).name().lower()
-                    except:
+                        pname = psutil.Process(pid).name().lower()
+                    except Exception:
                         pname = ''
-                    t_lower = buff.value.lower()
+                    t_lower = t.lower()
 
                     # Match by process name or window title
                     if norm_hint in pname or (t_lower and norm_hint in t_lower):
@@ -198,11 +196,15 @@ def get_foreground_info(target_hint=None):
                         if pname not in ignored_procs:
                             matched_hwnd[0] = h
                             matched_proc[0] = pname
-                            matched_title[0] = buff.value
+                            matched_title[0] = t
                             return False # Stop enum
                 return True
 
-            user32.EnumWindows(WNDENUMPROC(enum_for_hint), 0)
+            try:
+                win32gui.EnumWindows(enum_for_hint, None)
+            except Exception:
+                pass
+
             if matched_hwnd[0]:
                 hwnd = matched_hwnd[0]
             else:
@@ -211,25 +213,26 @@ def get_foreground_info(target_hint=None):
 
         if not hwnd or not win32gui.IsWindow(hwnd):
             # Fall back to finding the active user window
-            WNDENUMPROC = ctypes.WINFUNCTYPE(ctypes.c_bool, ctypes.c_int, ctypes.c_int)
             found_hwnd = [0]
             def enum_active(h, _):
-                if user32.IsWindowVisible(h) and not user32.IsIconic(h):
-                    length = user32.GetWindowTextLengthW(h)
-                    if length > 0:
-                        buff = ctypes.create_unicode_buffer(length + 1)
-                        user32.GetWindowTextW(h, buff, length + 1)
-                        pid = ctypes.c_uint()
-                        user32.GetWindowThreadProcessId(h, ctypes.byref(pid))
+                if win32gui.IsWindowVisible(h) and not win32gui.IsIconic(h):
+                    t = win32gui.GetWindowText(h)
+                    if t:
+                        _, pid = win32process.GetWindowThreadProcessId(h)
                         try:
-                            pname = psutil.Process(pid.value).name().lower()
-                        except:
+                            pname = psutil.Process(pid).name().lower()
+                        except Exception:
                             pname = ''
                         if pname and pname not in ignored_procs:
                             found_hwnd[0] = h
                             return False
                 return True
-            user32.EnumWindows(WNDENUMPROC(enum_active), 0)
+
+            try:
+                win32gui.EnumWindows(enum_active, None)
+            except Exception:
+                pass
+
             if found_hwnd[0]:
                 hwnd = found_hwnd[0]
 

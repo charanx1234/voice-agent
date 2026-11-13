@@ -470,11 +470,19 @@ if (!hasSingleInstanceLock) {
     });
   });
 
-  // Persist the final memory snapshot before the process exits.
+  // Persist the final memory snapshot before the process exits and cleanly terminate subprocesses.
   app.on('will-quit', () => {
     console.log('[FRIDAY] Shutting down backend services.');
     try {
       globalShortcut.unregisterAll();
+    } catch {}
+    try {
+      const { typeFlowService } = require('../services/typeflow/typeflowService');
+      typeFlowService.shutdown().catch(() => {});
+    } catch {}
+    try {
+      const { voiceFlowService } = require('../services/voiceflow/voiceflowService');
+      voiceFlowService.stop().catch(() => {});
     } catch {}
     memoryService.flushNow();
     remindersService.shutdownNow();
