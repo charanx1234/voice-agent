@@ -1,275 +1,148 @@
-# FRIDAY — Personal AI Desktop Companion 🤖✨
+# FRIDAY 2.0 — AI Desktop Companion for Windows 🤖⚡
 
-[![Platform](https://img.shields.io/badge/Platform-Windows%2010%20%7C%2011%20(64--bit)-blue.svg?style=for-the-badge&logo=windows)](https://microsoft.com)
-[![AI Engine](https://img.shields.io/badge/AI%20Engine-Google%20Gemini%20Flash%20%2F%20Pro-4285F4.svg?style=for-the-badge&logo=google)](https://aistudio.google.com)
-[![Desktop Framework](https://img.shields.io/badge/Desktop-Electron%2034%20%2B%20React%2019-61DAFB.svg?style=for-the-badge&logo=react)](https://electronjs.org)
-[![Language](https://img.shields.io/badge/Languages-Telugu%20%7C%20English%20%7C%20Hindi%20%7C%20Tamil%20%7C%20Kannada-green.svg?style=for-the-badge)](https://github.com)
-[![Tests](https://img.shields.io/badge/Tests-Passed%20100%25-success.svg?style=for-the-badge)](https://github.com)
-[![License](https://img.shields.io/badge/License-MIT-orange.svg?style=for-the-badge)](LICENSE)
+[![Platform](https://img.shields.io/badge/Platform-Windows%2010%20%7C%2011%20(64--bit)-0078D6.svg?style=flat-square&logo=windows)](https://microsoft.com)
+[![Framework](https://img.shields.io/badge/Architecture-Electron%2034%20%2B%20React%2019-61DAFB.svg?style=flat-square&logo=react)](https://electronjs.org)
+[![AI Engine](https://img.shields.io/badge/AI-Google%20Gemini%20Flash%20%2F%20Pro-4285F4.svg?style=flat-square&logo=google)](https://aistudio.google.com)
+[![STT Engine](https://img.shields.io/badge/STT-Groq%20Whisper%20%2F%20Faster--Whisper-F55036.svg?style=flat-square)](https://groq.com)
+[![Tests](https://img.shields.io/badge/Tests-57%20Suites%20%7C%20440%20Passed-success.svg?style=flat-square)](https://github.com)
+[![License](https://img.shields.io/badge/License-MIT-blue.svg?style=flat-square)](LICENSE)
 
-**FRIDAY** is a high-speed personal AI desktop companion for Windows. Built with a **Pet-First Architecture**, FRIDAY lives directly on your desktop as an interactive floating character that listens, speaks, manages your PC, plays media, organizes files, snaps windows, expands text snippets, manages workspaces, and remembers your preferences across restarts.
-
-FRIDAY is a **true standalone Windows desktop application** installed at `%LOCALAPPDATA%\Programs\FRIDAY`. You can launch it directly from your Desktop shortcut or Start Menu with **zero PowerShell windows, zero terminals, and no Administrator permissions required**.
+**FRIDAY 2.0** is an AI-powered personal desktop assistant for Windows engineered with a **Pet-First Architecture**. Living directly on your screen as a responsive floating companion, FRIDAY combines sub-second conversational voice intelligence, real-time speech interruption, universal desktop text injection, and local hardware automation into a lightweight, standalone desktop application.
 
 ---
 
-## ⚡ Speed & Latency Optimizations
+## 🏛️ System Architecture
 
-FRIDAY is engineered for sub-second, real-time desktop responsiveness:
-- **Fast Local Intent Engine (<20ms)**: High-frequency desktop commands (launching apps, closing apps, setting volume, screen brightness, window controls, and time queries) run locally without cloud API latency.
-- **Optimized Gemini Latency**: Tool schemas sent to Gemini are streamlined, cutting ~3,500 redundant tokens from requests to reduce AI first-token latency from ~5s down to sub-second speeds.
-- **Single Unified Notes Backend**: QuickNotes and the main Dashboard use a unified storage store (`notesStore.ts`), keeping notes in sync across the Desktop Pet, QuickTools UI, and voice pipeline.
-- **Zero-Freeze Window & File I/O**: Window snapping acts directly on foreground handles, and file indexing is scoped with depth limits to guarantee that the Electron event loop never freezes.
-
----
-
-## 📋 Comprehensive Catalog of Features — What Can FRIDAY Do?
-
-### 1. 🗂️ Quick Actions (Desktop & File Organization)
-- **Automatic Organization**: Scans loose files on your Desktop, Downloads, or custom folders and organizes them into categorized folders (`Documents`, `Images`, `Screenshots`, `Videos`, `Audio`, `Archives`, `Code`, `Executables`).
-- **Duplicate File Detection**: Finds exact duplicate files using size heuristics and cryptographic SHA-256 hashing.
-- **Safety First**: Non-destructive by design — always presents a before-and-after preview before executing, resolves collisions automatically (`file (1).pdf`), and includes **1-Click Undo / Restore**.
-
-### 2. 📋 Privacy-Shielded Clipboard History
-- **Searchable Clipboard Archive**: Keeps track of recently copied text and links locally.
-- **Pin & Star**: Favorite your most important snippets to keep them pinned at the top.
-- **Sensitive Data Protection**: Automatically detects and strips passwords, API keys, tokens, credit card patterns, and authorization headers from the clipboard log.
-- **1-Click Re-Copy & Instant Search**: Filter through previous clippings in milliseconds.
-
-### 3. ✂️ Smart Text Snippets (Instant Expansion)
-- **Shortcut Trigger**: Expand frequently typed phrases using custom prefixes (e.g. `;mail`, `;phone`, `;intro`, `;meeting`).
-- **Dynamic Variable Injection**: Automatically fills placeholders: `{name}`, `{date}`, `{time}`, and `{subject}`.
-- **Safe Insertion**: Inserts text directly through the Windows clipboard and synthetic keystroke events without global keylogger hooks.
-
-### 4. 🪟 Intelligent Window Manager
-- **Side-by-Side Arrangement**: Split two applications across your monitor (e.g., *"Put Chrome on the left and VS Code on the right"*).
-- **Single Window Snapping**: Snap the active window or a named application to the left or right half of the screen.
-- **Maximize, Minimize, Restore & Center**: Control window states hands-free using voice or quick UI clicks.
-- **Native User32 Execution**: Snaps foreground windows in milliseconds without recompiling C# on every command.
-
-### 5. 📝 Unified Quick Notes & Ideas
-- **Instant Voice Capture**: Capture notes or brainstorming ideas on the fly (*"Friday, remember this note: ... "* or *"Save this as an idea: ..."*).
-- **Categorization & Tags**: Organize notes into `Work`, `Personal`, `Ideas`, `Study`, `Coding`, and `General`.
-- **Pin Important Notes**: Toggle pins so priority items stay highlighted.
-- **Complete Synchronization**: Any note created via voice, the Desktop Pet, QuickTools UI, or the Dashboard is immediately accessible everywhere.
-
-### 6. 🏷️ Batch File Renamer
-- **Batch Pattern Transformation**: Rename dozens of files simultaneously with custom prefixes, suffixes, sequential numbering (`001`, `002`), date stamps, or string find-and-replace.
-- **Extension Safety**: Protects file extensions from accidental overwriting or corruption.
-- **Conflict Previews & Full Undo**: Previews every renamed file before applying changes; provides a 1-click restore mechanism to revert files back to their original names.
-
-### 7. 🔎 Natural Language File Finder
-- **Conversational File Queries**: Search files across your Desktop, Downloads, and Documents (*"Find my latest PDF"*, *"Find Java files modified yesterday"*).
-- **Fast Local Search**: High-performance metadata queries without uploading private filenames or folder structures to the cloud.
-- **Direct Actions**: Open matched files or their containing folders directly in Windows File Explorer.
-
-### 8. 💻 Temporary Workspaces (Presets)
-- **One-Command Setup**: Launch multiple applications and layouts with a single phrase (*"Start coding mode"*, *"Open study workspace"*, *"Focus mode"*).
-- **Customizable Configurations**: Create presets specifying target apps, folders, and window positions.
-- **Controlled Delays**: Launches applications with staggered delays to prevent system resource spikes.
-
-### 9. 📥 Dedicated Downloads Organiser
-- **Categorized Downloads Clean-Up**: Scans `%USERPROFILE%\Downloads` and categorizes files into Documents, Images, Videos, Audio, Archives, and Installers.
-- **Interactive Move Review**: Inspect proposed file locations with the ability to exclude specific files.
-- **Safe Collisions & Restoration**: Moves files without data loss and maintains an undo history.
-
-### 10. 📸 Screenshot Assistant & Vision Intelligence
-- **Flexible Capture**: Capture the entire monitor, active window, or a selected region.
-- **Direct Clipboard & Disk Save**: Automatically saves to Pictures/Screenshots and copies to your clipboard.
-- **Multimodal AI Analysis**: Ask FRIDAY questions about what's currently on your screen (requires Gemini vision).
-
-### 11. 🔊 Real Windows Master Volume & Mute Control
-- **True System Control**: Controls actual Windows master audio via CoreAudio COM interfaces (`IMMDeviceEnumerator`, `IAudioEndpointVolume`).
-- **Exact & Relative Levels**: *"Set volume to 50 percent"*, *"Increase volume by 15"*, *"Volume up"*, *"Mute my laptop"*, *"Unmute"*.
-
-### 12. ☀️ Real Laptop Screen Brightness Control
-- **WMI ACPI Display Control**: Directly controls laptop backlight brightness.
-- **Precise Adjustments**: *"Set brightness to 70 percent"*, *"Make screen dimmer"*, *"Increase brightness"*, *"Max brightness"*.
-
-### 13. 🚀 150+ Native Windows App Launcher & Window Closer
-- **Multilingual Support**: Supports English, Telugu, and Hinglish.
-  - **English**: *"Open Chrome"*, *"Launch VS Code"*, *"Close Notepad"*, *"Quit Spotify"*.
-  - **Telugu**: *"Chrome open chey"*, *"Spotify teeyi"*, *"Notepad close chey"*, *"Calculator chalu chey"*.
-  - **Hinglish**: *"Chrome kholo"*, *"Notepad band karo"*, *"Spotify chalao"*.
-
-### 14. 🖱️ Windows Mouse & Cursor Automation
-- **Anchor Movements**: *"Move mouse to top-right corner"*, *"Move mouse to center"*.
-- **Click Actions**: Single-click, double-click, and right-click at the current position.
-- **Scrolling**: Vertical mouse scrolling (*"Scroll down"*, *"Scroll up"*).
-
-### 15. ⏰ System Time, Date & Countdowns
-- **Local Clock Accuracy**: Real-time evaluation based on system timezone.
-- **Future/Past Offsets**: *"What time will it be in two hours?"*, *"How much time until 6 PM?"*, *"Today's date"*.
-
-### 16. ⛅ Live Weather & Forecasts
-- **Current & Forecast Data**: Real-time conditions powered by Open-Meteo geocoding.
-- **Natural Language Queries**: *"What's the weather?"*, *"Will it rain today?"*, *"Weather in Hyderabad"*, *"Tomorrow's weather"*.
-
-### 17. 🎵 Direct Media Playback (Spotify & YouTube)
-- **Spotify Direct Play**: *"Play Starboy on Spotify"* or *"Spotify lo DSP songs play chey"*.
-- **YouTube Direct Play**: *"Play Believer on YouTube"* or *"Search Python tutorials on YouTube"*.
-- **Media Keys**: Play/pause, next track, and rewind.
-
-### 18. 👏 Two-Hand Acoustic Clap-to-Wake (`clap-clap`)
-- **Hands-Free Activation**: Wake FRIDAY by clapping your hands twice.
-- **Physical Acoustic Engine**: Strict impulse checks (sharp attack, crest factor `>= 2.8`, high frequencies `1.5 kHz – 8 kHz`, tempo `180ms – 800ms`) reject keyboard typing, desk knocks, and speech.
-- **5-Minute Continuous Listening**: Stays awake for 5 minutes after being triggered. The timer resets every time you speak.
-
-### 19. 🎙️ FRIDAY VoiceFlow — Always-Ready AI Dictation & Auto-Insert
-- **Zero Push-to-Talk Friction**: Speak naturally without pressing and holding any keyboard keys or manually toggling recording.
-- **Local Speech Recognition Engine**: Transcribes speech locally and offline using `faster-whisper` (INT8 quantized on CPU) with integrated Silero VAD — zero cloud audio upload for dictation.
-- **Natural Language & Multi-Modal Activation**:
-  - **Wake Phrase**: Say *"Friday, type this"* (or *"Friday, type this please review my pull request"*).
-  - **Desktop Pet Click**: Click the floating desktop pet once to start dictating; click again anytime to cancel.
-  - **Global Shortcut**: Press `Ctrl+Alt+Space` in any Windows application.
-- **5 Intelligent AI Enhancement Modes**:
-  - `Natural Mode`: Fixes grammar, sentence structure, and punctuation while keeping your natural voice and Telugu-English mixed expressions intact.
-  - `Professional Mode`: Structures formal messages and emails with polite, clear tone and zero fluff.
-  - `Concise Mode`: Removes verbal fillers (`um`, `like`, `you know`) and delivers crisp, direct sentences.
-  - `Code Mode`: Strictly preserves programming identifiers, syntax, filenames, and commands without prose formatting.
-  - `Verbatim Mode`: Direct transcription with minimal correction (bypasses LLM rewriting).
-- **Hex-Engineered 6-Step Safe Text Insertion**:
-  - Snapshots target application and window handle (`HWND`) before dictation starts.
-  - **Password Field Security Gate**: Blocks automated text injection into password or sensitive controls.
-  - Waits for modifier keys (`Ctrl`, `Alt`, `Shift`, `Win`) to be released.
-  - Takes an atomic snapshot of your existing clipboard.
-  - Injects enhanced text via terminal-aware synthetic paste (`Ctrl+V` or `Ctrl+Shift+V`).
-  - Asynchronously restores your original clipboard after 500ms.
-- **Floating Recording HUD**: Floating glassmorphic HUD pill with live audio waveform VU meter, current mode badge, target process indicator, and instant cancel control.
-- **Local History & Settings**: Review recent dictations, change speech models (`tiny`, `base`, `small`, `turbo`), configure languages (`auto`, `en`, `te`), or toggle direct transcription in Settings ➔ **FRIDAY VOICEFLOW**.
+```
+                               ┌──────────────────────────────────────────────┐
+                               │             USER INPUT CHANNELS              │
+                               │  Voice Audio  │  Desktop Pet  │  Hotkeys / UI│
+                               └──────────────────────┬───────────────────────┘
+                                                      │
+                                                      ▼
+                       ┌─────────────────────────────────────────────────────────────┐
+                       │              VOICE COORDINATOR & STATE MUTEX                │
+                       │   Turn Mutex: IDLE ➔ LISTENING ➔ PROCESSING ➔ SPEAKING     │
+                       │   Real-Time Barge-In: Audio Interruption & Context Abort    │
+                       └──────────────┬───────────────────────────────┬──────────────┘
+                                      │                               │
+                      [High-Frequency Local Intent]            [Complex Reasoning]
+                                      │                               │
+                                      ▼                               ▼
+                       ┌─────────────────────────────┐ ┌─────────────────────────────┐
+                       │   FAST LOCAL INTENT ROUTER  │ │    HYBRID LLM PIPELINE      │
+                       │   (<20ms Native Execution)  │ │   Groq Whisper (<200ms STT) │
+                       │   • CoreAudio Master Volume │ │   Gemini 2.5 Flash / Pro    │
+                       │   • WMI Display Brightness  │ │   Neural Edge / Gemini TTS  │
+                       │   • User32 Window Manager   │ └──────────────┬──────────────┘
+                       │   • 150+ App Launcher/Close │                │
+                       └──────────────┬──────────────┘                │
+                                      │                               │
+                                      ▼                               ▼
+                       ┌─────────────────────────────────────────────────────────────┐
+                       │                     EXECUTION ENGINES                       │
+                       │  • TypeFlow: Win32 SendInput Unicode Keyboard Insertion     │
+                       │  • QuickTools: Clipboard Shield, Snippets, File Organizer   │
+                       │  • SQLite WASM: Conversation Memory & Context Persistence   │
+                       └─────────────────────────────────────────────────────────────┘
+```
 
 ---
 
-## 🧪 Testing Guide — How to Test Every Feature Properly
+## 🚀 Core Capabilities
 
-Use this checklist to test each capability via **Voice** (or by typing into the Desktop Pet / Dashboard chat input):
+### 1. 🐾 Pet-First Companion & Reactive Expressions
+- **Zero-Flicker Floating Companion**: A hardware-accelerated, transparent desktop pet ($180\times 136\text{px}$) that docks unobtrusively on any monitor.
+- **Multimodal State Synchronization**: Expresses real-time emotions (`smile`, `thinking`, `happy`, `surprised`, `sleepy`, `not-happy`) synchronized across audio analysis and state transitions.
+- **Subtle Listening Feedback**: Minimalist visual feedback during audio capture—free of distracting overlays or text clutter.
 
-### 1. Test System & Hardware Controls
-| Action | What to Say / Type | Expected Result |
-|---|---|---|
-| **Volume (Exact)** | `Set volume to 40 percent` | Windows master volume slider moves to 40% and FRIDAY confirms. |
-| **Volume (Delta)** | `Increase volume by 10` | Volume increases to 50%. |
-| **Volume (Mute)** | `Mute my laptop` | Windows audio is muted. |
-| **Volume (Unmute)** | `Unmute` | Windows audio is restored. |
-| **Brightness** | `Set brightness to 80 percent` | Laptop screen brightness adjusts to 80%. |
-| **Time Query** | `What time is it?` | FRIDAY speaks the current local time in <20ms. |
-| **Date Query** | `What is today's date?` | FRIDAY replies with the full weekday, month, and year. |
-| **Countdown** | `How much time until 10 PM?` | Calculates exact hours and minutes remaining. |
-| **Weather** | `What's the weather today?` | Returns live temperature, wind speed, and precipitation. |
+### 2. 🎙️ High-Speed Voice Pipeline & Natural Barge-In
+- **Atomic Turn Mutex**: Strictly sequences inputs (`IDLE` $\rightarrow$ `LISTENING` $\rightarrow$ `PROCESSING` $\rightarrow$ `SPEAKING`), preventing request collision and audio stutter.
+- **Instant Speech Interruption (Barge-In)**: Speak at any time while FRIDAY is talking to immediately halt TTS audio playback, cancel in-flight token streams, and redirect attention to your new prompt.
+- **Ultra-Fast Transcription (<200ms)**: Sub-second audio processing powered by Groq Whisper (`whisper-large-v3-turbo`) with automated fallback to Gemini.
+- **Bilingual Code-Switching**: Native conversational understanding across Telugu-English mixed dialect (*"Chrome open chey"*, *"DSP songs play chey"*, *"Volume 40 percent pettu"*), English, and Hinglish.
+- **Acoustic Clap-to-Wake (`clap-clap`)**: Physical two-clap impulse detector for completely hands-free activation.
 
-### 2. Test Multilingual App Launch & Close
-| Language | Command | Expected Result |
-|---|---|---|
-| **English Launch** | `Open Notepad` | Notepad launches immediately. |
-| **Telugu Launch** | `Chrome open chey` | Google Chrome opens. |
-| **Hinglish Launch** | `Calculator kholo` | Windows Calculator opens. |
-| **English Close** | `Close Notepad` | Notepad window closes cleanly. |
-| **Telugu Close** | `Chrome close chey` | Chrome window closes. |
+### 3. ⌨️ TypeFlow & VoiceFlow (Universal Text Automation)
+- **Universal Win32 SendInput Injection**: Types text, multiline blocks, and indented code directly into any focused Windows application (Notepad, VS Code, Chrome, Edge search bars, terminal, and browser editors).
+- **Desktop & Focus Management**: Attaches thread input (`AttachThreadInput`), restores iconic windows, and acquires input target handles safely without stealing unintended focus.
+- **AI Dictation Modes**: Transcribe and reformat speech on the fly with 5 purpose-built modes: `Natural`, `Professional`, `Concise`, `Code`, and `Verbatim`.
+- **Credential Safeguard Gate**: Automatically detects password inputs and proctored examination windows to abort automated injection.
 
-### 3. Test Window Manager
-| Action | What to Say / Type | Expected Result |
-|---|---|---|
-| **Side by Side** | `Put Chrome on the left and Notepad on the right` | Snaps Chrome to the left 50% and Notepad to the right 50%. |
-| **Snap Left** | `Snap this window to the left` | Snaps current active window to the left half. |
-| **Snap Right** | `Snap this window to the right` | Snaps current active window to the right half. |
-| **Maximize** | `Maximize window` | Expands current window to fill screen. |
-| **Minimize** | `Minimize window` | Minimizes current active window. |
+### 4. ⚡ Fast Local Intent Engine (<20ms Latency)
+High-frequency system commands run directly in native C++/Windows COM APIs without cloud roundtrips:
+- **Audio & Mute Control**: Adjusts master audio levels and toggle mutes via Windows CoreAudio `IAudioEndpointVolume`.
+- **Display Backlight**: Regulates monitor backlight levels directly via WMI ACPI brightness methods.
+- **Window Snapping**: Splits screens, snaps left/right, centers, minimizes, or maximizes windows via `user32.dll`.
+- **150+ App Launcher & Terminator**: Instantly launches and closes native Windows applications.
+- **Media Keys & Weather**: Direct control for Spotify and YouTube, alongside cached local weather via Open-Meteo.
 
-### 4. Test Quick Notes & Ideas
-| Action | What to Say / Type | Expected Result |
-|---|---|---|
-| **Save Note** | `Remember this note: Buy milk and finish report` | Saves note under "General" and confirms. |
-| **Save Idea** | `Save this as an idea: Build an offline voice LLM` | Saves note tagged with `#idea` under "Ideas". |
-| **List Notes** | `Show my notes` | Lists your recent saved notes. |
-| **UI Verification** | Open QuickTools modal → *Quick Notes* tab | Note appears with pin, edit, and delete options. |
-
-### 5. Test QuickTools Productivity Suite (UI & Shortcuts)
-1. **Open QuickTools**: Click the **QuickTools (⚡)** icon on the Control Bar or Desktop Pet.
-2. **Quick Actions Tab**:
-   - Click **Preview Desktop Cleanup**. Review categorized files.
-   - Click **Find Duplicates** to detect identical files.
-   - Click **Organize** to move files, then test **Undo** to restore them to their original location.
-3. **Clipboard History Tab**:
-   - Copy any sentence (`Ctrl + C`). It appears immediately in the history.
-   - Click the **Star** icon to pin it.
-   - Type in the search box to filter your clippings.
-   - Click **Copy** to restore it to your Windows clipboard.
-4. **Smart Text Snippets Tab**:
-   - Click **New Snippet**, enter trigger `;test` and replacement `Hello {name}, today is {date}!`.
-   - Click the **Insert** button or copy preview to verify dynamic replacement.
-5. **Batch Renamer Tab**:
-   - Choose `Desktop` or `Downloads`, enter prefix `Project_`, and check **Add Number**.
-   - Click **Generate Preview** to view before/after filenames.
-   - Click **Apply Rename**, then verify files. Click **Undo** to restore original names.
-6. **File Finder Tab**:
-   - Type `pdf` or `report` and press Enter. Matches appear with file size, modified date, and an **Open Folder** button.
-7. **Workspaces Tab**:
-   - Click **Launch** next to *Coding Mode*. VS Code, Terminal, and Chrome launch with staggered delays.
-
-### 6. Test Media & Hands-Free Triggers
-| Action | How to Test | Expected Result |
-|---|---|---|
-| **Clap to Wake** | Clap hands twice (`clap-clap`) while FRIDAY is on Standby | FRIDAY plays wake chime, opens eyes, and listens continuously. |
-| **Spotify Direct** | Say `Play Believer on Spotify` | Opens Spotify and starts playback. |
-| **YouTube Direct** | Say `Play lofi music on YouTube` | Opens YouTube and starts playing video. |
-| **Media Controls** | Say `Pause music`, then `Resume music`, then `Next song` | Sends native media key events to Windows. |
-
-### 7. Test FRIDAY VoiceFlow (Always-Ready Local Dictation)
-| Action | How to Test | Expected Result |
-|---|---|---|
-| **Pet Click Activation** | Click once on the compact Desktop Pet | Recording HUD appears, pet displays red recording indicator. Speak your text; it transcribes, polishes, and inserts into active window. |
-| **Pet Click Cancel** | Click pet once, then click pet again while recording | Cancels dictation immediately without inserting text or modifying clipboard. |
-| **Wake Phrase (Inline)** | Say `Friday, type this please review the PR by 5pm` | Directly intercepts dictation, enhances text, and inserts into your active window. |
-| **Wake Phrase (Dictate)** | Say `Friday, type this` | Activates recording session with HUD, listens for speech, auto-detects utterance end via VAD, and pastes. |
-| **Global Shortcut** | Press `Ctrl + Alt + Space` in any text box (Notepad, VS Code, Browser) | Dictation HUD opens, captures speech, polishes with selected mode, and inserts. |
-| **Modes & Settings** | Open Settings ➔ *FRIDAY VOICEFLOW* | Switch modes (`Natural`, `Professional`, `Concise`, `Code`, `Verbatim`), toggle direct transcription, select speech models, or view dictation history. |
+### 5. 🗂️ Productivity Suite & Memory Persistence
+- **Privacy-Shielded Clipboard**: Local clipboard history with automated redaction of sensitive credentials, API keys, and tokens.
+- **Smart Text Snippets**: Instant text expansion triggered by customizable shortcuts (e.g., `;mail`, `;notes`) with dynamic template variables (`{name}`, `{date}`).
+- **Desktop & Downloads Organizer**: Categorizes clutter into structured folders with built-in conflict resolution and 1-click restore/undo.
+- **Persistent Memory Engine**: SQLite WASM database with Write-Ahead Logging (WAL) retaining conversation facts, user preferences, and reminders across reboots.
 
 ---
 
 ## 🛠️ Technology Stack
 
-| Layer | Technology |
+| Layer | Technologies |
 |---|---|
-| **Runtime & Shell** | Electron 34 + Node.js 24 |
-| **Frontend Framework** | React 19 + TypeScript + Vite |
-| **Styling & Icons** | Tailwind CSS + Lucide React + DirectComposition CSS GPU Acceleration |
-| **AI Models** | Google Gemini API (`gemini-2.5-flash`, `gemini-3.1-pro-preview`) |
-| **Speech-to-Text (STT)** | Groq Whisper + Gemini Multimodal Audio |
-| **Text-to-Speech (TTS)** | Microsoft Edge Neural TTS + ElevenLabs + Gemini TTS |
-| **Audio Processing** | Web Audio API (`AudioContext`, Biquad Filters, Dynamics Compressor, Analyser) |
-| **Database** | SQLite via `sql.js` (WASM) with WAL persistence |
-| **Hardware APIs** | Windows CoreAudio COM, WMI ACPI Brightness, User32 / Shell32 native APIs |
+| **Runtime & Core** | Electron 34, Node.js 24, TypeScript |
+| **Frontend UI** | React 19, Vite, Tailwind CSS, Lucide Icons |
+| **AI & Voice** | Google Gemini API (2.5 Flash / 3.1 Pro), Groq Whisper Turbo, Edge Neural TTS, ElevenLabs |
+| **Native Systems** | Win32 API (`user32.dll`, `kernel32.dll`), CoreAudio COM, WMI, Python 3.12 |
+| **Local Storage** | SQLite WASM (`sql.js`) with atomic file flushes |
+| **Testing** | Vitest (57 test suites, 440 automated tests, 100% pass rate) |
 
 ---
 
-## 🚀 Running and Packaging
+## 📥 Getting Started
 
+### Prerequisites
+- Windows 10 or 11 (64-bit)
+- Node.js 20+ and Python 3.10+
+- Google Gemini API Key (saved in `.env`)
+
+### Installation & Development
 ```powershell
-# Run in development mode
-npm run dev
+# Clone the repository
+git clone https://github.com/charanx1234/voice-agent.git
+cd voice-agent
+
+# Install dependencies
+npm install
 
 # Run all test suites
 npm test
 
-# Build production TypeScript & Vite bundle
+# Start in development mode
+npm run dev
+```
+
+### Production Build & Packaging
+```powershell
+# Compile TypeScript and build Vite bundle
 npm run build
 
-# Package standalone Windows release (.exe & unpacked installer)
-npm run package:win
+# Package unpacked application and official Windows NSIS Installer
+npx electron-builder --win
 ```
+The compiled binaries are generated in `dist-release/`:
+- **Standalone Installer**: `dist-release/FRIDAY Setup 1.0.1.exe`
+- **Portable Distribution**: `dist-release/win-unpacked/FRIDAY.exe`
 
 ---
 
-## 📁 Key Directories & File Paths
+## 📁 System Paths
 
-- **Installed App**: `%LOCALAPPDATA%\Programs\FRIDAY\FRIDAY.exe`
-- **Application Data & SQLite Storage**: `%APPDATA%\friday-ai-companion\`
-- **Notes Storage**: `%APPDATA%\friday-ai-companion\notes\`
-- **Startup Diagnostics**: `%APPDATA%\friday-ai-companion\logs\startup.log`
-- **Application Logs**: `%APPDATA%\friday-ai-companion\logs\friday-YYYY-MM-DD.log`
+- **Application Binary**: `%LOCALAPPDATA%\Programs\FRIDAY\FRIDAY.exe`
+- **Memory & Storage**: `%APPDATA%\friday-ai-companion\friday_memory.db`
+- **Application Logs**: `%APPDATA%\friday-ai-companion\logs\`
 
 ---
 
 ## 🛡️ License
 
-This project is licensed under the **MIT License**. Built with ❤️ for next-generation Windows desktop AI companion and multimodal voice interaction.
+This project is licensed under the **MIT License**.
