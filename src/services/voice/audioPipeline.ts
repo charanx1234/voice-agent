@@ -3,6 +3,9 @@ import { VoiceActivityDetector, VadOptions, DEFAULT_VAD_OPTIONS, BARGE_IN_VAD_OP
 import { localWakeWordDetector } from './localWakeWord';
 import { speakerVerificationService } from './speakerVerification';
 import { ListeningEnvironment, getEnvironmentPreset } from './listeningEnvironment';
+import { noiseSuppressor } from './noiseSuppressor';
+import { echoCanceller } from './echoCanceller';
+import { turnDetector } from './turnDetector';
 
 export interface AudioPipelineConfig {
   noiseSuppression: 'off' | 'standard' | 'strong';
@@ -342,6 +345,7 @@ export class AudioPipeline {
    */
   public setFridaySpeaking(speaking: boolean): void {
     this.isFridaySpeaking = speaking;
+    echoCanceller.setSpeakingState(speaking);
     if (this.duckingGain && this.audioCtx) {
       const targetGain = speaking && this.config.echoCancellation !== false ? 0.08 : 1.0;
       this.duckingGain.gain.setTargetAtTime(targetGain, this.audioCtx.currentTime, 0.05);
@@ -395,6 +399,10 @@ export class AudioPipeline {
         offset += b.length;
       }
 
+      // Clean combined PCM with adaptive noise suppressor
+      noiseSuppressor.setMode(this.getEffectiveNoiseSuppression());
+      const cleanedSamples = noiseSuppressor.process(combinedSamples);
+
       // Run Speaker Verification if enabled
       let verificationResult: SpeakerVerificationResult = {
         verified: true,
@@ -406,13 +414,13 @@ export class AudioPipeline {
       if (this.config.speakerVerificationEnabled && this.config.enrolledVoiceProfile) {
         const sampleRate = this.audioCtx?.sampleRate || 44100;
         verificationResult = speakerVerificationService.verifySpeaker(
-          combinedSamples,
+          cleanedSamples,
           sampleRate,
           this.config.enrolledVoiceProfile
         );
       }
 
-      this.callbacks.onSpeechEnd?.(blob, combinedSamples, verificationResult);
+      this.callbacks.onSpeechEnd?.(blob, cleanedSamples, verificationResult);
     };
 
     try {

@@ -206,8 +206,9 @@ describe('FRIDAY Bug Fix Verification Suite', () => {
     });
 
     it('gracefully handles 401 Invalid api-key without repeatedly retrying invalid key', async () => {
-      // Force Murf key
+      // Force Murf key and disable Sonex for pure Murf-to-Edge fallback test
       vi.spyOn(neuralVoiceService as any, 'getMurfApiKey').mockReturnValue('invalid_mock_murf_key_67_characters_long_1234567890123456789012345678');
+      vi.spyOn(neuralVoiceService as any, 'getSonexApiKey').mockReturnValue('');
       
       const fetchSpy = vi.spyOn(global, 'fetch').mockResolvedValueOnce({
         ok: false,

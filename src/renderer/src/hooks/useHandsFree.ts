@@ -15,6 +15,10 @@ import { voiceSessionManager } from '@/services/voice/voiceSession';
 import { EnrolledSpeakerProfile, VoiceDiagnosticsData, VoiceProsodySummary, VoiceSessionState } from '@/shared/types';
 import type { ListeningEnvironment } from '@/services/voice/listeningEnvironment';
 import { encodeWav, resampleAudio, uint8ArrayToBase64, measurePcmLevels } from '@/services/voice/wavEncoder';
+import { noiseSuppressor } from '@/services/voice/noiseSuppressor';
+import { echoCanceller } from '@/services/voice/echoCanceller';
+import { turnDetector } from '@/services/voice/turnDetector';
+import { requestController } from '@/services/voice/requestController';
 
 export type HandsFreeMode = 'off' | 'standby' | 'active';
 
@@ -291,12 +295,17 @@ export function useHandsFree(options: HandsFreeOptions) {
         return;
       }
 
+      // Clean with NoiseSuppressor (spectral noise gate & transient suppressor)
+      noiseSuppressor.setMode(optionsRef.current.noiseSuppression || 'standard');
+      const cleanedPcm = noiseSuppressor.process(mergedPcm);
+
       // Valid single utterance: resample to 16,000 Hz & encode to standard 16-bit PCM WAV
       const inSampleRate = audioCtx?.sampleRate || 48000;
-      const resampledPcm = resampleAudio(mergedPcm, inSampleRate, 16000);
+      const resampledPcm = resampleAudio(cleanedPcm, inSampleRate, 16000);
       const wavBytes = encodeWav(resampledPcm, 16000);
       const audioBase64 = uint8ArrayToBase64(wavBytes);
-      const turnId = `turn_${Date.now()}_${++turnCounter}`;
+      const activeTurn = requestController.startTurn();
+      const turnId = activeTurn.turnId;
 
       console.info(`[AudioPipeline] Encoded 16kHz WAV payload: ${wavBytes.length} bytes (${Math.round(wavBytes.length / 1024)} KB), turnId=${turnId}`);
 
@@ -338,6 +347,7 @@ export function useHandsFree(options: HandsFreeOptions) {
         },
         isVerifiedSpeaker: isVerified,
         turnId,
+        sessionId: activeTurn.sessionId,
       });
     };
 
@@ -439,9 +449,10 @@ export function useHandsFree(options: HandsFreeOptions) {
 
       const inEchoCooldown = now - ttsFinishedAt < ECHO_COOLDOWN_MS;
 
-      // Software ducking during assistant speech
+      // Software ducking & AEC during assistant speech
+      echoCanceller.setSpeakingState(speaking);
       if (duckingGain && audioCtx) {
-        const targetGain = speaking ? 0.0 : 1.0;
+        const targetGain = speaking ? 0.10 : 1.0;
         duckingGain.gain.setTargetAtTime(targetGain, audioCtx.currentTime, 0.03);
       }
       if (speaking || inEchoCooldown) {
@@ -505,6 +516,7 @@ export function useHandsFree(options: HandsFreeOptions) {
           if (speaking) {
             // Intentional Barge-in during speech playback: Stop playback immediately, capture user's new question
             console.log('[AudioPipeline] Barge-in speech detected during assistant playback! Interrupting and listening to user...');
+            requestController.handleBargeIn();
             turnInProgress = false;
             isAwake = true;
             awakeUntil = now + 15000;

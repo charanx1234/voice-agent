@@ -11,7 +11,8 @@
     "dist-renderer/**/*",
     "src/services/voiceflow/voiceflowEngine.py",
     "src/services/typeflow/typeflowBackend.py",
-    "package.json"
+    "package.json",
+    ".env"
   ],
   "win": {
     "signAndEditExecutable": true,

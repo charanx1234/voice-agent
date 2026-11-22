@@ -26,7 +26,6 @@ import {
   ToolConfirmationPayload,
   VoiceSessionState,
 } from '@/shared/types';
-import { useHandsFree } from '../hooks/useHandsFree';
 import { playWakeChime } from '../utils/audioChime';
 import { voiceFlowController } from '@/services/voiceflow/voiceflowController';
 import { VoiceFlowHUD } from './VoiceFlowHUD';
@@ -342,122 +341,19 @@ export const DesktopPet: React.FC = () => {
     [handleSendMessage]
   );
 
-  // Start direct voice capture from the microphone in Desktop Pet
+  // In Hybrid Voice Architecture V2, Desktop Pet delegates mic triggers to the central audio host
   const startRecording = useCallback(async () => {
-    try {
-      stopSpeechPlayback();
-
-      const stream = await navigator.mediaDevices.getUserMedia({
-        audio: {
-          echoCancellation: true,
-          noiseSuppression: true,
-          autoGainControl: true,
-        },
-      });
-
-      audioStreamRef.current = stream;
-      audioChunksRef.current = [];
-
-      try {
-        const AudioCtxClass = window.AudioContext || (window as any).webkitAudioContext;
-        if (AudioCtxClass) {
-          const ctx = new AudioCtxClass();
-          recordAudioCtxRef.current = ctx;
-          const source = ctx.createMediaStreamSource(stream);
-          const analyser = ctx.createAnalyser();
-          analyser.fftSize = 256;
-          source.connect(analyser);
-
-          const dataArray = new Uint8Array(analyser.frequencyBinCount);
-          let consecutiveSilenceFrames = 0;
-          let hadSpeech = false;
-          const updateMeter = () => {
-            if (!mediaRecorderRef.current || mediaRecorderRef.current.state !== 'recording') return;
-            analyser.getByteFrequencyData(dataArray);
-            let sum = 0;
-            for (let i = 0; i < dataArray.length; i++) sum += dataArray[i];
-            const avg = sum / dataArray.length;
-            const norm = Math.min(1, (avg / 120) * 1.4);
-            setMicLevel(norm);
-            setLiveAmplitude(norm);
-
-            // Auto-stop after user speaks and pauses (~650ms of silence)
-            if (norm > 0.12) {
-              hadSpeech = true;
-              consecutiveSilenceFrames = 0;
-            } else if (hadSpeech) {
-              consecutiveSilenceFrames++;
-              if (consecutiveSilenceFrames > 40) {
-                setIsRecording(false);
-                setMicLevel(0);
-                setLiveAmplitude(0);
-                if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
-                  setPetState((p) => ({ ...p, robotState: 'thinking', voiceSessionState: 'THINKING' }));
-                  mediaRecorderRef.current.stop();
-                }
-                return;
-              }
-            }
-
-            requestAnimationFrame(updateMeter);
-          };
-          requestAnimationFrame(updateMeter);
-        }
-      } catch (err) {
-        console.warn('[DesktopPet] Recording meter warning:', err);
-      }
-
-      const mimeType = MediaRecorder.isTypeSupported('audio/webm;codecs=opus')
-        ? 'audio/webm;codecs=opus'
-        : MediaRecorder.isTypeSupported('audio/webm')
-        ? 'audio/webm'
-        : '';
-
-      const recorder = mimeType ? new MediaRecorder(stream, { mimeType }) : new MediaRecorder(stream);
-      mediaRecorderRef.current = recorder;
-
-      recorder.ondataavailable = (e) => {
-        if (e.data && e.data.size > 0) {
-          audioChunksRef.current.push(e.data);
-        }
-      };
-
-      recorder.onstop = async () => {
-        const recordedBlob = new Blob(audioChunksRef.current, { type: recorder.mimeType || 'audio/webm' });
-        audioStreamRef.current?.getTracks().forEach((t) => t.stop());
-        audioStreamRef.current = null;
-        if (recordAudioCtxRef.current && recordAudioCtxRef.current.state !== 'closed') {
-          recordAudioCtxRef.current.close().catch(() => {});
-          recordAudioCtxRef.current = null;
-        }
-
-        if (recordedBlob.size > 200) {
-          await processRecordedVoice(recordedBlob);
-        } else {
-          setPetState((p) => ({ ...p, robotState: 'idle', voiceSessionState: 'LISTENING' }));
-        }
-      };
-
-      recorder.start(100);
-      setIsRecording(true);
-      setPetState((p) => ({ ...p, robotState: 'listening', voiceSessionState: 'LISTENING' }));
-      playWakeChime();
-    } catch (err: any) {
-      console.error('[DesktopPet] Failed to access microphone:', err);
-      setPetState((p) => ({ ...p, robotState: 'error', voiceSessionState: 'ERROR' }));
-      setTimeout(() => setPetState((p) => ({ ...p, robotState: 'idle' })), 2000);
+    stopSpeechPlayback();
+    if (window.fridayAPI?.voiceTriggerMic) {
+      window.fridayAPI.voiceTriggerMic();
     }
-  }, [playAudioOutput, processRecordedVoice, stopSpeechPlayback]);
+  }, [stopSpeechPlayback]);
 
   // Stop recording and submit
   const stopRecording = useCallback(() => {
     setIsRecording(false);
     setMicLevel(0);
     setLiveAmplitude(0);
-    if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
-      setPetState((p) => ({ ...p, robotState: 'thinking', voiceSessionState: 'THINKING' }));
-      mediaRecorderRef.current.stop();
-    }
   }, []);
 
   const toggleRecording = useCallback(() => {
@@ -743,58 +639,9 @@ export const DesktopPet: React.FC = () => {
     };
   }, [isExpanded, isRecording, stopRecording, stopSpeechPlayback, toggleRecording]);
 
-  // Hands-Free Wake-Word in Desktop Pet (active when Main Dashboard is closed/hidden)
-  const isHandsFreeEligible = Boolean(
-    settings.handsFreeEnabled !== false &&
-    !isMainVisible &&
-    !isRecording
-  );
-
-  useHandsFree({
-    enabled: isHandsFreeEligible,
-    isMicMuted: Boolean(settings.soundMuted),
-    isTextModeActive: false,
-    language: settings.preferredLanguage || 'en-IN',
-    silenceTimeoutMs: settings.handsFreeSilenceTimeoutMs || 300000, // 5 minutes
-    noiseSuppression: settings.noiseSuppression || 'standard',
-    echoCancellation: settings.echoCancellation !== false,
-    autoGainControl: settings.autoGainControl !== false,
-    vadSensitivity: settings.vadSensitivity || 'medium',
-    listeningEnvironment: settings.listeningEnvironment || 'quiet',
-    speakerVerificationEnabled: settings.speakerVerificationEnabled,
-    enrolledVoiceProfile: settings.enrolledVoiceProfile,
-    deviceId: settings.microphoneDeviceId,
-    onLevel: (lvl) => {
-      if (!isRecording) {
-        setLiveAmplitude((prev) => (lvl > 0.08 ? lvl : prev > 0 ? 0 : prev));
-      }
-    },
-    isSpeaking: () => petState.isSpeaking || petState.robotState === 'speaking',
-    isBusy: () => petState.robotState === 'thinking',
-    onBargeIn: () => {
-      stopSpeechPlayback();
-    },
-    onSpeechActivity: (speaking) => {
-      if (speaking && petState.robotState !== 'speaking') {
-        setPetState((p) => ({ ...p, robotState: 'listening', voiceSessionState: 'SPEECH_DETECTED' }));
-      }
-    },
-    onUtterance: ({ audioBase64, mimeType, recognizedText }) => {
-      void handleSendMessage(recognizedText, audioBase64, mimeType);
-    },
-    onWake: (cmd) => {
-      setIsExpanded(true);
-      window.fridayAPI?.petSetExpanded?.(true);
-      playWakeChime();
-      setPetState((p) => ({ ...p, robotState: 'listening', voiceSessionState: 'LISTENING' }));
-      if (cmd) {
-        void handleSendMessage(cmd);
-      }
-    },
-    onError: (err) => {
-      console.warn('[DesktopPet handsFree error]:', err);
-    },
-  });
+  // In Hybrid Voice Architecture V2, Main Window is the sole exclusive microphone owner.
+  // Desktop Pet acts as a pure presentation layer: receiving real-time IPC broadcasts
+  // for voice state, mouth openness, and live level without opening duplicate audio streams.
 
   // Natural spontaneous blinking: independent organic timer
   useEffect(() => {

@@ -40,15 +40,18 @@ export const FEMALE_VOICES: Record<string, string> = {
   'kn-IN': 'kn-IN-SapnaNeural',
 };
 
-export type TtsProviderType = 'elevenlabs' | 'murf' | 'unknown';
+export type TtsProviderType = 'sonex' | 'elevenlabs' | 'murf' | 'unknown';
 
 /**
- * Detects whether an API key belongs to Murf AI (67 chars or starts with murf_)
- * or ElevenLabs (32 or 51 chars). Never routes a Murf key to ElevenLabs.
+ * Detects whether an API key belongs to Sonex Labs (starts with vsk_),
+ * Murf AI (67 chars or starts with murf_), or ElevenLabs (32 or 51 chars).
  */
 export function detectApiKeyProvider(key?: string): TtsProviderType {
   if (!key) return 'unknown';
   const trimmed = key.trim();
+  if (trimmed.startsWith('vsk_')) {
+    return 'sonex';
+  }
   if (trimmed.startsWith('murf_') || trimmed.length === 67) {
     return 'murf';
   }
@@ -69,6 +72,7 @@ export function redactApiKey(message: string, keys: Array<string | undefined> = 
       result = result.replaceAll(k, '[redacted]');
     }
   }
+  result = result.replace(/vsk_[a-zA-Z0-9_-]{20,}/g, '[redacted]');
   result = result.replace(/sk_[a-zA-Z0-9_-]{20,}/g, '[redacted]');
   result = result.replace(/api[-_]?key[:=]\s*['"]?[a-zA-Z0-9_-]{20,}['"]?/gi, 'api-key: [redacted]');
   return result;
@@ -190,6 +194,18 @@ export class NeuralVoiceService {
   private usageCache: { value: ElevenLabsUsage; expiresAt: number } | null = null;
   private murfAuthFailedKey: string | null = null;
 
+  private getSonexApiKey(): string {
+    const envKey = process.env.SONEX_API_KEY?.trim();
+    if (envKey) return envKey;
+    const rawKey = settingsStore.getElevenLabsApiKey()?.trim();
+    if (rawKey && rawKey.startsWith('vsk_')) return rawKey;
+    return '';
+  }
+
+  private getSonexVoiceId(): string {
+    return process.env.SONEX_VOICE_ID?.trim() || settingsStore.getSettings().elevenLabsVoiceId?.trim() || 'tiniaf6aw2';
+  }
+
   private getMurfApiKey(): string {
     const envKey = process.env.MURF_API_KEY?.trim() || process.env.MURF_KEY?.trim();
     if (envKey) return envKey;
@@ -205,11 +221,20 @@ export class NeuralVoiceService {
   }
 
   public getConnectionStatus(): {
-    provider: 'murf' | 'elevenlabs' | 'edge' | 'gemini';
+    provider: 'sonex' | 'murf' | 'elevenlabs' | 'edge' | 'gemini';
     configured: boolean;
     displayName: string;
     details: string;
   } {
+    const sonexKey = this.getSonexApiKey();
+    if (sonexKey) {
+      return {
+        provider: 'sonex',
+        configured: true,
+        displayName: 'Sonex Labs (Panini AI)',
+        details: `Connected to Sonex Labs with cloned voice (${this.getSonexVoiceId()})`,
+      };
+    }
     const murfKey = this.getMurfApiKey();
     if (murfKey) {
       if (this.murfAuthFailedKey === murfKey) {
@@ -266,15 +291,17 @@ export class NeuralVoiceService {
 
     const settings = settingsStore.getSettings();
     const preferred = settings.ttsEngine || 'auto';
+    const sonexKey = this.getSonexApiKey();
+    const isSonexAvailable = Boolean(sonexKey);
     const murfKey = this.getMurfApiKey();
     // Do not retry Murf if the currently configured key was already rejected (401)
     const isMurfAvailable = Boolean(murfKey && this.murfAuthFailedKey !== murfKey);
     const elKey = this.getElevenLabsApiKey();
-    const hasExternal = Boolean(isMurfAvailable || elKey);
+    const hasExternal = Boolean(isSonexAvailable || isMurfAvailable || elKey);
 
-    const order: Array<'murf' | 'elevenlabs' | 'edge' | 'gemini'> =
+    const order: Array<'sonex' | 'murf' | 'elevenlabs' | 'edge' | 'gemini'> =
       preferred === 'elevenlabs'
-        ? (isMurfAvailable ? ['murf', 'edge', 'gemini'] : ['elevenlabs', 'edge', 'gemini'])
+        ? (isSonexAvailable ? ['sonex', 'edge', 'gemini'] : isMurfAvailable ? ['murf', 'edge', 'gemini'] : ['elevenlabs', 'edge', 'gemini'])
         : preferred === 'gemini'
         ? ['gemini', 'edge']
         : preferred === 'edge'
@@ -282,7 +309,7 @@ export class NeuralVoiceService {
         : preferred === 'system'
         ? []
         : hasExternal
-        ? (isMurfAvailable ? ['murf', 'edge', 'gemini'] : ['elevenlabs', 'edge', 'gemini'])
+        ? (isSonexAvailable ? ['sonex', 'edge', 'gemini'] : isMurfAvailable ? ['murf', 'edge', 'gemini'] : ['elevenlabs', 'edge', 'gemini'])
         : ['edge', 'gemini'];
 
     const synthesis = (async () => {
@@ -290,7 +317,9 @@ export class NeuralVoiceService {
       for (const engine of order) {
         try {
           const result =
-            engine === 'murf'
+            engine === 'sonex'
+              ? await this.synthesizeSonex(text, sonexKey, this.getSonexVoiceId())
+              : engine === 'murf'
               ? await this.synthesizeMurf(text, request, murfKey)
               : engine === 'elevenlabs'
               ? await this.synthesizeElevenLabs(text, request)
@@ -303,6 +332,7 @@ export class NeuralVoiceService {
         } catch (err: any) {
           lastError = err instanceof Error ? err : new Error(String(err?.message || err));
           const safeMessage = redactApiKey(lastError.message, [
+            sonexKey,
             murfKey,
             elKey,
             settingsStore.getElevenLabsApiKey(),
@@ -319,6 +349,58 @@ export class NeuralVoiceService {
       return await synthesis;
     } finally {
       this.inFlight.delete(cacheKey);
+    }
+  }
+
+  /**
+   * Generates natural speech using Sonex Labs (Panini model) with cloned voice.
+   */
+  private async synthesizeSonex(
+    text: string,
+    apiKey: string,
+    voiceId: string
+  ): Promise<NeuralVoiceResult> {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 20_000);
+
+    try {
+      const response = await fetch('https://api.sonexlabs.com/v1/speech', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${apiKey}`,
+        },
+        signal: controller.signal,
+        body: JSON.stringify({
+          text,
+          voice_id: voiceId,
+          output_format: 'mp3',
+        }),
+      });
+
+      if (!response.ok) {
+        let errDetail = '';
+        try {
+          const errJson: any = await response.json();
+          errDetail = errJson.message || errJson.detail || JSON.stringify(errJson);
+        } catch {
+          errDetail = await response.text();
+        }
+        const safe = redactApiKey(errDetail, [apiKey]);
+        throw new Error(`Sonex Labs request failed (${response.status}): ${safe}`);
+      }
+
+      const arrayBuf = await response.arrayBuffer();
+      const audioBase64 = Buffer.from(arrayBuf).toString('base64');
+
+      return {
+        audioBase64,
+        mimeType: 'audio/mpeg',
+        voice: voiceId,
+        engine: 'elevenlabs', // Retain for UI compatibility
+      };
+    } finally {
+      clearTimeout(timer);
     }
   }
 

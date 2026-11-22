@@ -38,6 +38,9 @@ export class VoiceCoordinator {
   private isSpeaking = false;
   private isVerifiedSpeaker = true;
   private currentRequestId: string | null = null;
+  private currentTurnId: string | null = null;
+  private currentSessionId: string = `session_${Date.now()}`;
+  private activeAbortController: AbortController | null = null;
 
   constructor(
     getMainWindow: () => BrowserWindow | null,
@@ -220,11 +223,46 @@ export class VoiceCoordinator {
   }
 
   /**
+   * Starts a new user turn with unique turn ID, request ID, and abort controller.
+   * Cancels any previously active in-flight request.
+   */
+  public startTurn(turnId?: string): string {
+    if (this.activeAbortController) {
+      this.activeAbortController.abort();
+    }
+    this.activeAbortController = new AbortController();
+    this.currentTurnId = turnId || `turn_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+    this.currentRequestId = `req_${Date.now()}`;
+    console.info(`[VoiceCoordinator] Turn started: ${this.currentTurnId} (Request: ${this.currentRequestId})`);
+    return this.currentTurnId;
+  }
+
+  public getTurnId(): string | null {
+    return this.currentTurnId;
+  }
+
+  public getRequestId(): string | null {
+    return this.currentRequestId;
+  }
+
+  /**
+   * Cancels the currently active turn and broadcasts interruption.
+   */
+  public cancelActiveTurn(reason = 'Interrupted'): void {
+    if (this.activeAbortController) {
+      this.activeAbortController.abort();
+      this.activeAbortController = null;
+    }
+    console.info(`[VoiceCoordinator] Active turn ${this.currentTurnId} cancelled: ${reason}`);
+    this.setState('INTERRUPTED');
+    this.broadcast(IPC_CHANNELS.VOICE_INTERRUPT);
+  }
+
+  /**
    * Triggered when user interrupts speech (barge-in or manual click).
    */
   public handleInterrupt(): void {
-    this.setState('INTERRUPTED');
-    this.broadcast(IPC_CHANNELS.VOICE_INTERRUPT);
+    this.cancelActiveTurn('User barge-in or interrupt button');
   }
 
   /**

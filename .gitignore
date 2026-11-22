@@ -49,3 +49,6 @@ $RECYCLE.BIN/
 .agents/
 
 .cache/
+
+# Custom voice files
+custom_voice/
