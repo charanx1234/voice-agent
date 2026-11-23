@@ -1,0 +1,13 @@
+# FRIDAY Hardware Intelligence Engine Dependencies
+# Verified Python Environment: Python 3.12.10 (64-bit) on Windows 11
+# Hardware Target: Intel Core Ultra 5 125H, Intel AI Boost NPU, Intel Arc GPU
+
+# OpenVINO Runtime & Inference Engine
+openvino==2026.4.1
+openvino-telemetry>=2025.2.0
+
+# Numerical Arrays & Tensors
+numpy>=1.26.0,<2.6.0
+
+# System Metrics & Process Monitoring
+psutil>=5.9.0

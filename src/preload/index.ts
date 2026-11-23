@@ -361,6 +361,15 @@ const apiBridge: FridayApiBridge = {
     ipcRenderer.on(IPC_CHANNELS.TYPEFLOW_TYPE_CLIPBOARD, handler);
     return () => ipcRenderer.removeListener(IPC_CHANNELS.TYPEFLOW_TYPE_CLIPBOARD, handler);
   },
+
+  // FRIDAY Hardware Intelligence Engine Bridge
+  hardwareGetStatus: () => ipcRenderer.invoke(IPC_CHANNELS.HARDWARE_GET_STATUS),
+  hardwareGetInventory: (refresh?: boolean) => ipcRenderer.invoke(IPC_CHANNELS.HARDWARE_GET_INVENTORY, refresh),
+  hardwareRunInference: (modelId?: string, inputs?: number[][], preference?: string) =>
+    ipcRenderer.invoke(IPC_CHANNELS.HARDWARE_RUN_INFERENCE, modelId, inputs, preference),
+  hardwareSetPreference: (preference: string) => ipcRenderer.invoke(IPC_CHANNELS.HARDWARE_SET_PREFERENCE, preference),
+  hardwareGetDiagnostics: () => ipcRenderer.invoke(IPC_CHANNELS.HARDWARE_GET_DIAGNOSTICS),
+  hardwareGetWorkloads: (workloadId?: string) => ipcRenderer.invoke(IPC_CHANNELS.HARDWARE_GET_WORKLOADS, workloadId),
 };
 
 contextBridge.exposeInMainWorld('fridayAPI', apiBridge);

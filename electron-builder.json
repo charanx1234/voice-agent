@@ -11,6 +11,7 @@
     "dist-renderer/**/*",
     "src/services/voiceflow/voiceflowEngine.py",
     "src/services/typeflow/typeflowBackend.py",
+    "cognitive_engine/**/*",
     "package.json",
     ".env"
   ],

@@ -228,6 +228,57 @@ export interface FridaySettings {
    * and not sent to Gemini. Default 0.03.
    */
   audioQualityThreshold?: number;
+  /** Adaptive Cognitive Engine enabled (L0-L3 dynamic reasoning) */
+  adaptiveThinkingEnabled?: boolean;
+  /** Default reasoning level: 'L0' | 'L1' | 'L2' | 'L3' | 'adaptive' */
+  defaultReasoningLevel?: 'L0' | 'L1' | 'L2' | 'L3' | 'adaptive';
+  /** Long-term memory relevance threshold for context inclusion (0.0 to 1.0) */
+  memoryRelevanceThreshold?: number;
+  /** Maximum context token budget before truncation */
+  maxContextBudgetTokens?: number;
+}
+
+export type ReasoningLevel = 'L0' | 'L1' | 'L2' | 'L3';
+
+export type IntentCategory =
+  | 'general_conversation'
+  | 'learning_explanation'
+  | 'programming'
+  | 'debugging'
+  | 'research'
+  | 'comparison'
+  | 'planning'
+  | 'mathematical_reasoning'
+  | 'file_operations'
+  | 'desktop_automation'
+  | 'screen_understanding'
+  | 'memory_management'
+  | 'follow_up';
+
+export interface CognitiveTimingBreakdown {
+  requestId: string;
+  contextRetrievalMs: number;
+  intentRoutingMs: number;
+  complexityRoutingMs: number;
+  modelExecutionMs: number;
+  toolExecutionMs: number;
+  timeToFirstTokenMs: number;
+  totalDurationMs: number;
+}
+
+export interface CognitiveExecutionResult {
+  text: string;
+  detectedLanguage: string;
+  reasoningLevel: ReasoningLevel;
+  intentCategory: IntentCategory;
+  providerUsed: string;
+  modelUsed: string;
+  toolCalls?: ToolCallRecord[];
+  mood?: ConversationMood;
+  safetyOverride?: boolean;
+  cancelled?: boolean;
+  error?: string;
+  timing?: CognitiveTimingBreakdown;
 }
 
 export type AiProviderId =
@@ -494,6 +545,9 @@ export interface FridayResourceMetrics {
   wakeWordStatus: string;
   operatingState: 'idle' | 'listening' | 'thinking' | 'speaking' | 'standby';
   gpuStatus: string;
+  npuStatus?: string;
+  hardwareEngineStatus?: string;
+  hardwareDevices?: string[];
   timestamp: string;
 }
 
@@ -743,6 +797,14 @@ export interface FridayApiBridge {
   typeFlowClearHistory?: () => Promise<{ success: boolean }>;
   onTypeFlowProgress?: (callback: (progress: any) => void) => () => void;
   onTypeFlowShortcut?: (callback: () => void) => () => void;
+
+  // FRIDAY Hardware Intelligence Engine
+  hardwareGetStatus?: () => Promise<any>;
+  hardwareGetInventory?: (refresh?: boolean) => Promise<any>;
+  hardwareRunInference?: (modelId?: string, inputs?: number[][], preference?: string) => Promise<any>;
+  hardwareSetPreference?: (preference: string) => Promise<{ status: string; preference: string }>;
+  hardwareGetDiagnostics?: () => Promise<any>;
+  hardwareGetWorkloads?: (workloadId?: string) => Promise<any>;
 }
 
 export type WebsiteElementType =

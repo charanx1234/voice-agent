@@ -57,6 +57,10 @@ const DEFAULT_SETTINGS: FridaySettings = {
   speakerVerificationEnabled: false,
   listeningEnvironment: 'quiet',
   audioQualityThreshold: 0.03,
+  adaptiveThinkingEnabled: true,
+  defaultReasoningLevel: 'adaptive',
+  memoryRelevanceThreshold: 0.25,
+  maxContextBudgetTokens: 4096,
 };
 
 export class SettingsStore {

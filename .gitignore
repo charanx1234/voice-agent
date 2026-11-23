@@ -52,3 +52,10 @@ $RECYCLE.BIN/
 
 # Custom voice files
 custom_voice/
+
+# Python cache & build
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+

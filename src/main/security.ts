@@ -164,6 +164,14 @@ export const IPC_CHANNELS = {
   TYPEFLOW_GET_HISTORY: 'friday:typeflow-get-history',
   TYPEFLOW_CLEAR_HISTORY: 'friday:typeflow-clear-history',
   TYPEFLOW_PROGRESS: 'friday:typeflow-progress',
+
+  // FRIDAY Hardware Intelligence Engine (Intel AI Boost NPU / Arc GPU / CPU)
+  HARDWARE_GET_STATUS: 'friday:hardware-get-status',
+  HARDWARE_GET_INVENTORY: 'friday:hardware-get-inventory',
+  HARDWARE_RUN_INFERENCE: 'friday:hardware-run-inference',
+  HARDWARE_SET_PREFERENCE: 'friday:hardware-set-preference',
+  HARDWARE_GET_DIAGNOSTICS: 'friday:hardware-get-diagnostics',
+  HARDWARE_GET_WORKLOADS: 'friday:hardware-get-workloads',
 } as const;
 
 export function sanitizePath(inputPath: string): string {
