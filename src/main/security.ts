@@ -172,6 +172,7 @@ export const IPC_CHANNELS = {
   HARDWARE_SET_PREFERENCE: 'friday:hardware-set-preference',
   HARDWARE_GET_DIAGNOSTICS: 'friday:hardware-get-diagnostics',
   HARDWARE_GET_WORKLOADS: 'friday:hardware-get-workloads',
+  ACI_GET_DIAGNOSTICS: 'friday:aci-get-diagnostics',
 } as const;
 
 export function sanitizePath(inputPath: string): string {

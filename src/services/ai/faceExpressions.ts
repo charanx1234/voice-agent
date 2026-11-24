@@ -5,6 +5,7 @@ export interface FaceExpressionInput {
   mood?: ConversationMood;
   personalityMode?: PersonalityMode;
   text?: string;
+  conversationPolicy?: any;
 }
 
 /**
@@ -33,8 +34,20 @@ export function selectFaceExpression({
   mood = 'calm',
   personalityMode = 'moderate',
   text = '',
+  conversationPolicy,
 }: FaceExpressionInput): FaceExpression {
   const value = text.toLowerCase();
+  const effectiveMode = conversationPolicy?.personality || personalityMode;
+
+  // ACI policy primary emotion alignment
+  if (conversationPolicy?.primary_emotion && state === 'speaking') {
+    const emo = conversationPolicy.primary_emotion;
+    if (emo === 'frustration') return 'angry';
+    if (emo === 'sadness') return 'sad';
+    if (emo === 'confusion') return 'not-happy';
+    if (emo === 'excitement') return 'happy';
+    if (emo === 'happiness') return 'satisfied';
+  }
 
   // State-based foundational expressions
   if (state === 'sleeping') return 'sleepy';

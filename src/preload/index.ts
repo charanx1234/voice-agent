@@ -33,6 +33,7 @@ const apiBridge: FridayApiBridge = {
     ipcRenderer.on(IPC_CHANNELS.RESPONSE_STREAM, handler);
     return () => ipcRenderer.removeListener(IPC_CHANNELS.RESPONSE_STREAM, handler);
   },
+  getAciDiagnostics: () => ipcRenderer.invoke(IPC_CHANNELS.ACI_GET_DIAGNOSTICS),
 
   respondToolConfirmation: (id: string, confirmed: boolean) => {
     ipcRenderer.send(IPC_CHANNELS.TOOL_CONFIRM_RESPONSE, { id, confirmed });

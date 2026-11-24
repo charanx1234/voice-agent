@@ -28,6 +28,10 @@ import { toolRegistry } from '../../agent/toolRegistry';
 import { getLocalResponse } from '../localResponses';
 import { analyzeMood } from '../mood';
 import { isForeignAssistantCommand } from '../../agent/voiceActionGuard';
+import { adaptiveConversationController } from '../aci/adaptiveConversationController';
+import { userFeedbackLearner } from '../aci/feedbackLearner';
+import { ConversationPolicy } from '../aci/types';
+import { aciDiagnostics } from '../aci/aciDiagnostics';
 
 export interface ProcessCognitiveRequestParams extends ProviderGenerateParams {
   inputSource?: 'text' | 'voice' | 'pet' | 'quicktools';
@@ -95,6 +99,20 @@ export class CognitiveController {
 
       // 3. Mood Analysis & Foreign Command Check
       const moodAnalysis = analyzeMood(userText, params.prosody);
+
+      // 3.5 Adaptive Conversational Intelligence (ACI V1) Policy Evaluation
+      const rawFeedback = userFeedbackLearner.analyzeFeedback(userText);
+      const { policy: initialPolicy } = adaptiveConversationController.evaluatePolicy({
+        requestId,
+        message: userText,
+        conversationHistory: rawHistory,
+        manualPersonalityOverride: params.personalityMode,
+        defaultPersonalityPreference: settings.personalityMode,
+        reasoningLevel: params.overrideReasoningLevel,
+        preferredLanguage: preferredLang,
+        prosody: params.prosody,
+      });
+      const policy: ConversationPolicy = userFeedbackLearner.applyFeedback(initialPolicy, rawFeedback);
       if (isForeignAssistantCommand(userText)) {
         const response = preferredLang.startsWith('te')
           ? 'ఆ కమాండ్ వేరే అసిస్టెంట్‌కి (Google/Siri/Alexa) ఉద్దేశించినది కాబట్టి నేను ఎటువంటి డెస్క్‌టాప్ యాక్షన్ చేయలేదు.'
@@ -184,8 +202,9 @@ export class CognitiveController {
             modelUsed: 'fast_local_intent',
             toolCalls: fastResult.toolCalls as any,
             mood: moodAnalysis.mood,
-            safetyOverride: moodAnalysis.safetyOverride,
+            safetyOverride: moodAnalysis.safetyOverride || policy.safety_override,
             timing,
+            conversationPolicy: policy,
           };
         }
 
@@ -223,13 +242,14 @@ export class CognitiveController {
               },
             ],
             mood: moodAnalysis.mood,
-            safetyOverride: moodAnalysis.safetyOverride,
+            safetyOverride: moodAnalysis.safetyOverride || policy.safety_override,
             timing,
+            conversationPolicy: policy,
           };
         }
 
         // C. Canned Greetings / Local Responses
-        const localResponse = getLocalResponse(userText, preferredLang, settings.personalityMode);
+        const localResponse = getLocalResponse(userText, preferredLang, policy.personality);
         if (localResponse) {
           instrumentedStream({ type: 'delta', text: localResponse.text });
           instrumentedStream({ type: 'complete' });
@@ -246,8 +266,9 @@ export class CognitiveController {
             providerUsed: 'local_fast',
             modelUsed: 'local_response',
             mood: moodAnalysis.mood,
-            safetyOverride: moodAnalysis.safetyOverride,
+            safetyOverride: moodAnalysis.safetyOverride || policy.safety_override,
             timing,
+            conversationPolicy: policy,
           };
         }
       }
@@ -267,8 +288,9 @@ export class CognitiveController {
         rawHistory,
         {
           reasoningLevel: complexityResult.level,
-          personalityMode: settings.personalityMode,
+          personalityMode: policy.personality,
           budgetTokensOverride: settings.maxContextBudgetTokens,
+          conversationPolicy: policy,
         }
       );
       latencyMonitor.endPhase(requestId, 'context_retrieval');
@@ -281,6 +303,7 @@ export class CognitiveController {
         requestId,
         // Forward reasoning level and selected model
         conversationHistory: contextBundle.immediateMessages,
+        personalityMode: policy.personality,
       };
 
       // Temporarily set active model in settings if reasoning level warrants it
@@ -302,6 +325,7 @@ export class CognitiveController {
           modelUsed: 'none',
           cancelled: true,
           timing,
+          conversationPolicy: policy,
         };
       }
 
@@ -321,7 +345,8 @@ export class CognitiveController {
       const sanitized = responseQualityController.validateAndSanitize(
         genResult.text,
         toolSuccess,
-        settings.personalityMode
+        policy.personality,
+        policy
       );
 
       const timing = latencyMonitor.finishRequest(requestId);
@@ -341,10 +366,11 @@ export class CognitiveController {
         modelUsed: modelDecision.model,
         toolCalls: genResult.toolCalls,
         mood: genResult.mood || moodAnalysis.mood,
-        safetyOverride: genResult.safetyOverride || moodAnalysis.safetyOverride,
+        safetyOverride: genResult.safetyOverride || moodAnalysis.safetyOverride || policy.safety_override,
         cancelled: abortController.signal.aborted,
         error: genResult.error,
         timing,
+        conversationPolicy: policy,
       };
     } catch (err: any) {
       if (abortController.signal.aborted) {

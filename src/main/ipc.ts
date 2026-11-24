@@ -37,6 +37,7 @@ import { voiceFlowPaste } from '../services/voiceflow/voiceflowPaste';
 import { typeFlowController } from '../services/typeflow/typeflowController';
 import { typeFlowAi } from '../services/typeflow/typeflowAiIntelligence';
 import { hardwareService } from '../services/hardware/hardwareService';
+import { aciDiagnostics } from '../services/ai/aci/aciDiagnostics';
 
 let handlersRegistered = false;
 let activeVoiceCoordinator: VoiceCoordinator | null = null;
@@ -192,6 +193,11 @@ export function registerIpcHandlers(
 
   ipcMain.on(IPC_CHANNELS.CANCEL_RESPONSE, (_event, requestId?: string) => {
     cognitiveController.cancelRequest(requestId);
+  });
+
+  // Adaptive Conversational Intelligence (ACI V1) Diagnostics
+  ipcMain.handle(IPC_CHANNELS.ACI_GET_DIAGNOSTICS, () => {
+    return aciDiagnostics.getRecent(20);
   });
 
   // Select folder via native dialog

@@ -19,6 +19,7 @@ export interface VoiceSessionStateSnapshot {
   mood: ConversationMood;
   isSpeaking: boolean;
   isVerifiedSpeaker: boolean;
+  conversationPolicy?: any;
 }
 
 /**
@@ -37,6 +38,7 @@ export class VoiceCoordinator {
   private mood: ConversationMood = 'calm';
   private isSpeaking = false;
   private isVerifiedSpeaker = true;
+  private conversationPolicy: any = null;
   private currentRequestId: string | null = null;
   private currentTurnId: string | null = null;
   private currentSessionId: string = `session_${Date.now()}`;
@@ -58,6 +60,7 @@ export class VoiceCoordinator {
       mood: this.mood,
       isSpeaking: this.isSpeaking,
       isVerifiedSpeaker: this.isVerifiedSpeaker,
+      conversationPolicy: this.conversationPolicy,
     };
   }
 
@@ -91,13 +94,14 @@ export class VoiceCoordinator {
       mood?: ConversationMood;
       isSpeaking?: boolean;
       isVerifiedSpeaker?: boolean;
+      conversationPolicy?: any;
     }
   ): void {
     const stateUnchanged = this.sessionState === sessionState;
     const expressionUnchanged = !updates?.expression || updates.expression === this.expression;
     const isSpeakingUnchanged = updates?.isSpeaking === undefined || updates.isSpeaking === this.isSpeaking;
 
-    if (stateUnchanged && expressionUnchanged && isSpeakingUnchanged) {
+    if (stateUnchanged && expressionUnchanged && isSpeakingUnchanged && !updates?.conversationPolicy) {
       // Prevent duplicate transitions and console spam
       return;
     }
@@ -109,6 +113,9 @@ export class VoiceCoordinator {
     if (updates?.isSpeaking !== undefined) this.isSpeaking = updates.isSpeaking;
     if (updates?.isVerifiedSpeaker !== undefined) {
       this.isVerifiedSpeaker = updates.isVerifiedSpeaker;
+    }
+    if (updates?.conversationPolicy) {
+      this.conversationPolicy = updates.conversationPolicy;
     }
 
     // Map VoiceSessionState to RobotState

@@ -38,6 +38,7 @@ export class ContextEngine {
       reasoningLevel?: ReasoningLevel;
       personalityMode?: string;
       budgetTokensOverride?: number;
+      conversationPolicy?: any;
     } = {}
   ): Promise<ContextBundleResult> {
     const level = options.reasoningLevel || 'L1';
@@ -83,6 +84,27 @@ export class ContextEngine {
     if (briefText) systemParts.push(briefText);
     if (memoryBlock) systemParts.push(memoryBlock);
     if (extendedBlock) systemParts.push(extendedBlock);
+
+    if (options.conversationPolicy) {
+      const cp = options.conversationPolicy;
+      systemParts.push(
+        `ADAPTIVE CONVERSATIONAL INTELLIGENCE (ACI V1):\n` +
+        `- Intent: ${cp.intent} | Ongoing Task: ${cp.task} | Interaction Mode: ${cp.interactionMode}\n` +
+        `- Tone: ${cp.tone} | Strategy: ${cp.strategy}\n` +
+        `- Response Depth: ${cp.response_depth} (Verbosity: ${cp.verbosity})\n` +
+        `- Guideline: ${
+          cp.response_depth === 'D0'
+            ? 'D0 Minimal: Direct 1-2 words or single short sentence only.'
+            : cp.response_depth === 'D1'
+            ? 'D1 Brief: Concise, natural answer in 1-2 sentences. Avoid preamble.'
+            : cp.response_depth === 'D2'
+            ? 'D2 Normal: Focused response in 1-2 paragraphs. Shortest complete answer.'
+            : cp.response_depth === 'D3'
+            ? 'D3 Detailed: Thorough, structured explanation with code examples and reasoning.'
+            : 'D4 Deep: Comprehensive architectural analysis with edge cases and failure modes.'
+        }`
+      );
+    }
 
     let systemInstruction = systemParts.join('\n\n');
 

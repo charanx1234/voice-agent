@@ -279,6 +279,7 @@ export interface CognitiveExecutionResult {
   cancelled?: boolean;
   error?: string;
   timing?: CognitiveTimingBreakdown;
+  conversationPolicy?: any;
 }
 
 export type AiProviderId =
@@ -568,6 +569,8 @@ export interface FridayApiBridge {
     language?: string;
     prosody?: VoiceProsodySummary;
     requestId?: string;
+    personalityMode?: PersonalityMode;
+    reasoningLevel?: ReasoningLevel;
   }) => Promise<{
     text: string;
     detectedLanguage?: string;
@@ -577,9 +580,11 @@ export interface FridayApiBridge {
     safetyOverride?: boolean;
     error?: string;
     cancelled?: boolean;
+    conversationPolicy?: any;
   }>;
   cancelResponse: (requestId?: string) => void;
   onResponseStream: (callback: (event: ResponseStreamEvent) => void) => () => void;
+  getAciDiagnostics?: () => Promise<any[]>;
 
   // Tool Confirmations
   respondToolConfirmation: (id: string, confirmed: boolean) => void;

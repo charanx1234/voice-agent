@@ -15,6 +15,7 @@ export interface PersonaContext {
   personalityMode?: PersonalityMode;
   mood?: ConversationMood;
   moodInstruction?: string;
+  conversationPolicy?: any;
 }
 
 const IDENTITY = `You are FRIDAY, this user's personal AI assistant and trusted everyday friend on their Windows desktop.
@@ -263,6 +264,16 @@ export function buildPersonaInstruction(context: PersonaContext = {}): string {
 
   if (context.memoryContext && context.memoryContext.trim()) {
     instruction += `\n\n${context.memoryContext.trim()}`;
+  }
+
+  if (context.conversationPolicy) {
+    const cp = context.conversationPolicy;
+    instruction += `\n\nADAPTIVE CONVERSATIONAL INTELLIGENCE (ACI V1)
+- Context Intent: ${cp.intent} | Ongoing Task: ${cp.task} | Interaction Mode: ${cp.interactionMode}
+- Tone: ${cp.tone} | Strategy: ${cp.strategy}
+- Response Depth: ${cp.response_depth} (Verbosity: ${cp.verbosity})
+- Depth Principle: Provide the shortest complete answer. Never sacrifice necessary correctness or safety.
+- Spoken/Written Delivery: Embody the selected tone naturally without stating internal labels or announcing detected emotions.`;
   }
 
   return `${instruction}\n`;
