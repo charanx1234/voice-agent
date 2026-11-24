@@ -95,6 +95,12 @@ export function parseExtractionResponse(raw: string): ExtractedMemory[] {
     const title = String(record.title || '').trim() || content.slice(0, 60);
     if (!content || !title) continue;
 
+    // FIMA V1: Quality filter to prevent junk fragments like "till now" from polluting long-term memory
+    const words = content.split(/\s+/).filter(Boolean);
+    if (words.length < 3 || content.length < 8) continue;
+    if (/^(till now|so far|as of now|right now|okay|alright|nothing|none|done|yes|no|maybe)$/i.test(content)) continue;
+    if (/^(till now|so far|as of now)$/i.test(title)) continue;
+
     memories.push({
       kind: normalizeKind(record.kind),
       subject: String(record.subject || '').trim().toLowerCase().slice(0, 60),

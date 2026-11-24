@@ -311,6 +311,121 @@ export function registerIpcHandlers(
     }
   });
 
+  // FIMA V1 Enhanced Memory IPC Handlers
+  ipcMain.handle(IPC_CHANNELS.MEMORY_ARCHIVE, async (_event, id: string) => {
+    try {
+      return await memoryService.archive(id);
+    } catch (err: any) {
+      console.error('[IPC] memory-archive failed:', err?.message);
+      return false;
+    }
+  });
+
+  ipcMain.handle(IPC_CHANNELS.MEMORY_HISTORY, async (_event, memoryId: string) => {
+    try {
+      return await memoryService.getMemoryHistory(memoryId);
+    } catch (err: any) {
+      console.error('[IPC] memory-history failed:', err?.message);
+      return [];
+    }
+  });
+
+  ipcMain.handle(IPC_CHANNELS.MEMORY_FIMA_STATS, async () => {
+    try {
+      return await memoryService.getFimaStats();
+    } catch (err: any) {
+      console.error('[IPC] memory-fima-stats failed:', err?.message);
+      return {
+        totalActive: 0, totalTemporary: 0, totalArchived: 0,
+        totalOutdated: 0, totalPendingReview: 0,
+        byKind: {}, byMemoryType: {},
+        projectCount: 0, activityLast24h: 0,
+        embedded: 0, databaseBytes: 0,
+      };
+    }
+  });
+
+  ipcMain.handle(IPC_CHANNELS.MEMORY_EXPORT, async () => {
+    try {
+      return await memoryService.exportMemories();
+    } catch (err: any) {
+      console.error('[IPC] memory-export failed:', err?.message);
+      return '{}';
+    }
+  });
+
+  ipcMain.handle(IPC_CHANNELS.MEMORY_CLEAR_CATEGORY, async (_event, category: string) => {
+    try {
+      return await memoryService.clearCategory(category);
+    } catch (err: any) {
+      console.error('[IPC] memory-clear-category failed:', err?.message);
+      return 0;
+    }
+  });
+
+  ipcMain.handle(IPC_CHANNELS.MEMORY_PROJECTS_LIST, async () => {
+    try {
+      return await memoryService.listProjects();
+    } catch (err: any) {
+      console.error('[IPC] memory-projects-list failed:', err?.message);
+      return [];
+    }
+  });
+
+  ipcMain.handle(IPC_CHANNELS.MEMORY_PROJECT_GET, async (_event, id: string) => {
+    try {
+      return await memoryService.getProject(id);
+    } catch (err: any) {
+      console.error('[IPC] memory-project-get failed:', err?.message);
+      return null;
+    }
+  });
+
+  ipcMain.handle(IPC_CHANNELS.MEMORY_PROJECT_CREATE, async (_event, input: any) => {
+    try {
+      return await memoryService.createProject(input);
+    } catch (err: any) {
+      console.error('[IPC] memory-project-create failed:', err?.message);
+      throw err;
+    }
+  });
+
+  ipcMain.handle(IPC_CHANNELS.MEMORY_PROJECT_UPDATE, async (_event, payload: { id: string; patch: any }) => {
+    try {
+      return await memoryService.updateProject(payload.id, payload.patch);
+    } catch (err: any) {
+      console.error('[IPC] memory-project-update failed:', err?.message);
+      return null;
+    }
+  });
+
+  ipcMain.handle(IPC_CHANNELS.MEMORY_PROJECT_DELETE, async (_event, id: string) => {
+    try {
+      return await memoryService.deleteProject(id);
+    } catch (err: any) {
+      console.error('[IPC] memory-project-delete failed:', err?.message);
+      return false;
+    }
+  });
+
+  ipcMain.handle(IPC_CHANNELS.MEMORY_PROJECT_MEMORIES, async (_event, payload: { projectId: string; limit?: number }) => {
+    try {
+      return await memoryService.getProjectMemories(payload.projectId, payload.limit);
+    } catch (err: any) {
+      console.error('[IPC] memory-project-memories failed:', err?.message);
+      return [];
+    }
+  });
+
+  ipcMain.handle(IPC_CHANNELS.MEMORY_ACTIVITY, async (_event, limit?: number) => {
+    try {
+      return await memoryService.getActivity(limit || 50);
+    } catch (err: any) {
+      console.error('[IPC] memory-activity failed:', err?.message);
+      return [];
+    }
+  });
+
   ipcMain.handle(IPC_CHANNELS.CONVERSATION_LOAD, async (_event, limit?: number) => {
     try {
       return await memoryService.loadConversation(limit);

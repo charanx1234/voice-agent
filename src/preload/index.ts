@@ -69,9 +69,23 @@ const apiBridge: FridayApiBridge = {
   updateMemory: (id: string, patch) =>
     ipcRenderer.invoke(IPC_CHANNELS.MEMORY_UPDATE, { id, patch }),
   deleteMemory: (id: string) => ipcRenderer.invoke(IPC_CHANNELS.MEMORY_DELETE, id),
+  archiveMemory: (id: string) => ipcRenderer.invoke(IPC_CHANNELS.MEMORY_ARCHIVE, id),
+  getMemoryHistory: (memoryId: string) => ipcRenderer.invoke(IPC_CHANNELS.MEMORY_HISTORY, memoryId),
   getMemoryStats: () => ipcRenderer.invoke(IPC_CHANNELS.MEMORY_STATS),
+  getFimaStats: () => ipcRenderer.invoke(IPC_CHANNELS.MEMORY_FIMA_STATS),
+  exportMemories: () => ipcRenderer.invoke(IPC_CHANNELS.MEMORY_EXPORT),
+  clearMemoryCategory: (category: any) => ipcRenderer.invoke(IPC_CHANNELS.MEMORY_CLEAR_CATEGORY, category),
   loadConversation: (limit?: number) => ipcRenderer.invoke(IPC_CHANNELS.CONVERSATION_LOAD, limit),
   clearConversation: () => ipcRenderer.invoke(IPC_CHANNELS.CONVERSATION_CLEAR),
+
+  // Project Memory
+  listProjects: () => ipcRenderer.invoke(IPC_CHANNELS.MEMORY_PROJECTS_LIST),
+  getProject: (id: string) => ipcRenderer.invoke(IPC_CHANNELS.MEMORY_PROJECT_GET, id),
+  createProject: (input: any) => ipcRenderer.invoke(IPC_CHANNELS.MEMORY_PROJECT_CREATE, input),
+  updateProject: (id: string, patch: any) => ipcRenderer.invoke(IPC_CHANNELS.MEMORY_PROJECT_UPDATE, { id, patch }),
+  deleteProject: (id: string) => ipcRenderer.invoke(IPC_CHANNELS.MEMORY_PROJECT_DELETE, id),
+  listProjectMemories: (projectId: string) => ipcRenderer.invoke(IPC_CHANNELS.MEMORY_PROJECT_MEMORIES, { projectId }),
+  getMemoryActivity: (limit?: number) => ipcRenderer.invoke(IPC_CHANNELS.MEMORY_ACTIVITY, limit),
 
   // Reminders
   listReminders: (includeDone?: boolean) =>

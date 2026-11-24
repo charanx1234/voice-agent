@@ -382,8 +382,20 @@ export interface NoteItem {
   updatedAt: string;
 }
 
-/** Long-term memory categories. */
+/** Long-term memory categories (kind). */
 export type MemoryKind = 'preference' | 'personal' | 'project' | 'fact' | 'instruction';
+
+/** FIMA V1: Memory type — determines which manager owns this memory. */
+export type MemoryType = 'working' | 'long_term' | 'project' | 'episodic' | 'semantic';
+
+/** FIMA V1: Memory lifecycle status. */
+export type MemoryStatus =
+  | 'active'
+  | 'temporary'
+  | 'outdated'
+  | 'superseded'
+  | 'archived'
+  | 'pending_review';
 
 export interface MemoryItem {
   id: string;
@@ -399,13 +411,26 @@ export interface MemoryItem {
   lastUsedAt?: string;
   /** Present on search results. */
   score?: number;
+  // FIMA V1 fields
+  memoryType?: MemoryType;
+  status?: MemoryStatus;
+  confidence?: number;
+  projectId?: string;
+  sourceConversationId?: string;
+  expirationAt?: string;
+  version?: number;
+  supersedesId?: string;
+  extraMetadata?: Record<string, any>;
 }
 
 export interface MemoryStats {
   total: number;
   byKind: Record<string, number>;
+  byStatus?: Record<string, number>;
+  byMemoryType?: Record<string, number>;
   embedded: number;
   databaseBytes: number;
+  projectCount?: number;
 }
 
 export interface MemoryInputPayload {
@@ -414,6 +439,113 @@ export interface MemoryInputPayload {
   content: string;
   subject?: string;
   importance?: number;
+  // FIMA V1 optional fields
+  memoryType?: MemoryType;
+  status?: MemoryStatus;
+  confidence?: number;
+  projectId?: string;
+  sourceConversationId?: string;
+  expirationAt?: string;
+}
+
+// ── FIMA V1: Project Memory ─────────────────────────────────────────────────
+
+export type ProjectStatus =
+  | 'proposed'
+  | 'planned'
+  | 'in_progress'
+  | 'implemented'
+  | 'verified'
+  | 'failed'
+  | 'deprecated'
+  | 'archived';
+
+export interface ProjectItem {
+  id: string;
+  name: string;
+  description?: string;
+  objective?: string;
+  techStack?: string[];
+  status: ProjectStatus;
+  createdAt: string;
+  updatedAt: string;
+  archived: boolean;
+  /** Memories linked to this project, populated on detailed view. */
+  memories?: MemoryItem[];
+}
+
+export interface ProjectInputPayload {
+  name: string;
+  description?: string;
+  objective?: string;
+  techStack?: string[];
+  status?: ProjectStatus;
+}
+
+// ── FIMA V1: Memory Activity Log ────────────────────────────────────────────
+
+export type MemoryActivityAction =
+  | 'saved'
+  | 'updated'
+  | 'merged'
+  | 'archived'
+  | 'deleted'
+  | 'retrieved'
+  | 'ignored'
+  | 'conflict_detected'
+  | 'promoted'
+  | 'expired'
+  | 'superseded'
+  | 'pending_review';
+
+export interface MemoryActivityItem {
+  id: string;
+  action: MemoryActivityAction;
+  memoryId?: string;
+  projectId?: string;
+  reason?: string;
+  details?: Record<string, any>;
+  createdAt: string;
+}
+
+// ── FIMA V1: Memory History ─────────────────────────────────────────────────
+
+export interface MemoryHistoryItem {
+  id: string;
+  memoryId: string;
+  action: string;
+  oldContent?: string;
+  newContent?: string;
+  reason?: string;
+  source?: string;
+  createdAt: string;
+}
+
+// ── FIMA V1: Intelligence Gate decision ────────────────────────────────────
+
+export type GateDecision = 'save' | 'update' | 'temporary' | 'ignore';
+
+export interface GateResult {
+  decision: GateDecision;
+  reason: string;
+  confidence: number;
+  targetMemoryId?: string; // for 'update' decisions
+}
+
+// ── FIMA V1: Enhanced Memory Stats ─────────────────────────────────────────
+
+export interface FimaStats {
+  totalActive: number;
+  totalTemporary: number;
+  totalArchived: number;
+  totalOutdated: number;
+  totalPendingReview: number;
+  byKind: Record<string, number>;
+  byMemoryType: Record<string, number>;
+  projectCount: number;
+  activityLast24h: number;
+  embedded: number;
+  databaseBytes: number;
 }
 
 /** Reminder created from a spoken or typed request. */
@@ -603,8 +735,8 @@ export interface FridayApiBridge {
   getAllowedApps: () => Promise<AllowedApp[]>;
   launchApp: (appId: string) => Promise<{ success: boolean; error?: string }>;
 
-  // Long-term memory
-  listMemories: (options?: { kind?: MemoryKind; limit?: number }) => Promise<MemoryItem[]>;
+  // Long-term memory (original + FIMA V1 extended)
+  listMemories: (options?: { kind?: MemoryKind; limit?: number; status?: MemoryStatus; memoryType?: MemoryType }) => Promise<MemoryItem[]>;
   searchMemories: (query: string, limit?: number) => Promise<MemoryItem[]>;
   createMemory: (input: MemoryInputPayload) => Promise<{ memory: MemoryItem; action: 'created' | 'updated' }>;
   updateMemory: (
@@ -612,9 +744,23 @@ export interface FridayApiBridge {
     patch: Partial<MemoryInputPayload>
   ) => Promise<MemoryItem | null>;
   deleteMemory: (id: string) => Promise<boolean>;
+  archiveMemory: (id: string) => Promise<boolean>;
+  getMemoryHistory: (memoryId: string) => Promise<MemoryHistoryItem[]>;
   getMemoryStats: () => Promise<MemoryStats>;
+  getFimaStats: () => Promise<FimaStats>;
+  exportMemories: () => Promise<string>;
+  clearMemoryCategory: (category: MemoryStatus | MemoryType) => Promise<number>;
   loadConversation: (limit?: number) => Promise<ChatMessage[]>;
   clearConversation: () => Promise<boolean>;
+  // Project memory
+  listProjects: () => Promise<ProjectItem[]>;
+  getProject: (id: string) => Promise<ProjectItem | null>;
+  createProject: (input: ProjectInputPayload) => Promise<ProjectItem>;
+  updateProject: (id: string, patch: Partial<ProjectInputPayload>) => Promise<ProjectItem | null>;
+  deleteProject: (id: string) => Promise<boolean>;
+  listProjectMemories: (projectId: string) => Promise<MemoryItem[]>;
+  // Activity log
+  getMemoryActivity: (limit?: number) => Promise<MemoryActivityItem[]>;
 
   // Reminders
   listReminders: (includeDone?: boolean) => Promise<ReminderItem[]>;

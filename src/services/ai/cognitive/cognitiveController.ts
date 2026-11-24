@@ -349,6 +349,19 @@ export class CognitiveController {
         policy
       );
 
+      // Persist exchange to conversation transcript
+      void memoryService.appendExchange(userText, sanitized.sanitizedText, {
+        language: genResult.detectedLanguage || preferredLang,
+      });
+
+      // FIMA V1: Background intelligent memory extraction with gate
+      const hadExplicitMemoryTool = Array.isArray(genResult.toolCalls) &&
+        genResult.toolCalls.some((tc: any) => tc.toolName === 'save_memory');
+      memoryService.enqueueExtraction(userText, sanitized.sanitizedText, {
+        isL0Response: complexityResult.level === 'L0',
+        isExplicitToolSave: hadExplicitMemoryTool,
+      });
+
       const timing = latencyMonitor.finishRequest(requestId);
       latencyMonitor.logSummary(timing, {
         source: inputSource,
